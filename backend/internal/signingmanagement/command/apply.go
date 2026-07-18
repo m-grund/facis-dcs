@@ -120,23 +120,90 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		}
 	}(tx)
 
+	prepared, err := h.prepare(ctx, tx, cmd)
+	if err != nil {
+		return err
+	}
+
+	// Transitional DCS-side signing — superseded by the wallet-driven ceremony
+	// (ADR-12), kept until the ceremony endpoints replace this entrypoint. The
+	// signatory's wallet/QTSP produces these artefacts from prepared.basePDF
+	// (evidence embedded, AcroForm field placed) and prepared.jadesPayload; the
+	// DCS then validates and finalizes, holding no signing key of its own.
+	signedPDF, err := h.Signer.SignPDF(ctx, prepared.basePDF, prepared.ceremony.FieldName, prepared.ceremony.FieldName, prepared.evidence)
+	if err != nil {
+		return fmt.Errorf("pades sign: %w", err)
+	}
+	jadesSignature, err := jades.Sign(&h.DIDDocument, prepared.jadesPayload)
+	if err != nil {
+		return fmt.Errorf("JAdES sign: %w", err)
+	}
+
+	if err := h.finalize(ctx, tx, cmd, finalizeInput{
+		ceremony:        prepared.ceremony,
+		signedPDF:       signedPDF,
+		jadesSignature:  jadesSignature,
+		contentHash:     prepared.contentHash,
+		rendererVersion: prepared.rendererVersion,
+		signedCount:     prepared.signedCount,
+		vpToken:         prepared.vpToken,
+		kbSDHash:        prepared.kbSDHash,
+		signedAt:        prepared.signedAt,
+		contractVersion: prepared.contractVersion,
+	}); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// preparedSignature is the to-be-signed material the prepare phase yields: the
+// base PDF (AcroForm signature field placed, lifecycle-stamped, NOT yet
+// evidence-embedded or signed), the signing-summary evidence to embed, and the
+// canonical JAdES payload — plus the ceremony and hashes finalize binds. In the
+// wallet-driven ceremony (ADR-12) the base PDF is evidence-embedded and handed
+// to the signatory's wallet/QTSP to sign; the DCS applies no signature here.
+type preparedSignature struct {
+	ceremony        *db.SignatureCeremony
+	basePDF         []byte
+	basePDFHash     string
+	evidence        []byte
+	jadesPayload    []byte
+	contentHash     string
+	signedCount     int
+	rendererVersion string
+	vpToken         string
+	kbSDHash        string
+	signedAt        time.Time
+	contractVersion int
+}
+
+// prepare runs every step up to (but not including) the signature: it enforces
+// the ceremony precondition and multi-signer gating, seals the offer into the
+// odrl:Agreement on the first signature, runs the policy/closedness/conformance
+// and SHACL gates, loads and lifecycle-stamps the base PDF, and issues the
+// signing-summary credential(s). It mutates within tx (the sealed agreement is
+// persisted) but applies no signature and stores no artefact — the caller
+// either signs (transitional Handle) or embeds the evidence and hands the PDF
+// to the signatory's wallet (the ceremony download).
+func (h *Applier) prepare(ctx context.Context, tx *sqlx.Tx, cmd ApplyCmd) (*preparedSignature, error) {
 	// Serialize against the background PDF regenerator on the same per-contract
 	// key it uses (pdfgeneration/event). Without this, a genesis/lifecycle
 	// regeneration already in flight — holding this lock across its slow
-	// pdf-core render — commits its UpdatePDFState *after* SetSignedPDF below and
+	// pdf-core render — commits its UpdatePDFState *after* SetSignedPDF and
 	// overwrites the signed CID with an unsigned re-render, stripping the PAdES
 	// signature. Blocking here lets the regenerator finish first; the signed
 	// state we then write is frozen, so its later events short-circuit.
 	if _, err := tx.ExecContext(ctx, "SELECT pg_advisory_xact_lock(hashtext($1))", cmd.DID); err != nil {
-		return fmt.Errorf("acquire per-contract PDF regeneration lock for %s: %w", cmd.DID, err)
+		return nil, fmt.Errorf("acquire per-contract PDF regeneration lock for %s: %w", cmd.DID, err)
 	}
 
 	data, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
-		return fmt.Errorf("could not read contract %s: %w", cmd.DID, err)
+		return nil, fmt.Errorf("could not read contract %s: %w", cmd.DID, err)
 	}
 	if data.ContractData == nil {
-		return fmt.Errorf("contract %s has no contract data for policy validation", cmd.DID)
+		return nil, fmt.Errorf("contract %s has no contract data for policy validation", cmd.DID)
 	}
 
 	// Ceremony precondition (DCS-FR-SM-16): a completed (verified) PID
@@ -155,14 +222,14 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		ceremony, err = h.CeremonyRepo.FindVerifiedCeremony(ctx, tx, cmd.DID, cmd.SignerDID)
 	}
 	if err != nil {
-		return fmt.Errorf("could not resolve signing ceremony: %w", err)
+		return nil, fmt.Errorf("could not resolve signing ceremony: %w", err)
 	}
 	if ceremony == nil {
-		return ErrCeremonyRequired
+		return nil, ErrCeremonyRequired
 	}
 
 	if err := contractstate.ValidateTransition(contractstate.ContractState(data.State), contractstate.EventSign); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Multi-signer workflow (DCS-FR-SM-07/-17): contracts that declare
@@ -174,7 +241,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	requiredFields := validation.RequiredSignatureFields(*data.ContractData)
 	existingRecords, err := h.CRepo.LoadSignatures(ctx, tx, cmd.DID)
 	if err != nil {
-		return fmt.Errorf("could not load existing signatures: %w", err)
+		return nil, fmt.Errorf("could not load existing signatures: %w", err)
 	}
 	signedCount := 0
 	for _, rec := range existingRecords {
@@ -183,7 +250,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		}
 		signedCount++
 		if rec.FieldName != nil && *rec.FieldName == ceremony.FieldName {
-			return fmt.Errorf("%w: %s", ErrFieldAlreadySigned, ceremony.FieldName)
+			return nil, fmt.Errorf("%w: %s", ErrFieldAlreadySigned, ceremony.FieldName)
 		}
 	}
 	fieldCeremonies := map[string]*db.SignatureCeremony{ceremony.FieldName: ceremony}
@@ -196,14 +263,14 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 			}
 		}
 		if !declared {
-			return fmt.Errorf("%w: %s", ErrUnknownSignatureField, ceremony.FieldName)
+			return nil, fmt.Errorf("%w: %s", ErrUnknownSignatureField, ceremony.FieldName)
 		}
 		if signedCount == 0 {
 			var missing []string
 			for _, f := range requiredFields {
 				c, err := h.CeremonyRepo.FindVerifiedCeremonyByField(ctx, tx, cmd.DID, f)
 				if err != nil {
-					return fmt.Errorf("could not resolve ceremony for field %q: %w", f, err)
+					return nil, fmt.Errorf("could not resolve ceremony for field %q: %w", f, err)
 				}
 				if c == nil {
 					missing = append(missing, f)
@@ -215,7 +282,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 				fieldCeremonies[ceremony.FieldName] = ceremony
 			}
 			if len(missing) > 0 {
-				return fmt.Errorf("%w: missing ceremonies for %v", ErrCeremoniesIncomplete, missing)
+				return nil, fmt.Errorf("%w: missing ceremonies for %v", ErrCeremoniesIncomplete, missing)
 			}
 		}
 	}
@@ -227,10 +294,10 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	if signedCount == 0 {
 		sealed, err := sealAgreementForSigning(*data.ContractData, data.Responsible, cmd.SignerDID)
 		if err != nil {
-			return fmt.Errorf("seal agreement for signing: %w", err)
+			return nil, fmt.Errorf("seal agreement for signing: %w", err)
 		}
 		if err := h.CRepo.UpdateContractData(ctx, tx, cmd.DID, sealed); err != nil {
-			return fmt.Errorf("persist sealed agreement: %w", err)
+			return nil, fmt.Errorf("persist sealed agreement: %w", err)
 		}
 		data.ContractData = &sealed
 	}
@@ -244,7 +311,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 			HolderDID:       cmd.HolderDID,
 		},
 	); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Signatures are the point of no return: a contract must be closed — no
@@ -252,14 +319,14 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	// signed. A template's open policy is only ever a contract once every
 	// placeholder is materialized.
 	if err := validation.ValidateContractClosed(*data.ContractData); err != nil {
-		return fmt.Errorf("signature application blocked: %w", err)
+		return nil, fmt.Errorf("signature application blocked: %w", err)
 	}
 
 	// A non-conformant contract must never be signed (DCS-FR-PACM-03) —
 	// submission already gates this, but signatures are the point of no
 	// return, so the invariant is re-checked here.
 	if err := validation.RequireHubConformance(ctx, *data.ContractData); err != nil {
-		return fmt.Errorf("signature application blocked: %w", err)
+		return nil, fmt.Errorf("signature application blocked: %w", err)
 	}
 
 	// SHACL evidence (Phase 4, ADR-9): the hub schema version this contract
@@ -269,13 +336,13 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	// validation, and compares hashes to detect drift.
 	schemaVersion, validationReportHash, err := validation.SHACLEvidence(ctx, *data.ContractData)
 	if err != nil {
-		return fmt.Errorf("SHACL evidence for signing-summary credential: %w", err)
+		return nil, fmt.Errorf("SHACL evidence for signing-summary credential: %w", err)
 	}
 
 	// Load (or generate) the base PDF to be signed.
 	basePDF, err := h.loadBasePDF(ctx, tx, cmd.DID, *data.ContractData)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Stamp the "active" C2PA lifecycle assertion into the base PDF BEFORE
@@ -293,7 +360,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	if signedCount == 0 {
 		stampedPDF, rv, err := stampLifecycleForSigning(ctx, cmd.DID, *data.ContractData, basePDF, h.PDFCore, h.VCIssuer, h.IssuerDID)
 		if err != nil {
-			return fmt.Errorf("stamp active lifecycle assertion before signing: %w", err)
+			return nil, fmt.Errorf("stamp active lifecycle assertion before signing: %w", err)
 		}
 		basePDF = stampedPDF
 		rendererVersion = rv
@@ -308,7 +375,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 	basePDFHash := hex.EncodeToString(basePDFSum[:])
 
 	// Issue the signing-summary credential carrying the verbatim PID
-	// presentation, then embed it and sign (embed-first-sign-second).
+	// presentation, to be embedded before signing (embed-first-sign-second).
 	vpToken := ""
 	if ceremony.VpToken != nil {
 		vpToken = *ceremony.VpToken
@@ -336,7 +403,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 			ValidationReportHash: validationReportHash,
 		})
 		if err != nil {
-			return fmt.Errorf("issue signing-summary VC: %w", err)
+			return nil, fmt.Errorf("issue signing-summary VC: %w", err)
 		}
 	case signedCount == 0:
 		// First signature on a multi-signer contract: embed EVERY declared
@@ -374,13 +441,13 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 				ValidationReportHash: validationReportHash,
 			})
 			if err != nil {
-				return fmt.Errorf("issue signing-summary VC for field %q: %w", f, err)
+				return nil, fmt.Errorf("issue signing-summary VC for field %q: %w", f, err)
 			}
 			summaries = append(summaries, vc)
 		}
 		evidence, err = json.Marshal(summaries)
 		if err != nil {
-			return fmt.Errorf("encode signing-summary evidence bundle: %w", err)
+			return nil, fmt.Errorf("encode signing-summary evidence bundle: %w", err)
 		}
 	default:
 		// Later signature on a multi-signer contract: its evidence is
@@ -389,40 +456,29 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		evidence = nil
 	}
 
-	signedPDF, err := h.Signer.SignPDF(ctx, basePDF, ceremony.FieldName, ceremony.FieldName, evidence)
-	if err != nil {
-		return fmt.Errorf("pades sign: %w", err)
-	}
-
-	// JAdES over the machine-readable JSON-LD, the counterpart to the visible
-	// PAdES on the PDF: the same signature event covers both representations
-	// (DCS-FR-SM-02, DCS-FR-SM-11), so an external verifier can validate the
-	// contract's terms from the canonical JSON-LD without the rendered PDF.
+	// The JAdES payload over the machine-readable JSON-LD, the counterpart to
+	// the visible PAdES on the PDF: one signature event covers both
+	// representations (DCS-FR-SM-02, DCS-FR-SM-11), so an external verifier can
+	// validate the contract's terms from the canonical JSON-LD without the PDF.
 	jadesPayload, err := jades.BuildContractPayload(cmd.DID, data.ContractVersion, *data.ContractData)
 	if err != nil {
-		return fmt.Errorf("build JAdES payload: %w", err)
-	}
-	jadesSignature, err := jades.Sign(&h.DIDDocument, jadesPayload)
-	if err != nil {
-		return fmt.Errorf("JAdES sign: %w", err)
+		return nil, fmt.Errorf("build JAdES payload: %w", err)
 	}
 
-	if err := h.finalize(ctx, tx, cmd, finalizeInput{
+	return &preparedSignature{
 		ceremony:        ceremony,
-		signedPDF:       signedPDF,
-		jadesSignature:  jadesSignature,
+		basePDF:         basePDF,
+		basePDFHash:     basePDFHash,
+		evidence:        evidence,
+		jadesPayload:    jadesPayload,
 		contentHash:     contentHash,
-		rendererVersion: rendererVersion,
 		signedCount:     signedCount,
+		rendererVersion: rendererVersion,
 		vpToken:         vpToken,
 		kbSDHash:        kbSDHash,
 		signedAt:        signedAt,
 		contractVersion: data.ContractVersion,
-	}); err != nil {
-		return err
-	}
-
-	return tx.Commit()
+	}, nil
 }
 
 // finalizeInput carries the post-signature state the Finalizer persists: the
