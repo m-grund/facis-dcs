@@ -793,3 +793,68 @@ def step_then_signature_linked_to_ceremony(context, name):
             f"contract_signatures.{ceremony_key} ({row.get(ceremony_key)!r}) does not match the "
             f"ceremony this contract was actually signed through ({expected_ceremony_id!r})"
         )
+
+
+@then(
+    'the signature view for contract "{name}" carries a JAdES signature '
+    "that verifies over the contract JSON-LD"
+)
+def step_then_jades_verifies(context, name):
+    """The completed ceremony must produce a JAdES (ETSI TS 119 182-1) compact
+    JWS over the machine-readable JSON-LD alongside the visible PAdES on the
+    PDF (DCS-FR-SM-02/-11). Assert it is present, well-formed (ES256 + critical
+    sigT + x5c), cryptographically valid against its x5c leaf, and bound to
+    this contract's DID.
+    """
+    import base64  # noqa: PLC0415
+    import json  # noqa: PLC0415
+
+    import requests as _requests  # noqa: PLC0415
+    from cryptography.hazmat.primitives import hashes  # noqa: PLC0415
+    from cryptography.hazmat.primitives.asymmetric import ec, utils  # noqa: PLC0415
+    from cryptography.x509 import load_der_x509_certificate  # noqa: PLC0415
+
+    from steps.support.api_client import signature_view_url  # noqa: PLC0415
+
+    def b64url(seg):
+        return base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
+
+    did, _ = ContractService._contract_data(context, name)
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    view = _requests.get(
+        signature_view_url(context), params={"did": did}, headers=manager_h,
+        timeout=context.http_timeout_seconds,
+    )
+    assert view.status_code == 200, f"signature view failed: {view.status_code} {view.text}"
+    signatures = view.json().get("signatures") or []
+    assert signatures, f"Expected an applied signature on '{name}', got: {view.json()}"
+
+    jws = signatures[0].get("jades")
+    assert jws, f"Expected a JAdES signature on the signature view for '{name}', got: {signatures[0]}"
+    parts = jws.split(".")
+    assert len(parts) == 3, f"JAdES must be a compact JWS with 3 segments, got {len(parts)}"
+
+    header = json.loads(b64url(parts[0]))
+    assert header.get("alg") == "ES256", f"JAdES alg must be ES256, got {header.get('alg')}"
+    assert "sigT" in header and header.get("sigT"), "JAdES must carry a sigT (claimed signing time)"
+    assert "sigT" in (header.get("crit") or []), "JAdES sigT must be marked critical"
+    x5c = header.get("x5c") or []
+    assert x5c, "JAdES must carry an x5c certificate chain"
+
+    payload = json.loads(b64url(parts[1]))
+    assert payload.get("dcs:contractDid") == did, (
+        f"JAdES payload must bind this contract's DID; got {payload.get('dcs:contractDid')!r}"
+    )
+    assert "dcs:contractDocument" in payload, "JAdES payload must carry the contract document"
+
+    leaf = load_der_x509_certificate(base64.b64decode(x5c[0]))
+    pub = leaf.public_key()
+    assert isinstance(pub, ec.EllipticCurvePublicKey), "JAdES x5c leaf key must be EC"
+    raw_sig = b64url(parts[2])
+    assert len(raw_sig) == 64, f"JOSE ES256 signature must be 64 bytes, got {len(raw_sig)}"
+    der_sig = utils.encode_dss_signature(
+        int.from_bytes(raw_sig[:32], "big"), int.from_bytes(raw_sig[32:], "big")
+    )
+    signing_input = (parts[0] + "." + parts[1]).encode()
+    # Raises InvalidSignature if the signature does not verify.
+    pub.verify(der_sig, signing_input, ec.ECDSA(hashes.SHA256()))

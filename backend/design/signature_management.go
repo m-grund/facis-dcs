@@ -245,6 +245,7 @@ var SMSignatureViewItem = Type("SMSignatureViewItem", func() {
 	Attribute("signed_at", String, "When the signature was applied")
 	Attribute("revoked_at", String, "When the signature was revoked, if it was")
 	Attribute("format", String, "Signature container format")
+	Attribute("jades", String, "The JAdES (ETSI TS 119 182-1) compact JWS over the machine-readable JSON-LD contract representation, the counterpart to the visible PAdES on the PDF (DCS-FR-SM-02/-11)")
 
 	Required("signer_did", "credential_type", "status", "format")
 })

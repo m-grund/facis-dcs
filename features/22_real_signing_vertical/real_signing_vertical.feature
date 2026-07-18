@@ -192,6 +192,11 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
     Given contract "RSV Summary VC Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerFourteen"
     Then a ContractSigningSummaryCredential for contract "RSV Summary VC Contract" is embedded inside the PAdES ByteRange
 
+  @DCS-FR-SM-02 @DCS-FR-SM-11
+  Scenario: The ceremony also produces a JAdES signature over the machine-readable JSON-LD
+    Given contract "RSV JAdES Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerJades"
+    Then the signature view for contract "RSV JAdES Contract" carries a JAdES signature that verifies over the contract JSON-LD
+
   # Uses the IPFS CID-swap seam (steps/support/tamper_seam.py). See
   # steps/real_signing_vertical/dcs_real_signing_vertical_tamper_steps.py's
   # module docstring for why the observable signal here is

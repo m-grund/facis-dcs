@@ -19,7 +19,9 @@ import (
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/hsm"
+	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
+	"digital-contracting-service/internal/base/jades"
 	"digital-contracting-service/internal/base/validation"
 	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
@@ -81,6 +83,10 @@ type Applier struct {
 	// PDF before signing (DCS-OR-C2PA-004) — see stampActiveLifecycle below.
 	VCIssuer  provenance.VCIssuer
 	IssuerDID string
+	// DIDDocument is the instance's HSM-backed signing identity (x5c chain);
+	// used to produce the JAdES signature over the machine-readable JSON-LD
+	// alongside the visible PAdES on the PDF (DCS-FR-SM-02, DCS-FR-SM-11).
+	DIDDocument identity.DIDDocument
 	// ArchiveRepo, IPFSStorer, ArchiveNotary, and ArchiveTSA back the
 	// archive-entry creation that now happens on reaching SIGNED (DCS-FR-
 	// CWE-20), not on APPROVED. ArchiveRepo is the contractworkflowengine
@@ -388,6 +394,19 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		return fmt.Errorf("pades sign: %w", err)
 	}
 
+	// JAdES over the machine-readable JSON-LD, the counterpart to the visible
+	// PAdES on the PDF: the same signature event covers both representations
+	// (DCS-FR-SM-02, DCS-FR-SM-11), so an external verifier can validate the
+	// contract's terms from the canonical JSON-LD without the rendered PDF.
+	jadesPayload, err := jades.BuildContractPayload(cmd.DID, data.ContractVersion, *data.ContractData)
+	if err != nil {
+		return fmt.Errorf("build JAdES payload: %w", err)
+	}
+	jadesSignature, err := jades.Sign(&h.DIDDocument, jadesPayload)
+	if err != nil {
+		return fmt.Errorf("JAdES sign: %w", err)
+	}
+
 	signedPDFSum := sha256.Sum256(signedPDF)
 	signedPDFHash := hex.EncodeToString(signedPDFSum[:])
 
@@ -435,6 +454,7 @@ func (h *Applier) Handle(ctx context.Context, cmd ApplyCmd) error {
 		PDFHash:        &signedPDFHash,
 		ContentHash:    &contentHash,
 		FieldName:      &fieldName,
+		JAdESSignature: &jadesSignature,
 	}
 	if err := h.CRepo.CreateSignature(ctx, tx, signature); err != nil {
 		return fmt.Errorf("could not create signature: %w", err)

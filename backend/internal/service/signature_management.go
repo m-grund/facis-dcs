@@ -74,7 +74,7 @@ type signatureManagementsrvc struct {
 func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, ceremonyRepo db.CeremonyRepo,
 	auditTrailReader base.AuditTrailReader, contractSigner signer.ContractSigner, vcSigner provenance.VCSigner, issuerDID string,
 	ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client, archiveRepo cwedb.ContractRepo, archiveNotary cwecommand.ArchiveNotary,
-	archiveTSA *tsa.APIClient, vcIssuer provenance.VCIssuer) signaturemanagement.Service {
+	archiveTSA *tsa.APIClient, vcIssuer provenance.VCIssuer, didDocument identity.DIDDocument) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
@@ -87,6 +87,7 @@ func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db
 		VCSigner:         vcSigner,
 		VCIssuer:         vcIssuer,
 		IssuerDID:        issuerDID,
+		DIDDocument:      didDocument,
 		IPFSClient:       ipfsClient,
 		ArchiveRepo:      archiveRepo,
 		ArchiveNotary:    archiveNotary,
@@ -281,6 +282,7 @@ func (s *signatureManagementsrvc) Apply(ctx context.Context, req *signaturemanag
 		VCSigner:      s.VCSigner,
 		VCIssuer:      s.VCIssuer,
 		IssuerDID:     s.IssuerDID,
+		DIDDocument:   s.DIDDocument,
 		ArchiveRepo:   s.ArchiveRepo,
 		IPFSStorer:    s.IPFSClient,
 		ArchiveNotary: s.ArchiveNotary,
@@ -491,7 +493,8 @@ func (s *signatureManagementsrvc) View(ctx context.Context, req *signaturemanage
 			FieldName:      rec.FieldName,
 			CredentialType: rec.CredentialType,
 			Status:         rec.Status,
-			Format:         "PAdES (ETSI.CAdES.detached)",
+			Format:         "PAdES (ETSI.CAdES.detached) + JAdES (ETSI TS 119 182-1)",
+			Jades:          rec.JAdESSignature,
 		}
 		if rec.SignedAt != nil {
 			t := rec.SignedAt.UTC().Format(time.RFC3339)
