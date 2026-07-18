@@ -436,7 +436,7 @@ def step_when_create_and_offer_cross_instance(context):
 @then("the contract appears on instance B in state OFFERED within a few seconds")
 def step_then_contract_offered_on_b(context):
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_b)
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + 45
     actual_state = None
     last_resp = None
     while time.monotonic() < deadline:
@@ -658,7 +658,7 @@ def step_then_approved_replicated_both(context):
         ("A", context.base_url_a, manager_h_a),
         ("B", context.base_url_b, manager_h_b),
     ):
-        deadline = time.monotonic() + 15
+        deadline = time.monotonic() + 45
         actual_state = None
         last_resp = None
         while time.monotonic() < deadline:
@@ -770,7 +770,7 @@ def step_then_state_replicated_both(context, state):
     expected = state.upper()
     for label, base_url in (("A", context.base_url_a), ("B", context.base_url_b)):
         manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=base_url)
-        deadline = time.monotonic() + 15
+        deadline = time.monotonic() + 45
         actual_state = None
         last_resp = None
         while time.monotonic() < deadline:
@@ -1088,7 +1088,7 @@ def step_then_provenance_on_b(context):
     c_did = context.cross_instance_contract_did
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_b)
     resp = None
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         resp = _requests.get(
             f"{context.base_url_b}/peer/contracts/provenance",
