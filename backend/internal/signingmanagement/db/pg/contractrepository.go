@@ -48,10 +48,13 @@ func (r *PostgresContractRepo) ReadDataByDID(ctx context.Context, tx *sqlx.Tx, d
 }
 
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
+	// ACTIVE belongs here too: signing completion auto-deploys the contract
+	// (SIGNED -> ACTIVE), so a fully-signed contract that the Signature Compliance
+	// Viewer must still inspect lives in ACTIVE, not SIGNED.
 	query := `
         SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contracts
-        WHERE state IN ('APPROVED', 'SIGNED')
+        WHERE state IN ('APPROVED', 'SIGNED', 'ACTIVE')
     `
 
 	var params []any
