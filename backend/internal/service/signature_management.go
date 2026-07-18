@@ -13,6 +13,7 @@ import (
 
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	"digital-contracting-service/internal/auth"
+	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
 	cwecommand "digital-contracting-service/internal/contractworkflowengine/command"
@@ -67,13 +68,25 @@ type signatureManagementsrvc struct {
 	ArchiveRepo   cwedb.ContractRepo
 	ArchiveNotary cwecommand.ArchiveNotary
 	ArchiveTSA    *tsa.APIClient
+	// RequestSigner signs the OID4VP Document-Retrieval request object (JAR) the
+	// wallet consumes in the publish/callback signing ceremony (ADR-12). It is the
+	// SAME HSM JAR signer the auth service uses for login/PID request objects — the
+	// DCS attesting as itself, not as a contracting party.
+	RequestSigner oid4vprequest.Signer
+	// OID4VPClientID is the DCS relying party's x509_san_dns client_id bound into
+	// the request object (the same Hydra client_id the auth OID4VP flows use).
+	OID4VPClientID string
+	// PublicAPIBase is the externally-resolvable API base the request object's
+	// request_uri, document_locations, and response_uri are built from.
+	PublicAPIBase string
 	auth.JWTAuthenticator
 }
 
 func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db.ContractRepo, ceremonyRepo db.CeremonyRepo,
 	auditTrailReader base.AuditTrailReader, vcSigner provenance.VCSigner, issuerDID string,
 	ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client, archiveRepo cwedb.ContractRepo, archiveNotary cwecommand.ArchiveNotary,
-	archiveTSA *tsa.APIClient, vcIssuer provenance.VCIssuer) signaturemanagement.Service {
+	archiveTSA *tsa.APIClient, vcIssuer provenance.VCIssuer,
+	requestSigner oid4vprequest.Signer, oid4vpClientID, publicAPIBase string) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
@@ -89,6 +102,9 @@ func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db
 		ArchiveRepo:      archiveRepo,
 		ArchiveNotary:    archiveNotary,
 		ArchiveTSA:       archiveTSA,
+		RequestSigner:    requestSigner,
+		OID4VPClientID:   oid4vpClientID,
+		PublicAPIBase:    publicAPIBase,
 	}
 }
 

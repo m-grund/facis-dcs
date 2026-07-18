@@ -368,6 +368,51 @@ var SMSignatureWebhookResponse = Type("SMSignatureWebhookResponse", func() {
 	Required("ceremony_id", "status")
 })
 
+var SMSignatureRequestPublishRequest = Type("SMSignatureRequestPublishRequest", func() {
+	Description("Publish the OID4VP Document-Retrieval signing request for a verified ceremony (ADR-12): prepare the to-be-signed document and emit the signed request object as a QR/deep link.")
+
+	Token("token", String, "JWT token")
+
+	Attribute("ceremony_id", String, "Identifier of the verified ceremony to publish a signing request for")
+	Attribute("credential_type", String, "Type of credential the signatory uses (default: AES)")
+
+	Required("ceremony_id")
+})
+
+var SMSignatureRequestPublishResponse = Type("SMSignatureRequestPublishResponse", func() {
+	Description("The published OID4VP Document-Retrieval request as QR/deep-link data (ADR-12). The wallet fetches the request object at request_uri, fetches the to-be-signed document it references, signs it with the signatory's own key, and posts the signed document back to the request object's response_uri.")
+
+	Attribute("ceremony_id", String, "Identifier of the ceremony")
+	Attribute("client_id", String, "x509_san_dns client_id of the DCS relying party the request object is bound to")
+	Attribute("request_uri", String, "HTTPS URL the wallet fetches the signed OID4VP request object (JAR) from")
+	Attribute("wallet_uri", String, "openid4vp:// deep link (request-by-reference) the signer's wallet opens")
+	Attribute("nonce", String, "Fresh nonce bound into the request object")
+	Attribute("expires_at", String, "ISO-8601 timestamp when the signing request expires")
+
+	Required("ceremony_id", "client_id", "request_uri", "wallet_uri", "expires_at")
+})
+
+var SMSignatureRequestCallbackRequest = Type("SMSignatureRequestCallbackRequest", func() {
+	Description("The wallet's direct_post of the signed document to the request object's response_uri (ADR-12). The DCS validates the signature identifies the signatory (sole control) and finalizes the contract.")
+
+	Attribute("ceremony_id", String, "Identifier of the ceremony this signing request belongs to")
+	Attribute("state", String, "The request object's state echoed back by the wallet (the ceremony id)")
+	Attribute("signed_pdf", Bytes, "The signatory's PAdES-signed document, returned by the wallet")
+	Attribute("jades_signature", String, "The signatory's JAdES over the machine-readable JSON-LD (DCS-FR-SM-02/-11); empty when only the PDF was signed")
+
+	Required("ceremony_id", "signed_pdf")
+})
+
+var SMSignatureRequestCallbackResponse = Type("SMSignatureRequestCallbackResponse", func() {
+	Description("Result of accepting the wallet's signed document at the ceremony callback")
+
+	Attribute("ceremony_id", String, "Identifier of the ceremony")
+	Attribute("did", String, "DID of the contract the ceremony signed")
+	Attribute("status", String, "Contract lifecycle state after finalizing the signature")
+
+	Required("ceremony_id", "status")
+})
+
 // Signature Management Service  (/signature/...)
 var _ = Service("SignatureManagement", func() {
 	Description("Signature Management APIs (/signature/...)")
@@ -580,6 +625,111 @@ var _ = Service("SignatureManagement", func() {
 			Response("bad_request", StatusBadRequest)
 			Response("unauthorized", StatusUnauthorized)
 			Response("not_found", StatusNotFound)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("publishSignatureRequest", func() {
+		Description("publish the OID4VP Document-Retrieval signing request for a verified ceremony (ADR-12): run prepare to produce the to-be-signed document, store it on the ceremony, and emit the signed request object as a QR/deep link. The wallet then fetches the request object + document, signs, and posts back to the callback.")
+		Meta("dcs:requirements", "DCS-FR-SM-16", "DCS-IR-SI-04")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Signer")
+			Scope("Sys. Contract Signer")
+		})
+
+		Payload(SMSignatureRequestPublishRequest)
+		Result(SMSignatureRequestPublishResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("not_found", ErrorResult, "Ceremony not found")
+		Error("ceremony_required", ErrorResult, "No completed PID presentation ceremony exists for this signer and contract")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/signature/request/{ceremony_id}/publish")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("not_found", StatusNotFound)
+			Response("ceremony_required", StatusUnprocessableEntity)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("signatureRequestObject", func() {
+		Description("serve the signed OID4VP Document-Retrieval request object (JAR) the wallet fetches by reference (ADR-12).")
+		Meta("dcs:requirements", "DCS-FR-SM-16", "DCS-IR-SI-04")
+
+		NoSecurity()
+
+		Payload(func() {
+			Attribute("ceremony_id", String, "Identifier of the ceremony whose signing request object is served")
+			Required("ceremony_id")
+		})
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("not_found", ErrorResult, "Ceremony not found or not published")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/signature/request/{ceremony_id}/object")
+			SkipResponseBodyEncodeDecode()
+			Response(StatusOK, func() {
+				ContentType("application/oauth-authz-req+jwt")
+			})
+			Response("bad_request", StatusBadRequest)
+			Response("not_found", StatusNotFound)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("signatureRequestDocument", func() {
+		Description("serve the to-be-signed PDF the wallet fetches from the request object's document_locations (ADR-12).")
+		Meta("dcs:requirements", "DCS-FR-SM-16", "DCS-IR-SI-04")
+
+		NoSecurity()
+
+		Payload(func() {
+			Attribute("ceremony_id", String, "Identifier of the ceremony whose to-be-signed document is served")
+			Required("ceremony_id")
+		})
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("not_found", ErrorResult, "Ceremony not found or not published")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/signature/request/{ceremony_id}/document")
+			SkipResponseBodyEncodeDecode()
+			Response(StatusOK, func() {
+				ContentType("application/pdf")
+			})
+			Response("bad_request", StatusBadRequest)
+			Response("not_found", StatusNotFound)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("signatureRequestCallback", func() {
+		Description("accept the wallet's direct_post of the signed document at the request object's response_uri (ADR-12): validate it identifies the signatory (sole control) and finalize the contract, reusing the /signature/submit validate+finalize path. Authenticated by the unguessable ceremony id, not a JWT (the caller is the signatory's wallet).")
+		Meta("dcs:requirements", "DCS-FR-SM-16", "DCS-FR-SM-18", "DCS-IR-SI-04")
+
+		NoSecurity()
+
+		Payload(SMSignatureRequestCallbackRequest)
+		Result(SMSignatureRequestCallbackResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("not_found", ErrorResult, "Ceremony not found or not published")
+		Error("signature_invalid", ErrorResult, "The submitted signature is not valid or does not identify the signatory")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/signature/request/{ceremony_id}/callback")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("not_found", StatusNotFound)
+			Response("signature_invalid", StatusUnprocessableEntity)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})
