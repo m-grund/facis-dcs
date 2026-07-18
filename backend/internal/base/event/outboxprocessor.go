@@ -255,6 +255,17 @@ func (j OutboxProcessor) processEvent(ctx context.Context, event datatype.Outbox
 		return fmt.Errorf("could not create IPFS file for event %d: %w", event.ID, err)
 	}
 
+	// Confirm the entry resolves through the read path before persisting its CID
+	// as the audit-trail head. The tenant store is eventually consistent, so a
+	// CID CreateFile has just returned is not always immediately retrievable;
+	// persisting it early lets a later audit read walk the chain to a head — or
+	// a predecessor link — it cannot yet fetch and fail the whole trail with a
+	// "DataIdentifier not found". Blocking here until the entry is resolvable
+	// makes every anchored CID a safe chain link (mirrors apply.go's readback).
+	if _, err := j.IPFSClient.FetchFile(result.Identifier.Value); err != nil {
+		return fmt.Errorf("audit entry CID %s not resolvable after store for event %d: %w", result.Identifier.Value, event.ID, err)
+	}
+
 	if isResourceDID(event.DID) {
 		if err = j.ARepo.UpdateLogCID(ctx, tx, event.Component, *event.DID, &result.Identifier.Value); err != nil {
 			return fmt.Errorf("could not update log CID: %w", err)
