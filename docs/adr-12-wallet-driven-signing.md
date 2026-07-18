@@ -2,11 +2,19 @@
 
 ## Status
 
-Accepted (2026-07-18). **Supersedes the organizational-signature clause of
-[ADR-3](adr-3-signing-semantics.md)** (org-key AES over the PDF) and removes
-"PAdES contract signatures" from [ADR-1](adr-1-key-custody.md)'s list of DCS
-key-custody touchpoints. Everything else in ADR-3 (embed-then-sign ordering,
+Accepted, rolling out (2026-07-18). **Supersedes the organizational-signature
+clause of [ADR-3](adr-3-signing-semantics.md)** (org-key AES over the PDF) and
+removes "PAdES contract signatures" from [ADR-1](adr-1-key-custody.md)'s list of
+DCS key-custody touchpoints. Everything else in ADR-3 (embed-then-sign ordering,
 mandatory PID ceremony, identity binding inside the signed byte range) stands.
+
+**What is built today** (see "Implementation state" below): the DCS-side
+acceptance path — `POST /signature/prepare`, `POST /signature/submit`, the DSS
+sole-control validation gate — and the removal of the eIDAS-invalid
+DCS-signs-via-a-shared-DSS-key detour. **Still transitional:** the original
+`POST /signature/apply`, where the DCS produces the PAdES itself through
+pdf-core's PKCS#11 path, remains the default the signing UI and BDD use; it is
+removed once they migrate to prepare/submit.
 
 ## Context
 
@@ -128,20 +136,41 @@ URL, and trust the QTSP's issuing CA instead of the dev CA. No DCS code change.
 
 ## Consequences
 
-- **Removed:** the DCS-as-signatory path — `signer.ContractSigner` /
-  `PDFCoreSigner` / the DSS-as-DCS-signer, the `SIGNER_BACKEND` toggle and the
-  PAdES x5chain env/secret, pdf-core `/sign` + the backend `/internal/pades/sign`
-  endpoint, and the HSM `dcs-contract-pades` key as a contract signer.
+- **Removed:** the eIDAS-invalid detour where the DCS produced the contract
+  signature itself through a remote DSS with a shared key — `signer/dss.go`
+  (`DSSSigner`), `dss/sign.go` (`getDataToSign`/`signDocument`), the
+  `signer.NewContractSigner` backend toggle, `conf.SignerBackend`/`DSSURL`/
+  `PAdESX5ChainPEM`, the `DCS_SIGNER_BACKEND`/`DCS_DSS_URL`/`DCS_PADES_X5CHAIN_PEM`
+  env and the backend's pades-x5chain secret mount, and the `bdd-dss.yml` CI job.
 - **Kept (legitimately DCS-signed with its own HSM key, ADR-1):** C2PA claim
   and lifecycle-assertion signatures, the signing-summary VC, OID4VP request
   objects (JAR), and the DCS-to-DCS synchronizer's JAdES transport envelope.
   These are the DCS attesting as itself, not as a contracting party.
-- The DCS gains an intermediate `PENDING_SIGNATURE` state between APPROVED and
-  SIGNED (the async gap while the wallet signs) and persists the to-be-signed
-  document so `document_locations` can serve it and finalize can confirm the
-  wallet signed those exact bytes.
-- A verifier who trusts a signature trusts the **signatory's** certificate, not
-  the DCS's — sole control is provable from the artifact alone.
+- **Kept until migration (transitional):** the pdf-core PKCS#11 PAdES signer
+  (`signer.PDFCoreSigner` → pdf-core `/sign` → `/internal/pades/sign` with the
+  HSM `dcs-contract-pades` key) behind `POST /signature/apply`. This is the
+  DCS-as-signatory shape ADR-12 replaces; it stays only until the signing UI and
+  BDD move to prepare/submit, then it and its HSM key are removed.
+- A verifier who trusts a submit-path signature trusts the **signatory's**
+  certificate, not the DCS's — sole control is provable from the artifact alone.
+
+## Implementation state (2026-07-18)
+
+| Piece | State |
+| --- | --- |
+| DSS validation report → signer identity + `AssertValidAES` sole-control gate | done (`dss/client.go`) |
+| `apply.go` split into `prepare()` (to-be-signed) + `finalize()` | done |
+| `Applier.Prepare` (embed evidence, no signing) + `Applier.SubmitSignature` (validate + finalize) | done |
+| `POST /signature/prepare` + `POST /signature/submit` | done, reachable |
+| DSS-as-DCS-signer detour removed | done |
+| OID4VP Document-Retrieval request object (`oid4vp/request/docretrieval.go`) | done, not yet wired into `startCeremony` (the QR layer over prepare/submit) |
+| Remove transitional `POST /signature/apply` + pdf-core `/sign` + HSM `dcs-contract-pades` | pending UI + BDD migration |
+| Test wallet+QTSP stand-in drives prepare → sign → submit; BDD/Playwright per-signatory-cert assertions | pending |
+
+Between `prepare` and `submit` the contract stays APPROVED (the sealed agreement
+is persisted at prepare, so the signed content is frozen); a dedicated
+`PENDING_SIGNATURE` state and persisting the exact to-be-signed bytes are a
+possible refinement, not required for the acceptance path to be sound.
 
 ## SRS coverage
 
