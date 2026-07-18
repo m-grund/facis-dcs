@@ -201,25 +201,27 @@ func (s *signatureManagementsrvc) RetrieveByID(ctx context.Context, req *signatu
 		Description:     result.Contract.Description,
 		CreatedAt:       result.Contract.CreatedAt.Format(time.RFC3339),
 		UpdatedAt:       result.Contract.UpdatedAt.Format(time.RFC3339),
+		ContractData:    result.Contract.ContractData,
 	}
 
-	signatureEnvelop := &signaturemanagement.SMContractSignatureEnvelope{
-		ContractDid:    result.SignatureEnvelope.ContractDID,
-		CredentialType: result.SignatureEnvelope.CredentialType,
-		IpfsCid:        result.SignatureEnvelope.IpfsCID,
-		RevokedAt:      result.SignatureEnvelope.RevokedAt,
-		SignedAt:       result.SignatureEnvelope.SignedAt,
-		SignerDid:      result.SignatureEnvelope.SignerDID,
-		Status:         result.SignatureEnvelope.Status.String(),
+	res = &signaturemanagement.SMContractRetrieveByIDResponse{Contract: &contract}
+
+	// An APPROVED-unsigned contract has no signature envelope yet; the signer
+	// still needs to read its content to sign it.
+	if envelope := result.SignatureEnvelope; envelope != nil {
+		res.SignatureEnvelope = &signaturemanagement.SMContractSignatureEnvelope{
+			ContractDid:    envelope.ContractDID,
+			CredentialType: envelope.CredentialType,
+			IpfsCid:        envelope.IpfsCID,
+			RevokedAt:      envelope.RevokedAt,
+			SignedAt:       envelope.SignedAt,
+			SignerDid:      envelope.SignerDID,
+			Status:         envelope.Status.String(),
+		}
+		res.KeyVersion = &envelope.KeyVersion
 	}
 
-	keyVersion := result.SignatureEnvelope.KeyVersion
-
-	return &signaturemanagement.SMContractRetrieveByIDResponse{
-		Contract:          &contract,
-		SignatureEnvelope: signatureEnvelop,
-		KeyVersion:        &keyVersion,
-	}, nil
+	return res, nil
 }
 
 func (s *signatureManagementsrvc) Verify(ctx context.Context, req *signaturemanagement.SMContractVerifyRequest) (res *signaturemanagement.SMContractVerifyResponse, err error) {
@@ -356,16 +358,17 @@ func (s *signatureManagementsrvc) SubmitSignature(ctx context.Context, req *sign
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(err)
 	}
+	envelope := result.SignatureEnvelope
 	return &signaturemanagement.SMContractApplyResponse{
 		Did: req.Did,
 		SignatureEnvelope: &signaturemanagement.SMContractSignatureEnvelope{
-			ContractDid:    result.SignatureEnvelope.ContractDID,
-			CredentialType: result.SignatureEnvelope.CredentialType,
-			IpfsCid:        result.SignatureEnvelope.IpfsCID,
-			RevokedAt:      result.SignatureEnvelope.RevokedAt,
-			SignedAt:       result.SignatureEnvelope.SignedAt,
-			SignerDid:      result.SignatureEnvelope.SignerDID,
-			Status:         result.SignatureEnvelope.Status.String(),
+			ContractDid:    envelope.ContractDID,
+			CredentialType: envelope.CredentialType,
+			IpfsCid:        envelope.IpfsCID,
+			RevokedAt:      envelope.RevokedAt,
+			SignedAt:       envelope.SignedAt,
+			SignerDid:      envelope.SignerDID,
+			Status:         envelope.Status.String(),
 		},
 	}, nil
 }
@@ -396,7 +399,24 @@ func (s *signatureManagementsrvc) Validate(ctx context.Context, req *signaturema
 	return &signaturemanagement.SMContractValidateResponse{
 		Did:      req.Did,
 		Findings: result.Findings,
+		Dss:      mapDSSReport(result.DSSReport),
 	}, nil
+}
+
+// mapDSSReport lifts the query layer's structured DSS report into the goa
+// response type (DCS-FR-SM-18/-26). nil in stays nil out: no DSS configured or
+// no signed PDF means no report to render.
+func mapDSSReport(r *dss.Report) *signaturemanagement.SMDSSReport {
+	if r == nil {
+		return nil
+	}
+	return &signaturemanagement.SMDSSReport{
+		Indication:      r.Indication,
+		SubIndication:   optString(r.SubIndication),
+		SignedBy:        optString(r.SignedBy),
+		SignatureFormat: optString(r.SignatureFormat),
+		SigningTime:     optString(r.SigningTime),
+	}
 }
 
 func (s *signatureManagementsrvc) Revoke(ctx context.Context, req *signaturemanagement.SMContractRevokeRequest) (res *signaturemanagement.SMContractRevokeResponse, err error) {
@@ -549,6 +569,7 @@ func (s *signatureManagementsrvc) View(ctx context.Context, req *signaturemanage
 			t := rec.RevokedAt.UTC().Format(time.RFC3339)
 			item.RevokedAt = &t
 		}
+		enrichWithSigningEvidence(item, rec, validation.SigningEvidence)
 		signatures = append(signatures, item)
 	}
 
@@ -557,7 +578,44 @@ func (s *signatureManagementsrvc) View(ctx context.Context, req *signaturemanage
 		ContractState:     processData.State,
 		Signatures:        signatures,
 		IntegrityFindings: validation.Findings,
+		Dss:               mapDSSReport(validation.DSSReport),
 	}, nil
+}
+
+// enrichWithSigningEvidence attaches the integrity proof and credential binding
+// from the signature's embedded ContractSigningSummaryCredential (DCS-FR-SM-26).
+// Evidence is matched to the signature record by signer DID, disambiguated by
+// the declared field on multi-signer contracts. A signature whose evidence is
+// absent (e.g. pre-evidence data) simply carries no proof fields.
+func enrichWithSigningEvidence(item *signaturemanagement.SMSignatureViewItem, rec db.SignatureRecord, evidence []query.SigningEvidence) {
+	field := ""
+	if rec.FieldName != nil {
+		field = *rec.FieldName
+	}
+	for i := range evidence {
+		ev := evidence[i]
+		if ev.SignerDID != rec.SignerDID {
+			continue
+		}
+		if field != "" && ev.FieldName != "" && ev.FieldName != field {
+			continue
+		}
+		item.CeremonyID = optString(ev.CeremonyID)
+		item.ContentHash = optString(ev.ContentHash)
+		item.PdfHash = optString(ev.PDFHash)
+		item.KbSdHash = optString(ev.KBSDHash)
+		item.ValidationReportHash = optString(ev.ValidationReportHash)
+		return
+	}
+}
+
+// optString returns nil for an empty string so optional goa attributes stay
+// unset rather than serialising as "".
+func optString(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func (s *signatureManagementsrvc) StartCeremony(ctx context.Context, req *signaturemanagement.SMSignatureRequestStartRequest) (res *signaturemanagement.SMSignatureRequestStartResponse, err error) {

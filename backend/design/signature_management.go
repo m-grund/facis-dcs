@@ -93,10 +93,10 @@ var SMContractSignatureEnvelope = Type("SMContractSignatureEnvelope", func() {
 
 var SMContractRetrieveByIDResponse = Type("SMContractRetrieveByIDResponse", func() {
 	Attribute("contract", SMContractItem, "The contract")
-	Attribute("signature_envelope", SMContractSignatureEnvelope, "The signature_envelope of the contract")
+	Attribute("signature_envelope", SMContractSignatureEnvelope, "The latest signature envelope; absent for an APPROVED-unsigned contract that has no signature yet")
 	Attribute("key_version", Int, "HSM key version that produced the latest signature (DCS-OR-C2PA-007)")
 
-	Required("contract", "signature_envelope")
+	Required("contract")
 })
 
 var SMContractVerifyRequest = Type("SMContractVerifyRequest", func() {
@@ -183,6 +183,7 @@ var SMContractValidateResponse = Type("SMContractValidateResponse", func() {
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("findings", ArrayOf(String), "A list of findings")
+	Attribute("dss", SMDSSReport, "EU DSS validation report for the contract's PDF signature — signer identity, signature level, timestamp, and ETSI indication (DCS-FR-SM-18/-26); absent when DSS validation is not configured or the contract carries no signed PDF")
 
 	Required("did")
 })
@@ -258,8 +259,20 @@ var SMSignatureViewRequest = Type("SMSignatureViewRequest", func() {
 	Required("did")
 })
 
+var SMDSSReport = Type("SMDSSReport", func() {
+	Description("EU DSS (ETSI EN 319 102-1) validation report for the signed contract's PDF signature — the external AdES validator's view of trust anchors, cryptographic integrity, and timestamp (DCS-FR-SM-18, DCS-IR-SM-05). Absent when DSS validation is not configured or the contract carries no signed PDF.")
+
+	Attribute("indication", String, "ETSI EN 319 102-1 main indication: TOTAL-PASSED, INDETERMINATE, or TOTAL-FAILED")
+	Attribute("sub_indication", String, "Qualifier for a non-passed indication (e.g. NO_CERTIFICATE_CHAIN_FOUND for a non-qualified CA)")
+	Attribute("signed_by", String, "Subject of the signing certificate — the signer identity / credential chain the wallet used (DCS-FR-SM-26)")
+	Attribute("signature_format", String, "AdES format and level DSS recognized (e.g. PAdES-BASELINE-B) — the QES/AES level evidence (DCS-FR-SM-21)")
+	Attribute("signing_time", String, "Claimed/qualified signing time the signature carries (DCS-FR-SM-18 timestamp verification)")
+
+	Required("indication")
+})
+
 var SMSignatureViewItem = Type("SMSignatureViewItem", func() {
-	Description("One applied signature's metadata for the Signature Compliance Viewer (DCS-FR-SM-26): signer identity, credential class/signature level, status, and timestamps")
+	Description("One applied signature's metadata for the Signature Compliance Viewer (DCS-FR-SM-26): signer identity, credential class/signature level, status, timestamps, and the cryptographic integrity proof bound into the embedded ContractSigningSummaryCredential")
 
 	Attribute("signer_did", String, "DID of the signer the signature is bound to")
 	Attribute("field_name", String, "The declared signature field this signature covers (DCS-FR-SM-07/-17)")
@@ -269,17 +282,23 @@ var SMSignatureViewItem = Type("SMSignatureViewItem", func() {
 	Attribute("revoked_at", String, "When the signature was revoked, if it was")
 	Attribute("format", String, "Signature container format")
 	Attribute("jades", String, "The JAdES (ETSI TS 119 182-1) compact JWS over the machine-readable JSON-LD contract representation, the counterpart to the visible PAdES on the PDF (DCS-FR-SM-02/-11)")
+	Attribute("ceremony_id", String, "The signing ceremony that produced this signature, from the embedded ContractSigningSummaryCredential")
+	Attribute("content_hash", String, "SHA-256 of the JSON-LD contract source the signature covers — cryptographic integrity proof (DCS-FR-SM-26)")
+	Attribute("pdf_hash", String, "SHA-256 of the base PDF bytes the signature covers — cryptographic integrity proof (DCS-FR-SM-26)")
+	Attribute("kb_sd_hash", String, "KB-JWT sd_hash binding the signature to the presented credential — the credential chain link (DCS-FR-SM-26)")
+	Attribute("validation_report_hash", String, "Hash of the SHACL validation report pinned at signing time (drift evidence)")
 
 	Required("signer_did", "credential_type", "status", "format")
 })
 
 var SMSignatureViewResponse = Type("SMSignatureViewResponse", func() {
-	Description("Signature Compliance Viewer data (DCS-FR-SM-26, DCS-IR-SM-05): every applied signature's metadata plus the contract's cryptographic integrity findings")
+	Description("Signature Compliance Viewer data (DCS-FR-SM-26, DCS-IR-SM-05): every applied signature's metadata plus the contract's cryptographic integrity findings and the external EU DSS validation report")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("contract_state", String, "Current contract lifecycle state")
 	Attribute("signatures", ArrayOf(SMSignatureViewItem), "All signatures applied to the contract")
 	Attribute("integrity_findings", ArrayOf(String), "Cryptographic integrity findings from the validation machinery (empty = intact)")
+	Attribute("dss", SMDSSReport, "EU DSS validation report for the contract's PDF signature; absent when DSS validation is not configured or the contract carries no signed PDF")
 
 	Required("did", "contract_state", "signatures", "integrity_findings")
 })
@@ -356,13 +375,17 @@ var _ = Service("SignatureManagement", func() {
 	Method("retrieve", func() {
 		Description("fetch contracts, recording an audit-trail entry for the read.")
 		Meta("dcs:requirements", "DCS-IR-SM-01")
-		Meta("dcs:ui", "Secure Contract Viewer")
+		Meta("dcs:ui", "Secure Contract Viewer", "Signature Compliance Viewer")
 		Meta("dcs:sm:components", "Signer Authorization & PoA application")
 
 		Security(JWTAuth, func() {
 			Scope("Contract Signer")
 			Scope("Sys. Contract Signer")
 			Scope("Contract Observer")
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+			Scope("Auditor")
+			Scope("Compliance Officer")
 		})
 
 		Payload(SMContractRetrieveRequest)
