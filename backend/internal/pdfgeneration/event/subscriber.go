@@ -16,8 +16,10 @@ import (
 	"github.com/jmoiron/sqlx"
 
 	"digital-contracting-service/internal/base/conf"
+	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/ipfs"
+	cweevent "digital-contracting-service/internal/contractworkflowengine/event"
 	cweeventtype "digital-contracting-service/internal/contractworkflowengine/datatype/eventtype"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/middleware"
@@ -227,6 +229,15 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 
 	if err = s.CRepo.UpdatePDFState(ctx, tx, cweEvt.DID, cwedb.ContractPDFState{IPFSCID: storeResult.Identifier.Value, RendererVersion: rendererVersion, C2PAState: c2paState, PayloadHash: currentPayloadHash}); err != nil {
 		return fmt.Errorf("update pdf_ipfs_cid for %s: %w", cweEvt.DID, err)
+	}
+
+	if err := event.Create(ctx, tx, cweevent.PdfRegeneratedEvent{
+		DID:        cweEvt.DID,
+		IPFSCID:    storeResult.Identifier.Value,
+		State:      string(contract.State),
+		OccurredAt: time.Now().UTC(),
+	}, componenttype.ContractWorkflowEngine); err != nil {
+		return fmt.Errorf("emit PDF-regenerated event for %s: %w", cweEvt.DID, err)
 	}
 
 	if err := tx.Commit(); err != nil {

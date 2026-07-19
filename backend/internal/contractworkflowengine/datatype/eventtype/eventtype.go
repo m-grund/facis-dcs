@@ -53,6 +53,11 @@ const (
 	// Revoke marks the invalidation of a signed contract via signature
 	// revocation (FR-SM-20); no command emits it yet.
 	Revoke EventType = "REVOKE_CONTRACT"
+
+	// PDFRegenerated is emitted after the background regenerator has rebuilt and
+	// stored a contract's PDF. The DCS-to-DCS synchronizer ships that PDF to the
+	// counterparty on shippable transitions (ADR-13).
+	PDFRegenerated EventType = "PDF_REGENERATED"
 )
 
 var validStates = map[EventType]bool{
@@ -90,6 +95,7 @@ var validStates = map[EventType]bool{
 	Withdraw:                 true,
 	Revoke:                   true,
 	Export:                   true,
+	PDFRegenerated:           true,
 }
 
 func NewEventType(s string) (EventType, error) {
