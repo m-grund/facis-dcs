@@ -386,7 +386,7 @@ def step_given_two_instances_running(context):
 
 @when(
     "the initiator on instance A creates and offers a contract with instance B "
-    "as negotiator and approver"
+    "as counterparty"
 )
 def step_when_create_and_offer_cross_instance(context):
     with _as_instance(context, context.base_url_a):
@@ -431,7 +431,7 @@ def step_when_create_and_offer_cross_instance(context):
         assert offer_resp.status_code == 200, offer_resp.text
 
 
-@then("the contract appears on instance B in state OFFERED within a few seconds")
+@then("the contract appears on instance B in state NEGOTIATION within a few seconds")
 def step_then_contract_offered_on_b(context):
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_b)
     deadline = time.monotonic() + 45
@@ -445,12 +445,12 @@ def step_then_contract_offered_on_b(context):
         )
         if last_resp.status_code == 200:
             actual_state = str(last_resp.json().get("state", "")).upper()
-            if actual_state == "OFFERED":
+            if actual_state == "NEGOTIATION":
                 return
         time.sleep(1)
-    assert actual_state == "OFFERED", (
-        "Expected the contract created on instance A to replicate to instance B as OFFERED "
-        f"within a few seconds; last observed state: '{actual_state}' (last response: "
+    assert actual_state == "NEGOTIATION", (
+        "Expected the contract offered on instance A to appear on its counterparty B as "
+        f"NEGOTIATION within a few seconds; last observed state: '{actual_state}' (last response: "
         f"{last_resp.status_code if last_resp else 'n/a'} {last_resp.text if last_resp else ''})"
     )
 
