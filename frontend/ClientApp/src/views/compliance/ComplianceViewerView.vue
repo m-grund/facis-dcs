@@ -4,10 +4,10 @@ import {
   type SignatureAuditEntry,
   type SignatureComplianceResult,
   type SignatureContract,
+  signatureManagementService,
   type SignatureValidateResult,
   type SignatureViewItem,
   type SignatureViewResult,
-  signatureManagementService,
 } from '@/services/signature-management-service'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -162,16 +162,15 @@ function dssIndicator(indication: string | undefined): Indicator {
   }
 }
 
-const FAILURE_KEYWORDS = /(mismatch|drift detected|does not match|failed|could not|missing|no longer|power of attorney)/i
+const FAILURE_KEYWORDS =
+  /(mismatch|drift detected|does not match|failed|could not|missing|no longer|power of attorney)/i
 
 function isFailureFinding(finding: string): boolean {
   return FAILURE_KEYWORDS.test(finding)
 }
 
 function findingIndicator(finding: string): Indicator {
-  return isFailureFinding(finding)
-    ? { label: 'FAIL', cls: 'badge-error' }
-    : { label: 'PASS', cls: 'badge-success' }
+  return isFailureFinding(finding) ? { label: 'FAIL', cls: 'badge-error' } : { label: 'PASS', cls: 'badge-success' }
 }
 
 // Prefer the freshest structured DSS report: the one just returned by the
@@ -218,7 +217,7 @@ function buildReport() {
 }
 
 function reportFilename(ext: string): string {
-  const base = (selected.value?.name || selected.value?.did || 'contract').replace(/[^\w.-]+/g, '_')
+  const base = (selected.value?.name ?? selected.value?.did ?? 'contract').replace(/[^\w.-]+/g, '_')
   return `compliance-report-${base}.${ext}`
 }
 
@@ -232,7 +231,7 @@ function exportJson() {
   URL.revokeObjectURL(url)
 }
 
-function escapeHtml(value: unknown): string {
+function escapeHtml(value: string | number | boolean | null | undefined): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -317,8 +316,13 @@ function exportPdf() {
       <!-- Contract list: filter/search signed contracts by compliance status -->
       <div class="lg:col-span-1">
         <div class="mb-2 flex flex-col gap-2">
-          <input v-model="search" type="text" placeholder="Search DID or name…" class="input input-sm input-bordered w-full" />
-          <select v-model="statusFilter" class="select select-sm select-bordered w-full">
+          <input
+            v-model="search"
+            type="text"
+            placeholder="Search DID or name…"
+            class="input-bordered input input-sm w-full"
+          />
+          <select v-model="statusFilter" class="select-bordered select w-full select-sm">
             <option value="">All statuses</option>
             <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
           </select>
@@ -349,11 +353,39 @@ function exportPdf() {
         <div v-if="!selected" class="text-base-content/60">Select a contract to inspect its signatures.</div>
         <div v-else>
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div role="tablist" class="tabs tabs-boxed">
-              <button role="tab" class="tab" :class="{ 'tab-active': activeTab === 'validation' }" @click="activeTab = 'validation'">Validation</button>
-              <button role="tab" class="tab" :class="{ 'tab-active': activeTab === 'revocation' }" @click="activeTab = 'revocation'">Revocation</button>
-              <button role="tab" class="tab" :class="{ 'tab-active': activeTab === 'compliance' }" @click="activeTab = 'compliance'">Compliance Checks</button>
-              <button role="tab" class="tab" :class="{ 'tab-active': activeTab === 'audit' }" @click="activeTab = 'audit'">Audit Reports</button>
+            <div role="tablist" class="tabs-boxed tabs">
+              <button
+                role="tab"
+                class="tab"
+                :class="{ 'tab-active': activeTab === 'validation' }"
+                @click="activeTab = 'validation'"
+              >
+                Validation
+              </button>
+              <button
+                role="tab"
+                class="tab"
+                :class="{ 'tab-active': activeTab === 'revocation' }"
+                @click="activeTab = 'revocation'"
+              >
+                Revocation
+              </button>
+              <button
+                role="tab"
+                class="tab"
+                :class="{ 'tab-active': activeTab === 'compliance' }"
+                @click="activeTab = 'compliance'"
+              >
+                Compliance Checks
+              </button>
+              <button
+                role="tab"
+                class="tab"
+                :class="{ 'tab-active': activeTab === 'audit' }"
+                @click="activeTab = 'audit'"
+              >
+                Audit Reports
+              </button>
             </div>
             <div class="flex gap-2">
               <button class="btn btn-outline btn-sm" @click="exportJson">Export JSON</button>
@@ -367,7 +399,7 @@ function exportPdf() {
             <!-- Validation tab: trust anchors, crypto integrity, timestamps -->
             <div v-if="activeTab === 'validation'" class="space-y-4">
               <div class="flex items-center gap-2">
-                <button class="btn btn-primary btn-sm" :disabled="!canManage || busy" @click="runValidate">
+                <button class="btn btn-sm btn-primary" :disabled="!canManage || busy" @click="runValidate">
                   <span v-if="busy" class="loading loading-xs loading-spinner" />
                   Validate
                 </button>
@@ -378,13 +410,27 @@ function exportPdf() {
                 <div class="card-body p-4">
                   <div class="flex items-center gap-2">
                     <h3 class="font-semibold">EU DSS Validation (ETSI EN 319 102-1)</h3>
-                    <span class="badge" :class="dssIndicator(activeDss.indication).cls">{{ dssIndicator(activeDss.indication).label }}</span>
+                    <span class="badge" :class="dssIndicator(activeDss.indication).cls">
+                      {{ dssIndicator(activeDss.indication).label }}
+                    </span>
                   </div>
                   <dl class="mt-2 grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
-                    <div><dt class="inline font-medium">Signer identity:</dt> <dd class="inline break-all">{{ activeDss.signed_by ?? '—' }}</dd></div>
-                    <div><dt class="inline font-medium">Signature level:</dt> <dd class="inline">{{ activeDss.signature_format ?? '—' }}</dd></div>
-                    <div><dt class="inline font-medium">Timestamp:</dt> <dd class="inline">{{ activeDss.signing_time ?? '—' }}</dd></div>
-                    <div><dt class="inline font-medium">Sub-indication:</dt> <dd class="inline">{{ activeDss.sub_indication ?? '—' }}</dd></div>
+                    <div>
+                      <dt class="inline font-medium">Signer identity:</dt>
+                      <dd class="inline break-all">{{ activeDss.signed_by ?? '—' }}</dd>
+                    </div>
+                    <div>
+                      <dt class="inline font-medium">Signature level:</dt>
+                      <dd class="inline">{{ activeDss.signature_format ?? '—' }}</dd>
+                    </div>
+                    <div>
+                      <dt class="inline font-medium">Timestamp:</dt>
+                      <dd class="inline">{{ activeDss.signing_time ?? '—' }}</dd>
+                    </div>
+                    <div>
+                      <dt class="inline font-medium">Sub-indication:</dt>
+                      <dd class="inline">{{ activeDss.sub_indication ?? '—' }}</dd>
+                    </div>
                   </dl>
                 </div>
               </div>
@@ -392,7 +438,11 @@ function exportPdf() {
               <div>
                 <div class="mb-1 flex items-center gap-2">
                   <h3 class="font-semibold">Cryptographic Integrity</h3>
-                  <span v-if="integrityFindings.length" class="badge" :class="integrityIntact ? 'badge-success' : 'badge-error'">
+                  <span
+                    v-if="integrityFindings.length"
+                    class="badge"
+                    :class="integrityIntact ? 'badge-success' : 'badge-error'"
+                  >
                     {{ integrityIntact ? 'Intact' : 'Issues found' }}
                   </span>
                 </div>
@@ -410,17 +460,27 @@ function exportPdf() {
             <div v-else-if="activeTab === 'revocation'" class="overflow-x-auto">
               <table class="table w-full table-zebra">
                 <thead>
-                  <tr><th>Signer</th><th>Field</th><th>Status</th><th>Signed / Revoked</th><th>Action</th></tr>
+                  <tr>
+                    <th>Signer</th>
+                    <th>Field</th>
+                    <th>Status</th>
+                    <th>Signed / Revoked</th>
+                    <th>Action</th>
+                  </tr>
                 </thead>
                 <tbody>
                   <tr v-for="(sig, i) in view?.signatures ?? []" :key="i">
                     <td class="max-w-[12rem] truncate font-mono text-xs">{{ sig.signer_did }}</td>
                     <td>{{ sig.field_name ?? '—' }}</td>
-                    <td><span class="badge badge-sm" :class="statusIndicator(sig.status).cls">{{ statusIndicator(sig.status).label }}</span></td>
+                    <td>
+                      <span class="badge badge-sm" :class="statusIndicator(sig.status).cls">
+                        {{ statusIndicator(sig.status).label }}
+                      </span>
+                    </td>
                     <td class="text-xs">{{ sig.revoked_at ?? sig.signed_at ?? '—' }}</td>
                     <td>
                       <button
-                        class="btn btn-error btn-outline btn-xs"
+                        class="btn btn-outline btn-xs btn-error"
                         :disabled="!canManage || busy || sig.status.toUpperCase() === 'REVOKED'"
                         @click="revoke(sig)"
                       >
@@ -428,16 +488,20 @@ function exportPdf() {
                       </button>
                     </td>
                   </tr>
-                  <tr v-if="!view?.signatures?.length"><td colspan="5" class="text-base-content/60">No signatures on this contract.</td></tr>
+                  <tr v-if="!view?.signatures?.length">
+                    <td colspan="5" class="text-base-content/60">No signatures on this contract.</td>
+                  </tr>
                 </tbody>
               </table>
-              <p v-if="!canManage" class="mt-2 text-xs text-base-content/50">Revocation requires the Contract Manager role.</p>
+              <p v-if="!canManage" class="mt-2 text-xs text-base-content/50">
+                Revocation requires the Contract Manager role.
+              </p>
             </div>
 
             <!-- Compliance Checks tab: signature level (QES/AES), credential status, roles -->
             <div v-else-if="activeTab === 'compliance'" class="space-y-4">
               <div class="flex items-center gap-2">
-                <button class="btn btn-primary btn-sm" :disabled="!canManage || busy" @click="runCompliance">
+                <button class="btn btn-sm btn-primary" :disabled="!canManage || busy" @click="runCompliance">
                   <span v-if="busy" class="loading loading-xs loading-spinner" />
                   Run Compliance
                 </button>
@@ -447,16 +511,31 @@ function exportPdf() {
               <div class="overflow-x-auto">
                 <table class="table w-full table-zebra">
                   <thead>
-                    <tr><th>Signer</th><th>Signature level</th><th>Credential status</th><th>Credential binding</th></tr>
+                    <tr>
+                      <th>Signer</th>
+                      <th>Signature level</th>
+                      <th>Credential status</th>
+                      <th>Credential binding</th>
+                    </tr>
                   </thead>
                   <tbody>
                     <tr v-for="(sig, i) in view?.signatures ?? []" :key="i">
                       <td class="max-w-[12rem] truncate font-mono text-xs">{{ sig.signer_did }}</td>
-                      <td><span class="badge badge-info badge-sm">{{ signatureLevel(sig) }}</span></td>
-                      <td><span class="badge badge-sm" :class="statusIndicator(sig.status).cls">{{ statusIndicator(sig.status).label }}</span></td>
-                      <td class="max-w-[12rem] truncate font-mono text-[10px]" :title="sig.kb_sd_hash ?? ''">{{ sig.kb_sd_hash ?? '—' }}</td>
+                      <td>
+                        <span class="badge badge-sm badge-info">{{ signatureLevel(sig) }}</span>
+                      </td>
+                      <td>
+                        <span class="badge badge-sm" :class="statusIndicator(sig.status).cls">
+                          {{ statusIndicator(sig.status).label }}
+                        </span>
+                      </td>
+                      <td class="max-w-[12rem] truncate font-mono text-[10px]" :title="sig.kb_sd_hash ?? ''">
+                        {{ sig.kb_sd_hash ?? '—' }}
+                      </td>
                     </tr>
-                    <tr v-if="!view?.signatures?.length"><td colspan="4" class="text-base-content/60">No signatures on this contract.</td></tr>
+                    <tr v-if="!view?.signatures?.length">
+                      <td colspan="4" class="text-base-content/60">No signatures on this contract.</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
@@ -475,17 +554,24 @@ function exportPdf() {
             <!-- Audit Reports tab -->
             <div v-else class="space-y-3">
               <div class="flex items-center gap-2">
-                <button class="btn btn-primary btn-sm" :disabled="!canAudit || busy" @click="loadAudit">
+                <button class="btn btn-sm btn-primary" :disabled="!canAudit || busy" @click="loadAudit">
                   <span v-if="busy" class="loading loading-xs loading-spinner" />
                   Load Audit Report
                 </button>
-                <span v-if="!canAudit" class="text-xs text-base-content/50">Requires Auditor or Compliance Officer role.</span>
+                <span v-if="!canAudit" class="text-xs text-base-content/50">
+                  Requires Auditor or Compliance Officer role.
+                </span>
               </div>
 
               <div v-if="auditEntries" class="overflow-x-auto">
                 <table class="table w-full table-zebra">
                   <thead>
-                    <tr><th>ID</th><th>Component</th><th>Event</th><th>Created</th></tr>
+                    <tr>
+                      <th>ID</th>
+                      <th>Component</th>
+                      <th>Event</th>
+                      <th>Created</th>
+                    </tr>
                   </thead>
                   <tbody>
                     <tr v-for="entry in auditEntries" :key="entry.id">
@@ -494,7 +580,9 @@ function exportPdf() {
                       <td>{{ entry.event_type }}</td>
                       <td class="text-xs">{{ entry.created_at }}</td>
                     </tr>
-                    <tr v-if="auditEntries.length === 0"><td colspan="4" class="text-base-content/60">No audit entries.</td></tr>
+                    <tr v-if="auditEntries.length === 0">
+                      <td colspan="4" class="text-base-content/60">No audit entries.</td>
+                    </tr>
                   </tbody>
                 </table>
               </div>

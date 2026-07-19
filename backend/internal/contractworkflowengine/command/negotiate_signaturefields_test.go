@@ -22,7 +22,11 @@ func signatureFieldsOf(t *testing.T, raw datatype.JSON) map[string]string {
 		require.Equal(t, "dcs:SignatureField", node["@type"])
 		id, _ := node["@id"].(string)
 		require.NotEmpty(t, id)
-		out[signatureFieldName(node)] = id
+		name, _ := node["dcs:signatoryName"].(string)
+		if name == "" {
+			name, _ = node["signatoryName"].(string)
+		}
+		out[name] = id
 	}
 	return out
 }

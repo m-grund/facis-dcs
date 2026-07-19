@@ -62,7 +62,12 @@ test('signature compliance viewer surfaces DSS + embedded-VC metadata', async ({
 
     // The cryptographic-integrity findings section renders with pass/fail rows.
     await expect(page.getByRole('heading', { name: 'Cryptographic Integrity' })).toBeVisible()
-    await expect(page.locator('.badge').filter({ hasText: /PASS|FAIL/ }).first()).toBeVisible()
+    await expect(
+      page
+        .locator('.badge')
+        .filter({ hasText: /PASS|FAIL/ })
+        .first(),
+    ).toBeVisible()
   })
 
   await test.step('compliance checks tab flags signature level + credential status', async () => {

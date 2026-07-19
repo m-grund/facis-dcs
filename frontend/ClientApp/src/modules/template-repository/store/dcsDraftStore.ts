@@ -1039,9 +1039,7 @@ function semanticConditionToPolicies(
 /** Flattens a constraint list to its atomic leaves, descending logical constraints.
  * ODRL/JSON-LD lets `odrl:constraint` be a single node or a list, so a bare
  * constraint object is normalized to a one-element list before descent. */
-function atomicConstraintLeaves(
-  nodes: readonly OdrlConstraintNode[] | OdrlConstraintNode,
-): OdrlConstraint[] {
+function atomicConstraintLeaves(nodes: readonly OdrlConstraintNode[] | OdrlConstraintNode): OdrlConstraint[] {
   const list = Array.isArray(nodes) ? nodes : [nodes]
   const leaves: OdrlConstraint[] = []
   for (const node of list) {

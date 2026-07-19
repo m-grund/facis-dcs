@@ -54,7 +54,9 @@ onMounted(async () => {
             <td>{{ contract.name ?? '—' }}</td>
             <td>{{ contract.contract_version ?? 1 }}</td>
             <td>{{ new Date(contract.updated_at).toLocaleDateString() }}</td>
-            <td><span class="badge badge-ghost badge-sm">{{ contract.state }}</span></td>
+            <td>
+              <span class="badge badge-ghost badge-sm">{{ contract.state }}</span>
+            </td>
             <td>
               <RouterLink
                 class="btn btn-sm btn-primary"
