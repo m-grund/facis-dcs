@@ -87,7 +87,7 @@ Feature: PKI consolidation - PKCS#11 + SoftHSM2, ECDSA P-256, trust anchors, rot
     # means ECDSA P-256 end to end, on both instances simultaneously.
     Given instance A and instance B are both running and trust each other
     Then instance A and instance B each publish an ECDSA P-256 DID key, not RSA
-    When the initiator on instance A creates and offers a contract with instance B as negotiator and approver
+    When the initiator on instance A creates and offers a contract with instance B as counterparty
     Then the contract appears on instance B in state OFFERED within a few seconds
 
   @DCS-IR-HI-01
