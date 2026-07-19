@@ -45,6 +45,18 @@ jobs:
           python-version: '3.12'
           cache: pip
 
+      # Restore the BDD venv itself so setup_environment's reinstall is
+      # "already satisfied" (no re-download/rebuild of cryptography + the
+      # bdd-executor deps). setup_environment still reinstalls on top, so a
+      # requirements/Makefile change is always picked up.
+      - name: Cache BDD Python venv
+        uses: actions/cache@v4
+        with:
+          path: tests/bdd/.venv
+          key: bdd-venv-py312-${{ hashFiles('testWallet/requirements.txt', 'tests/bdd/Makefile') }}
+          restore-keys: |
+            bdd-venv-py312-
+
       # The DSS demo image is the single largest external pull (~1-2GB). Cache a
       # docker-save tarball and load it so kind_load_dss_image's `docker image
       # inspect` skips the pull on a hit.
@@ -171,6 +183,18 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
+
+      # Restore the BDD venv itself so setup_environment's reinstall is
+      # "already satisfied" (no re-download/rebuild of cryptography + the
+      # bdd-executor deps). setup_environment still reinstalls on top, so a
+      # requirements/Makefile change is always picked up.
+      - name: Cache BDD Python venv
+        uses: actions/cache@v4
+        with:
+          path: tests/bdd/.venv
+          key: bdd-venv-py312-${{ hashFiles('testWallet/requirements.txt', 'tests/bdd/Makefile') }}
+          restore-keys: |
+            bdd-venv-py312-
 
       - name: Setup Node
         uses: actions/setup-node@v4
