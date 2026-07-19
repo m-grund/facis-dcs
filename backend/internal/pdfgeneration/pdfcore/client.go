@@ -399,6 +399,32 @@ func (c *Client) ExtractManifestChain(ctx context.Context, pdf []byte) ([]ChainE
 	return chain, nil
 }
 
+// ExtractPayload returns the machine-readable JSON-LD contract payload embedded
+// in a PDF. A peer that receives a contract PDF rebuilds its local copy from
+// this, so the DCS never parses PDF bytes itself (ADR-13).
+func (c *Client) ExtractPayload(ctx context.Context, pdf []byte) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+"/payload/extract", bytes.NewReader(pdf))
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core payload-extract request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/pdf")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core payload-extract: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkStatus(resp); err != nil {
+		return nil, err
+	}
+	payload, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("pdf-core payload-extract read: %w", err)
+	}
+	return payload, nil
+}
+
 // checkStatus returns an error for non-2xx responses, including the status code
 // in the message. Hard-fail: callers must not silently swallow pdf-core errors.
 func checkStatus(resp *http.Response) error {

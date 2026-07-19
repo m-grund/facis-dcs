@@ -559,6 +559,28 @@ func (s *service) extractManifest(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(manifestStore)
 }
 
+// extractPayload returns the machine-readable JSON-LD contract payload embedded
+// in the PDF (the latest version). A peer that receives a contract PDF rebuilds
+// its local copy from this; the DCS never parses PDF bytes itself (ADR-13).
+func (s *service) extractPayload(w http.ResponseWriter, r *http.Request) {
+	if err := checkMediaType(r.Header.Get("Content-Type"), "application/pdf"); err != nil {
+		writeError(w, err)
+		return
+	}
+	raw, err := limitRead(r.Body, 32<<20)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+	payload, err := compiler.ExtractLatestEmbeddedJSONLD(raw)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+	w.Header().Set("Content-Type", "application/ld+json")
+	_, _ = w.Write(payload)
+}
+
 // manifestChain extracts the embedded C2PA manifest store and returns its
 // parsed manifest chain (one entry per manifest, oldest first, with each
 // manifest's dcs.lifecycle assertion). All JUMBF/CBOR byte parsing lives here
