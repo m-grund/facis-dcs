@@ -22,6 +22,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # The kind node loads the heavy DSS demo bundle (~1-2GB) alongside the two
+      # DCS images, pdf-core, and the Postgres/Keycloak/IPFS/ORCE/FC base images;
+      # on a stock runner (~14GB free) this intermittently exhausts the disk
+      # ("No space left on device" mid pip-install). Reclaim the preinstalled
+      # toolchains this job never uses.
+      - name: Free up disk space
+        run: |
+          echo "Before:"; df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android \
+            /opt/hostedtoolcache/CodeQL /usr/local/.ghcup /usr/share/swift || true
+          sudo docker image prune -af || true
+          echo "After:"; df -h /
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
