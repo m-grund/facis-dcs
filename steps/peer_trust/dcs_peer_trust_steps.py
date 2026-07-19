@@ -431,8 +431,9 @@ def step_when_create_and_offer_cross_instance(context):
         assert offer_resp.status_code == 200, offer_resp.text
 
 
-@then("the contract appears on instance B in state NEGOTIATION within a few seconds")
-def step_then_contract_offered_on_b(context):
+@then("the contract appears on instance B in state {expected} within a few seconds")
+def step_then_contract_offered_on_b(context, expected):
+    expected = expected.upper()
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_b)
     deadline = time.monotonic() + 45
     actual_state = None
@@ -445,12 +446,12 @@ def step_then_contract_offered_on_b(context):
         )
         if last_resp.status_code == 200:
             actual_state = str(last_resp.json().get("state", "")).upper()
-            if actual_state == "NEGOTIATION":
+            if actual_state == expected:
                 return
         time.sleep(1)
-    assert actual_state == "NEGOTIATION", (
+    assert actual_state == expected, (
         "Expected the contract offered on instance A to appear on its counterparty B as "
-        f"NEGOTIATION within a few seconds; last observed state: '{actual_state}' (last response: "
+        f"{expected} within a few seconds; last observed state: '{actual_state}' (last response: "
         f"{last_resp.status_code if last_resp else 'n/a'} {last_resp.text if last_resp else ''})"
     )
 

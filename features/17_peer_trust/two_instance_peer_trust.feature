@@ -18,4 +18,4 @@ Feature: Two-instance peer trust — trusted_peers allowlist and cross-instance 
   Scenario: A contract offered on instance A appears on its counterparty B
     Given instance A and instance B are both running and trust each other
     When the initiator on instance A creates and offers a contract with instance B as counterparty
-    Then the contract appears on instance B in state NEGOTIATION within a few seconds
+    Then the contract appears on instance B in state OFFERED within a few seconds

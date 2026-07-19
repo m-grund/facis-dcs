@@ -76,7 +76,6 @@ func (h *PeerPdfReceiver) Handle(ctx context.Context, cmd PeerPdfReceiveCmd) err
 
 	data := db.Contract{
 		DID:             cmd.ContractIRI,
-		State:           contractstate.Negotiation.String(),
 		UpdatedAt:       now,
 		ContractData:    &payload,
 		TemplateDID:     templateIRI,
@@ -85,6 +84,10 @@ func (h *PeerPdfReceiver) Handle(ctx context.Context, cmd PeerPdfReceiveCmd) err
 	}
 
 	if existing != nil {
+		// A re-ship (a counteroffer or a settled/signed version) refreshes the
+		// content but must not clobber this instance's own local RBAC progress —
+		// its intrinsic state is private and advances through its own workflow.
+		data.State = existing.State
 		data.Origin = existing.Origin
 		data.CreatedBy = existing.CreatedBy
 		data.ContractVersion = existing.ContractVersion + 1
@@ -93,6 +96,12 @@ func (h *PeerPdfReceiver) Handle(ctx context.Context, cmd PeerPdfReceiveCmd) err
 		}
 		return tx.Commit()
 	}
+
+	// A first receipt is an inbound offer: this instance's intrinsic state starts
+	// at OFFERED (an offer on our table, awaiting our own review), which its local
+	// review/approval tasks then advance. The peer-facing extrinsic lifecycle
+	// (offered → accepted → executed) is inferred from this plus the shipped PDF.
+	data.State = contractstate.Offered.String()
 
 	// The two parties are objective on both copies: the origin (the peer that
 	// created and offered the contract) and this instance. This instance's own
