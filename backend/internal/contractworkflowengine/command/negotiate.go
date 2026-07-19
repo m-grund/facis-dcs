@@ -167,13 +167,15 @@ func seedSignatureFields(raw datatype.JSON, instanceDIDs []string) (datatype.JSO
 	}
 
 	fields, _ := doc["dcs:signatureFields"].([]any)
-	present := map[string]bool{}
-	for _, rawField := range fields {
-		if node, ok := rawField.(map[string]any); ok {
-			present[signatureFieldName(node)] = true
-		}
+	// Explicit declaration wins: a contract that already declares its signature
+	// fields (e.g. a multi-signatory contract naming each signer) is signed
+	// against exactly those, so the per-party auto-seed does not add an extra
+	// instance-DID field on top of them.
+	if len(fields) > 0 {
+		return raw, false, nil
 	}
 
+	present := map[string]bool{}
 	docID, _ := doc["@id"].(string)
 	changed := false
 	for _, did := range instanceDIDs {
@@ -199,14 +201,4 @@ func seedSignatureFields(raw datatype.JSON, instanceDIDs []string) (datatype.JSO
 		return nil, false, fmt.Errorf("encode contract data: %w", err)
 	}
 	return encoded, true, nil
-}
-
-// signatureFieldName reads a dcs:SignatureField node's signatory name, which a
-// document may carry under the prefixed or the JSON-LD-compacted term.
-func signatureFieldName(node map[string]any) string {
-	if name, ok := node["dcs:signatoryName"].(string); ok {
-		return name
-	}
-	name, _ := node["signatoryName"].(string)
-	return name
 }

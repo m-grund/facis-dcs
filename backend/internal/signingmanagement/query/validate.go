@@ -146,12 +146,27 @@ func (h *Validator) validateWithDSS(ctx context.Context, tx *sqlx.Tx, did string
 	if err != nil {
 		return nil, nil, fmt.Errorf("EU DSS validation of %s failed: %w", did, err)
 	}
-	finding := fmt.Sprintf("EU DSS validation report: indication=%s", report.Indication)
-	if report.SubIndication != "" {
-		finding += fmt.Sprintf(" (subIndication=%s)", report.SubIndication)
+	// A wallet-produced signature is an AES (eIDAS Art. 26), not a QES: DSS's
+	// AES acceptance criteria (integrity sound + signatory certificate present)
+	// are the passing bar, NOT TOTAL-PASSED — which additionally demands a
+	// qualified EU-trust-list chain (see dss.Report.AssertValidAES). So an
+	// INDETERMINATE whose sub-indication is only a trust/POE gap
+	// (NO_CERTIFICATE_CHAIN_FOUND for the wallet's non-qualified dev CA) is a
+	// PASSING confirmation here, consistent with what the signing path already
+	// accepts; only a crypto/integrity failure is a defect finding.
+	if err := report.AssertValidAES(); err != nil {
+		finding := fmt.Sprintf("EU DSS validation report: indication=%s", report.Indication)
+		if report.SubIndication != "" {
+			finding += fmt.Sprintf(" (subIndication=%s)", report.SubIndication)
+		}
+		return report, []string{finding}, nil
 	}
-	return report, []string{finding}, nil
+	return report, []string{ValidAESFinding}, nil
 }
+
+// ValidAESFinding is the passing confirmation recorded when the EU DSS leg
+// accepts the signature as a valid Advanced Electronic Signature.
+const ValidAESFinding = "EU DSS validation confirms a valid Advanced Electronic Signature"
 
 // collectSigningEvidence extracts the ContractSigningSummaryCredential(s)
 // embedded in the stored signed PDF and distills each to the compliance

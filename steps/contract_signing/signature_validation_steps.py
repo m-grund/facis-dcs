@@ -78,6 +78,10 @@ _PASSING_VALIDATION_FINDINGS = {
     # in the signing evidence (signingmanagement/query/validate.go).
     "SHACL validation report re-verified against the pinned hub schema version — no drift",
     "Validation passed",
+    # The EU DSS leg accepts a wallet-produced AES (integrity sound + signatory
+    # certificate present); a non-qualified dev-CA chain is expected for AES and
+    # is not a defect (signingmanagement/query/validate.go ValidAESFinding).
+    "EU DSS validation confirms a valid Advanced Electronic Signature",
 }
 
 
