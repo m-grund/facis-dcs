@@ -56,7 +56,11 @@ def _dss_post(dss_url: str, path: str, body: dict) -> dict:
 def _pades_params(cert_b64: str, field: str) -> dict:
     return {
         "signingCertificate": {"encodedCertificate": cert_b64},
-        "signatureLevel": "PAdES_BASELINE_B",
+        # PAdES-B-T: the SCA (DSS) embeds an RFC3161 signature-timestamp from its
+        # configured TSP source. The DSS demo's default source is an in-process
+        # TSA (config/tsp-config.xml); prod swaps that file for an OnlineTSPSource
+        # pointing at a real/ORCE TSA — config-only, no code change.
+        "signatureLevel": "PAdES_BASELINE_T",
         "digestAlgorithm": "SHA256",
         "signaturePackaging": "ENVELOPED",
         # A fixed signing time shared by both remote calls: the CMS
