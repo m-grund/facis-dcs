@@ -404,16 +404,14 @@ def step_when_create_and_offer_cross_instance(context):
         # variant of ContractService's template setup.
         t_did = ContractService._create_approved_template_for_contract(context)
         creator_h = AuthService.get_headers_for_roles(["Contract Creator"], api_base=context.base_url_a)
-        # Reviewer = A's own identity (Origin == localPeer, so review can
-        # complete locally); negotiator/approver = instance B.
+        # Instance B is the counterparty (ADR-13): the peer the contract is
+        # offered to. Review/approval are A's own internal RBAC.
         create_resp = post_json(
             context,
             contract_create_url(context),
             {
                 "template_did": t_did,
-                "reviewers": [context.peer_did_a],
-                "negotiators": [context.peer_did_b],
-                "approvers": [context.peer_did_b],
+                "counterparty": context.peer_did_b,
             },
             headers=creator_h,
         )

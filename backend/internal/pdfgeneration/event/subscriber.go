@@ -36,6 +36,8 @@ import (
 var contractLifecycleEventTypes = map[string]bool{
 	cweeventtype.Create.String():                  true,
 	cweeventtype.Update.String():                  true,
+	cweeventtype.Offer.String():                   true,
+	cweeventtype.Withdraw.String():                true,
 	cweeventtype.Submit.String():                  true,
 	cweeventtype.Approve.String():                 true,
 	cweeventtype.Reject.String():                  true,
