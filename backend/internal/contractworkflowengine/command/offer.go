@@ -15,7 +15,6 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
-	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -58,25 +57,6 @@ func (h *Offerer) Handle(ctx context.Context, cmd OfferCmd) error {
 	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
 		return err
-	}
-
-	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
-		/*
-			Not the Origin peer for this contract: forward unchanged instead of
-			mutating locally (single-writer-per-aggregate, see command package doc).
-		*/
-
-		err := tx.Commit()
-		if err != nil {
-			return fmt.Errorf("could not commit transaction: %w", err)
-		}
-
-		err = remoteaction.Offer.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
-		if err != nil {
-			return err
-		}
-
-		return nil
 	}
 
 	// Optimistic concurrency: reject if the caller's view of the contract is

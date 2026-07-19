@@ -23,7 +23,6 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
-	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 	semanticmapper "digital-contracting-service/internal/semantic/mapper"
 )
 
@@ -73,25 +72,6 @@ func (h *Approver) Handle(ctx context.Context, cmd ApproveCmd) error {
 	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
 		return err
-	}
-
-	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
-		/*
-			Not the Origin peer for this contract: forward unchanged instead of
-			mutating locally (single-writer-per-aggregate, see package doc).
-		*/
-
-		err := tx.Commit()
-		if err != nil {
-			return fmt.Errorf("could not commit transaction: %w", err)
-		}
-
-		err = remoteaction.Approve.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
-		if err != nil {
-			return err
-		}
-
-		return nil
 	}
 
 	// Optimistic concurrency: reject if the caller's view of the contract is

@@ -10,7 +10,6 @@ import (
 
 	"digital-contracting-service/internal/base/identity"
 
-	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -58,32 +57,6 @@ func (h *NegotiationRejector) Handle(ctx context.Context, cmd RejectNegotiationC
 	processData, err := h.CRepo.ReadProcessDataByDID(ctx, tx, cmd.DID)
 	if err != nil {
 		return fmt.Errorf("could not process core data: %w", err)
-	}
-
-	localPeer, err := h.DIDDocument.GetID()
-	if err != nil {
-		return err
-	}
-
-	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
-		/*
-			Not the Origin peer for this contract: forward unchanged to the peer
-			that is (single-writer-per-aggregate, see package doc / ADR-0005).
-			Note this command carries no UpdatedAt, so it skips the optimistic-
-			concurrency check that most other handlers in this package apply.
-		*/
-
-		err := tx.Commit()
-		if err != nil {
-			return fmt.Errorf("could not commit transaction: %w", err)
-		}
-
-		err = remoteaction.RejectNegotiation.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
-		if err != nil {
-			return err
-		}
-
-		return nil
 	}
 
 	if err := contractstate.ValidateTransition(contractstate.ContractState(processData.State), contractstate.EventRejectNegotiation); err != nil {

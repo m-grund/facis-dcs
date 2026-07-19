@@ -13,7 +13,6 @@ import (
 
 	"digital-contracting-service/internal/base/identity"
 
-	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"digital-contracting-service/internal/base/conf"
@@ -71,25 +70,6 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
 		return err
-	}
-
-	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
-		/*
-			Not the Origin peer for this contract: forward unchanged instead of
-			mutating locally (single-writer-per-aggregate, see package doc).
-		*/
-
-		err := tx.Commit()
-		if err != nil {
-			return fmt.Errorf("could not commit transaction: %w", err)
-		}
-
-		err = remoteaction.Negotiate.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
-		if err != nil {
-			return err
-		}
-
-		return nil
 	}
 
 	// Optimistic concurrency: reject if the caller's view of the contract is
