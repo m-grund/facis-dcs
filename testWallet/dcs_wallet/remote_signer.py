@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import json
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -42,8 +43,14 @@ def _dss_post(dss_url: str, path: str, body: dict) -> dict:
         data=json.dumps(body).encode(),
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return json.loads(resp.read())
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as exc:
+        # Surface the DSS server's error body — its exception message names the
+        # exact rejected parameter, which a bare "HTTP 500" hides.
+        detail = exc.read().decode("utf-8", "replace")[:3000]
+        raise RuntimeError(f"DSS {path} returned HTTP {exc.code}: {detail}") from exc
 
 
 def _pades_params(cert_b64: str, field: str) -> dict:
