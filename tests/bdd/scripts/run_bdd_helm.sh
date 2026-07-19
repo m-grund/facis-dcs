@@ -53,10 +53,29 @@ export BDD_DCS_BASE_URL_B="${BDD_DCS_BASE_URL_B:-http://dcs-b.localhost:18080/di
 # pick a pod that has no digital-contracting-service container. Scoped by
 # instance (see HELM_RELEASE above) so this always signs through instance A's
 # own token, never instance B's, when both releases share the namespace.
-DCS_POD="$("${KUBECTL_BIN}" -n "${K8S_NAMESPACE}" get pod \
-  -l "app.kubernetes.io/component=backend,app.kubernetes.io/instance=${HELM_RELEASE}" \
-  --field-selector=status.phase=Running \
-  -o jsonpath='{.items[0].metadata.name}')"
+# Resolve a Running pod's name by label, waiting for one to appear: the one-shot
+# get can race a rollout (a rollout-restart transiently has the old pod
+# Terminating and the new one not yet phase=Running, i.e. zero Running matches),
+# and jsonpath '{.items[0]...}' errors on an empty list under `set -e`.
+wait_for_running_pod() {
+  local ns="$1" selector="$2" name deadline
+  deadline=$(( $(date +%s) + 120 ))
+  while [[ "$(date +%s)" -lt "$deadline" ]]; do
+    name="$("${KUBECTL_BIN}" -n "$ns" get pod -l "$selector" \
+      --field-selector=status.phase=Running \
+      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    if [[ -n "$name" ]]; then
+      echo "$name"
+      return 0
+    fi
+    sleep 3
+  done
+  echo "run_bdd_helm: timed out waiting for a Running pod matching [$selector] in namespace $ns" >&2
+  return 1
+}
+
+DCS_POD="$(wait_for_running_pod "${K8S_NAMESPACE}" \
+  "app.kubernetes.io/component=backend,app.kubernetes.io/instance=${HELM_RELEASE}")"
 export BDD_HSMSIGN_EXEC="${KUBECTL_BIN} -n ${K8S_NAMESPACE} exec ${DCS_POD} -c digital-contracting-service --"
 
 # IPFS CID-swap tamper seam (steps/support/tamper_seam.py): several
@@ -67,10 +86,8 @@ export BDD_HSMSIGN_EXEC="${KUBECTL_BIN} -n ${K8S_NAMESPACE} exec ${DCS_POD} -c d
 # a SINGLE instance shared across both BDD releases (values.bdd2.yml's
 # ipfsClient.mfsBaseURL points at "dcs-ipfs" regardless of caller instance),
 # so this is not release-scoped the way BDD_HSMSIGN_EXEC is.
-IPFS_POD="$("${KUBECTL_BIN}" -n "${K8S_NAMESPACE}" get pod \
-  -l "app.kubernetes.io/name=ipfs,app.kubernetes.io/instance=dcs" \
-  --field-selector=status.phase=Running \
-  -o jsonpath='{.items[0].metadata.name}')"
+IPFS_POD="$(wait_for_running_pod "${K8S_NAMESPACE}" \
+  "app.kubernetes.io/name=ipfs,app.kubernetes.io/instance=dcs")"
 # -i/--stdin is required (not just harmless) here: `ipfs add -` reads its
 # content from stdin, and without --stdin the API server may not have a
 # stdin stream attached before the remote command starts reading — observed
