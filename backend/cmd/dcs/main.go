@@ -328,11 +328,8 @@ func main() {
 	dcsToDcsSynchronizer := dcstodcs2.DCSToDCSSynchronizer{
 		DB:          db,
 		CRepo:       &cweRepo,
-		NRepo:       cweNRepo,
-		NTRepo:      &cweNTRepo,
-		RTRepo:      &cweRTRepo,
-		ATRepo:      &cweATRepo,
 		SRepo:       &syncRepo,
+		IPFSClient:  ipfsAPIClient,
 		DIDDocument: *didDocument,
 	}
 	dcsToDcsSynchronizer.StartSynchronizerJob(ctx, cepSubClient)
