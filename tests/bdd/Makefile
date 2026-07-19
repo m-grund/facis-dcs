@@ -197,6 +197,7 @@ ensure_k8s_tools:
 KIND_KUBECONFIG := $(CURDIR)/.tmp/kind-kubeconfig
 KIND_GOALS := kind_create kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b \
 	kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci \
+	run_e2e_kind run_e2e_kind_ci \
 	run_bdd_audit_kind_ci kind_up kind_up_audit run_bdd_kind_once run_bdd_audit_kind_once kind_down
 $(KIND_GOALS): export KUBECONFIG := $(KIND_KUBECONFIG)
 
