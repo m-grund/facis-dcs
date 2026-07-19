@@ -107,10 +107,11 @@ func (s *dcsToDcssrvc) PostPdf(ctx context.Context, req *dcstodcs.DCSToDCSContra
 			fmt.Errorf("post_pdf rejected: could not extract contract payload from PDF: %w", err))
 	}
 
-	receiver := command.PeerPdfReceiver{DB: s.DB, CRepo: s.CRepo}
+	receiver := command.PeerPdfReceiver{DB: s.DB, CRepo: s.CRepo, RTRepo: s.RTRepo, ATRepo: s.ATRepo, NTRepo: s.NTRepo}
 	if err := receiver.Handle(ctx, command.PeerPdfReceiveCmd{
 		ContractIRI:  req.ContractIri,
 		Counterparty: req.FromPeerDid,
+		LocalPeer:    localPeer,
 		Payload:      payload,
 	}); err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)

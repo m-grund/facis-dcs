@@ -21,17 +21,26 @@ import (
 // contract PDF that a counterparty shipped (ADR-13). The receiver rebuilds its
 // own local copy of the contract from it.
 type PeerPdfReceiveCmd struct {
-	ContractIRI  string
+	ContractIRI string
+	// Counterparty is the peer that shipped the PDF — the contract's origin,
+	// from this instance's perspective.
 	Counterparty string
+	// LocalPeer is this instance's own DID — the other party and the holder of
+	// the local RBAC roles.
+	LocalPeer string
 	// Payload is the JSON-LD contract document pdf-core extracted from the PDF.
 	Payload []byte
 }
 
 // PeerPdfReceiver upserts a peer-shipped contract into this instance's own
-// store. It never touches tasks: each DCS runs its own workflow/RBAC (ADR-13).
+// store and opens its own local workflow tasks (ADR-13): each DCS runs its own
+// RBAC; nothing crosses the boundary.
 type PeerPdfReceiver struct {
-	DB    *sqlx.DB
-	CRepo db.ContractRepo
+	DB     *sqlx.DB
+	CRepo  db.ContractRepo
+	RTRepo db.ReviewTaskRepo
+	ATRepo db.ApprovalTaskRepo
+	NTRepo db.NegotiationTaskRepo
 }
 
 // Handle upserts the local copy from the shipped contract's JSON-LD. A first
@@ -78,13 +87,26 @@ func (h *PeerPdfReceiver) Handle(ctx context.Context, cmd PeerPdfReceiveCmd) err
 		return tx.Commit()
 	}
 
+	// The two parties are objective on both copies: the origin (the peer that
+	// created and offered the contract) and this instance. This instance's own
+	// users hold the local RBAC roles.
+	resp := db.Responsible{
+		Creator:      cmd.Counterparty,
+		Counterparty: cmd.LocalPeer,
+		Reviewers:    []string{cmd.LocalPeer},
+		Approvers:    []string{cmd.LocalPeer},
+		Negotiators:  []string{cmd.LocalPeer},
+	}
 	data.Origin = cmd.Counterparty
 	data.CreatedBy = cmd.Counterparty
 	data.CreatedAt = now
 	data.ContractVersion = 1
-	data.Responsible = &db.Responsible{Creator: cmd.Counterparty}
+	data.Responsible = &resp
 	if err := h.CRepo.RemoteCreate(ctx, tx, data); err != nil {
 		return fmt.Errorf("could not create local contract copy: %w", err)
+	}
+	if err := createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd.ContractIRI, cmd.LocalPeer, resp); err != nil {
+		return err
 	}
 	return tx.Commit()
 }
