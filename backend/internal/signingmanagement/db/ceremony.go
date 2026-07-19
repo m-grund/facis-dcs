@@ -20,25 +20,25 @@ const (
 // present a PID (via EUDIPLO/OID4VP) that must complete before a PAdES
 // signature can be applied (FR-SM-14, UC-04-02).
 type SignatureCeremony struct {
-	ID          string     `db:"id"`
-	ContractDID string     `db:"contract_did"`
-	FieldName   string     `db:"field_name"`
-	RequestedBy string     `db:"requested_by"`
-	Status      string     `db:"status"`
-	WalletURI   *string    `db:"wallet_uri"`
-	Nonce       string     `db:"nonce"`
-	SignerDID   *string    `db:"signer_did"`
-	VpToken     *string    `db:"vp_token"`
-	PidClaims   []byte     `db:"pid_claims"`
-	KbSdHash    *string    `db:"kb_sd_hash"`
+	ID          string  `db:"id"`
+	ContractDID string  `db:"contract_did"`
+	FieldName   string  `db:"field_name"`
+	RequestedBy string  `db:"requested_by"`
+	Status      string  `db:"status"`
+	WalletURI   *string `db:"wallet_uri"`
+	Nonce       string  `db:"nonce"`
+	SignerDID   *string `db:"signer_did"`
+	VpToken     *string `db:"vp_token"`
+	PidClaims   []byte  `db:"pid_claims"`
+	KbSdHash    *string `db:"kb_sd_hash"`
 	// The Power of Attorney presented at signing (UC-14, FR-SM-03): the verified
 	// organization the signatory is authorized to act for, and their roles. nil
 	// until the ceremony's PoA presentation is verified.
-	PoAOrganization *string `db:"poa_organization"`
-	PoARoles        []byte  `db:"poa_roles"`
-	CreatedAt   time.Time  `db:"created_at"`
-	VerifiedAt  *time.Time `db:"verified_at"`
-	ExpiresAt   time.Time  `db:"expires_at"`
+	PoAOrganization *string    `db:"poa_organization"`
+	PoARoles        []byte     `db:"poa_roles"`
+	CreatedAt       time.Time  `db:"created_at"`
+	VerifiedAt      *time.Time `db:"verified_at"`
+	ExpiresAt       time.Time  `db:"expires_at"`
 	// The published OID4VP Document-Retrieval signing request (ADR-12): the
 	// to-be-signed PDF and its digest the wallet fetches and signs, the request
 	// object's nonce/expiry, and the publishing signer's participant context the

@@ -18,7 +18,6 @@ import (
 	dcstodcsdb "digital-contracting-service/internal/dcstodcs/db"
 	pq2 "digital-contracting-service/internal/dcstodcs/db/pg"
 
-
 	didservice "digital-contracting-service/gen/did_service"
 
 	genauth "digital-contracting-service/gen/auth"
