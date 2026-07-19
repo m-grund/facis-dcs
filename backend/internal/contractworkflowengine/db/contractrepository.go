@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -17,6 +18,12 @@ type Responsible struct {
 	Approvers   []string `json:"approvers"`
 	Reviewers   []string `json:"reviewers"`
 	Negotiators []string `json:"negotiators"`
+	// Counterparty is the single peer DCS this contract is offered to and
+	// negotiated with (ADR-13). It is NOT a role assignment — reviewer/approver/
+	// negotiator are internal RBAC roles held by local users, never peer DIDs.
+	// Origin + Counterparty are the two parties (GetParties): the PDF ship
+	// targets and the signature-field slots.
+	Counterparty string `json:"counterparty"`
 }
 
 func ToResponsible(raw any) (*Responsible, error) {
@@ -57,51 +64,18 @@ func (r *Responsible) Scan(src any) error {
 	return json.Unmarshal(b, r)
 }
 
-func (r *Responsible) GetResponsibleSet() map[string]struct{} {
-	set := make(map[string]struct{}, 1+len(r.Approvers)+len(r.Reviewers)+len(r.Negotiators))
-
-	if r.Creator != "" {
-		set[r.Creator] = struct{}{}
-	}
-	for _, did := range r.Approvers {
-		set[did] = struct{}{}
-	}
-	for _, did := range r.Reviewers {
-		set[did] = struct{}{}
-	}
-	for _, did := range r.Negotiators {
-		set[did] = struct{}{}
-	}
-
-	return set
-}
-
-func (r *Responsible) GetUniqueResponsibleList() []string {
-	set := make(map[string]struct{})
-	var result []string
-
-	add := func(did string) {
-		if did == "" {
-			return
-		}
-		if _, exists := set[did]; !exists {
-			set[did] = struct{}{}
-			result = append(result, did)
+// GetParties returns the contract's two DCS parties — the origin (creator) and
+// the counterparty — deduplicated, empty entries dropped. These are the PDF
+// ship targets and the slots the AcroForm signature fields are seeded for
+// (ADR-13); they are distinct from the internal RBAC role lists.
+func (r *Responsible) GetParties() []string {
+	parties := make([]string, 0, 2)
+	for _, did := range []string{r.Creator, r.Counterparty} {
+		if did != "" && !slices.Contains(parties, did) {
+			parties = append(parties, did)
 		}
 	}
-
-	add(r.Creator)
-	for _, did := range r.Approvers {
-		add(did)
-	}
-	for _, did := range r.Reviewers {
-		add(did)
-	}
-	for _, did := range r.Negotiators {
-		add(did)
-	}
-
-	return result
+	return parties
 }
 
 type Contract struct {

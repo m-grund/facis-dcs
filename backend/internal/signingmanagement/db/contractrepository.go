@@ -23,6 +23,9 @@ type Responsible struct {
 	Approvers   []string `json:"approvers"`
 	Reviewers   []string `json:"reviewers"`
 	Negotiators []string `json:"negotiators"`
+	// Counterparty is the single peer DCS this contract is offered to (ADR-13);
+	// with the origin it forms the two signing parties.
+	Counterparty string `json:"counterparty"`
 }
 
 func (r Responsible) Value() (driver.Value, error) {

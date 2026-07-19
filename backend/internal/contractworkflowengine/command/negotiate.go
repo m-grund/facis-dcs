@@ -124,7 +124,7 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 	if err != nil {
 		return fmt.Errorf("could not read contract for signature-field seeding: %w", err)
 	}
-	seeded, changed, err := seedSignatureFields(*contract.ContractData, contract.Responsible.GetUniqueResponsibleList())
+	seeded, changed, err := seedSignatureFields(*contract.ContractData, contract.Responsible.GetParties())
 	if err != nil {
 		return fmt.Errorf("could not seed signature fields: %w", err)
 	}

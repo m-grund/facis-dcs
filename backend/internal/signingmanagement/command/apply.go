@@ -887,27 +887,14 @@ func sealAgreementForSigning(raw datatype.JSON, responsible *db.Responsible, sig
 	return datatype.NewJSON(doc)
 }
 
-// counterpartyIdentity resolves who accepted the offer: the single workflow
-// peer that is not the originating instance, or the verified signer when
-// the workflow ran on one instance.
+// counterpartyIdentity resolves who accepted the offer: the contract's
+// counterparty peer (ADR-13), or the verified signer when the workflow ran on
+// a single instance with no counterparty.
 func counterpartyIdentity(responsible *db.Responsible, signerDID string) string {
-	if responsible == nil {
+	if responsible == nil || responsible.Counterparty == "" {
 		return signerDID
 	}
-	peers := map[string]bool{}
-	for _, group := range [][]string{responsible.Reviewers, responsible.Approvers, responsible.Negotiators} {
-		for _, peer := range group {
-			if peer != "" && peer != responsible.Creator {
-				peers[peer] = true
-			}
-		}
-	}
-	if len(peers) == 1 {
-		for peer := range peers {
-			return peer
-		}
-	}
-	return signerDID
+	return responsible.Counterparty
 }
 
 // singleOpenPartyPlaceholder returns the IRI of the only dcs:parties node

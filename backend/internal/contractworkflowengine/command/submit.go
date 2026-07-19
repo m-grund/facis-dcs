@@ -30,9 +30,6 @@ type SubmitCmd struct {
 	DID          string                 `json:"did"`
 	UpdatedAt    time.Time              `json:"updated_at"`
 	SubmittedBy  string                 `json:"submitted_by"`
-	Reviewers    []string               `json:"reviewers"`
-	Approvers    []string               `json:"approvers"`
-	Negotiators  []string               `json:"negotiators"`
 	ActionFlag   *actionflag.ActionFlag `json:"action_flag"`
 	Comments     []string               `json:"comments"`
 	ContractData *datatype.JSON         `json:"contract_data"`
@@ -117,18 +114,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid participant")
 		}
 
-		if len(cmd.Reviewers) == 0 {
-			return errors.New("no reviewers provided")
-		}
-
-		if len(cmd.Negotiators) == 0 {
-			return errors.New("no negotiators provided")
-		}
-
-		if len(cmd.Approvers) == 0 {
-			return errors.New("no approvers provided")
-		}
-
 		contractData, err := h.contractDataForSemanticValidation(ctx, tx, cmd)
 		if err != nil {
 			return err
@@ -140,38 +125,25 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return fmt.Errorf("contract submission blocked: %w", err)
 		}
 
-		resp := db.Responsible{
-			// Responsible.Creator is the ORIGIN PEER DID (see create.go,
-			// db.Responsible.GetUniqueResponsibleList treating it as a
-			// federation peer), not the human/org display name — using
-			// processData.CreatedBy here silently broke every subsequent
-			// PostSync broadcast for this contract, since a non-DID string
-			// fails CheckForUntrustedPeers and aborts the whole delivery.
-			Creator:     processData.Origin,
-			Reviewers:   cmd.Reviewers,
-			Approvers:   cmd.Approvers,
-			Negotiators: cmd.Negotiators,
+		existing, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
+		if err != nil {
+			return fmt.Errorf("could not read contract: %w", err)
 		}
-		updateData := db.ContractUpdateData{
-			DID:         cmd.DID,
-			Responsible: &resp,
-		}
+		updateData := db.ContractUpdateData{DID: cmd.DID}
 
-		// Submission into NEGOTIATION is where the participating parties are
-		// finalized, so seed one signature field per participating DCS instance
-		// here (CORRECTION 5): the contract carries a pre-placed AcroForm field
-		// per party (dcs:signatoryName == instance DID), which prepare renders
-		// and the signatory's wallet signs.
-		seeded, changed, err := seedSignatureFields(*contractData, resp.GetUniqueResponsibleList())
+		// Submission into NEGOTIATION finalizes the participating parties, so
+		// seed one AcroForm signature field per party — origin and counterparty
+		// (dcs:signatoryName == the party's DCS instance DID) — which prepare
+		// renders and the signatory's wallet signs (ADR-13).
+		seeded, changed, err := seedSignatureFields(*contractData, existing.Responsible.GetParties())
 		if err != nil {
 			return fmt.Errorf("could not seed signature fields: %w", err)
 		}
 		if changed {
 			updateData.ContractData = &seeded
-		}
-
-		if err := h.CRepo.Update(ctx, tx, updateData); err != nil {
-			return fmt.Errorf("could not update contract: %w", err)
+			if err := h.CRepo.Update(ctx, tx, updateData); err != nil {
+				return fmt.Errorf("could not update contract: %w", err)
+			}
 		}
 
 		nextState = contractstate.Negotiation

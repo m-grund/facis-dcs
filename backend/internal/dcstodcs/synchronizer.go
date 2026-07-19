@@ -183,7 +183,7 @@ func (s *DCSToDCSSynchronizer) shipContractPDF(ctx context.Context, did string) 
 		return nil
 	}
 
-	recipients := contractData.Responsible.GetUniqueResponsibleList()
+	recipients := contractData.Responsible.GetParties()
 	untrustedPeers, err := CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, recipients)
 	if err != nil {
 		return err

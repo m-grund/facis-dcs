@@ -11,9 +11,7 @@ var ContractCreateRequest = Type("ContractCreateRequest", func() {
 
 	Attribute("template_did", String, "The did of the contract template, that is to use to create a new contract")
 
-	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
-	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")
-	Attribute("negotiators", ArrayOf(String), "A list of negotiators for that contract")
+	Attribute("counterparty", String, "The single peer DCS (a did:web) this contract is offered to and negotiated with (ADR-13). Together with the origin it forms the two parties: the PDF ship target and the signature-field slots. Reviewer/approver/negotiator are internal RBAC roles, isolated per instance — never peer DIDs.")
 	Attribute("parties", ArrayOf(String), "Organizations authorized to read this contract (legal names, matched against the OID4VP organization claim; stored as dcs:parties). Read authorization only — the contract's ODRL rule parties are bound from workflow evidence: the originator at creation via originator_role, the counterparty when signing completes.")
 	Attribute("originator_role", String, "The contractual role the creating organization declares for itself (e.g. provider, customer); binds the origin DID to that role's party node in the contract's ODRL rules. The counterpart role stays open until the counterparty accepts by signing.")
 
@@ -69,9 +67,6 @@ var ContractSubmitRequest = Type("ContractSubmitRequest", func() {
 	Attribute("forward_to", String, "Action flag: approval | reject")
 	Attribute("comments", ArrayOf(String), "Optional comments")
 	Attribute("contract_data", Any, "Optional updated contract data to persist atomically before submit validation")
-	Attribute("reviewers", ArrayOf(String), "Participants assigned to review the contract")
-	Attribute("approvers", ArrayOf(String), "Participants assigned to approve the contract")
-	Attribute("negotiators", ArrayOf(String), "Participants assigned to negotiate the contract")
 
 	Required("did", "updated_at")
 })
