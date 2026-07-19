@@ -325,12 +325,17 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
   await test.step('export PDF and bundle', async () => {
     await gotoAs(page, loginAs, 'Contract Manager', `/ui/contracts/view/${contractDid}`)
 
-    const pdfDownload = page.waitForEvent('download')
+    // The signed-PDF export fetches the frozen PDF (and evidence bundle its ZIP)
+    // from IPFS before the browser download fires; against the post-behave
+    // loaded stack this legitimately runs longer than the 15s waitForEvent
+    // default (cf. the secure-contract-viewer/compliance steps that take ~1m),
+    // so give it a realistic window.
+    const pdfDownload = page.waitForEvent('download', { timeout: 90_000 })
     await page.getByRole('button', { name: 'Export PDF' }).click()
     const pdfBytes = readFileSync((await (await pdfDownload).path())!)
     expect(pdfBytes.subarray(0, 5).toString('latin1')).toBe('%PDF-')
 
-    const bundleDownload = page.waitForEvent('download')
+    const bundleDownload = page.waitForEvent('download', { timeout: 90_000 })
     await page.getByRole('button', { name: 'Export bundle' }).click()
     const bundleBytes = readFileSync((await (await bundleDownload).path())!)
     expect(bundleBytes.subarray(0, 2).toString('latin1')).toBe('PK')
