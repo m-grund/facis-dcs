@@ -329,15 +329,12 @@ def step_when_ac5_setup(context):
         t_did = ContractService._create_approved_template_for_contract(context)
         creator_h = AuthService.get_headers_for_roles(["Contract Creator"], api_base=context.base_url_a)
 
-        # Frame contract: stays local to A, never offered.
+        # Frame contract: stays local to A, never offered (no counterparty).
         frame_resp = post_json(
             context,
             contract_create_url(context),
             {
                 "template_did": t_did,
-                "reviewers": [context.peer_did_a],
-                "negotiators": [context.peer_did_a],
-                "approvers": [context.peer_did_a],
             },
             headers=creator_h,
         )
@@ -345,15 +342,13 @@ def step_when_ac5_setup(context):
         frame_did = frame_resp.json().get("did")
         context.ac5_frame_did = frame_did
 
-        # Child linked to the frame, offered to B (negotiator+approver=B) so it replicates.
+        # Child linked to the frame, offered to B (counterparty=B) so it replicates.
         child_b_resp = post_json(
             context,
             contract_create_url(context),
             {
                 "template_did": t_did,
-                "reviewers": [context.peer_did_a],
-                "negotiators": [context.peer_did_b],
-                "approvers": [context.peer_did_b],
+                "counterparty": context.peer_did_b,
             },
             headers=creator_h,
         )
@@ -391,9 +386,6 @@ def step_when_ac5_setup(context):
             contract_create_url(context),
             {
                 "template_did": t_did,
-                "reviewers": [context.peer_did_a],
-                "negotiators": [context.peer_did_a],
-                "approvers": [context.peer_did_a],
             },
             headers=creator_h,
         )
