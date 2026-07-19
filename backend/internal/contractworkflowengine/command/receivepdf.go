@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
+	"digital-contracting-service/internal/base/jsonld"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 
@@ -63,8 +64,14 @@ func (h *PeerPdfReceiver) Handle(ctx context.Context, cmd PeerPdfReceiveCmd) err
 		return fmt.Errorf("could not read local contract copy: %w", err)
 	}
 
-	payload := datatype.JSON(cmd.Payload)
-	templateIRI, templateVersion, name := parseShippedContractMeta(cmd.Payload)
+	// pdf-core embeds the canonical, IRI-expanded JSON-LD; re-compact it to the
+	// FACIS context so this copy matches the originator's compact form (ADR-13).
+	compacted, err := jsonld.CompactToFacis(cmd.Payload)
+	if err != nil {
+		return fmt.Errorf("could not re-compact shipped contract JSON-LD: %w", err)
+	}
+	payload := datatype.JSON(compacted)
+	templateIRI, templateVersion, name := parseShippedContractMeta(compacted)
 	now := time.Now().UTC()
 
 	data := db.Contract{
