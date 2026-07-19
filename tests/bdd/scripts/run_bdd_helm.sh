@@ -414,9 +414,24 @@ if [[ -n "${ARG_BDD_JUNIT:-}" ]]; then
   JUNIT_ARGS=(${ARG_BDD_JUNIT})
 fi
 
-echo "Running BDD suite via bdd-executor environment"
-cd "$PROJECT_ROOT"
-"$VENV_PATH/bin/coverage" run --append -m behave "${JUNIT_ARGS[@]}" "$FEATURES_PATH" "${EXTRA_ARGS[@]}"
+# The deployed stack + all its port-forwards (DSS 18099, ORCE, DB, instance B)
+# are live at this point and stay alive until this script exits (trap cleanup).
+# RUN_MODE selects what runs against them without tearing anything down:
+#   bdd (default) — the behave suite via the bdd-executor environment;
+#   e2e           — the Playwright suite (its own vite servers + the venv-backed
+#                   signing helpers), so the frontend E2E gets the same live
+#                   two-instance stack + DSS forward the BDD suite uses.
+if [[ "${RUN_MODE:-bdd}" == "e2e" ]]; then
+  echo "Running Playwright E2E against the deployed stack"
+  cd "$PROJECT_ROOT/frontend/ClientApp"
+  E2E_DCS_API_BASE="${BDD_PUBLIC_ORIGIN}/digital-contracting-service/api" \
+  E2E_BDD_PYTHON="$VENV_PATH/bin/python3" \
+    npm run e2e
+else
+  echo "Running BDD suite via bdd-executor environment"
+  cd "$PROJECT_ROOT"
+  "$VENV_PATH/bin/coverage" run --append -m behave "${JUNIT_ARGS[@]}" "$FEATURES_PATH" "${EXTRA_ARGS[@]}"
 
-JUNIT_COUNT=$(find "$REPORTS_JUNIT_DIR" -name "*.xml" 2>/dev/null | wc -l || true)
-echo "Generated $JUNIT_COUNT junit XML files in $REPORTS_JUNIT_DIR/"
+  JUNIT_COUNT=$(find "$REPORTS_JUNIT_DIR" -name "*.xml" 2>/dev/null | wc -l || true)
+  echo "Generated $JUNIT_COUNT junit XML files in $REPORTS_JUNIT_DIR/"
+fi
