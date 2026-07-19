@@ -11,6 +11,9 @@ cleanup() {
   if [[ -f .tmp/port-forward-orce.pid ]]; then
     kill "$(cat .tmp/port-forward-orce.pid)" >/dev/null 2>&1 || true
   fi
+  if [[ -f .tmp/port-forward-dss.pid ]]; then
+    kill "$(cat .tmp/port-forward-dss.pid)" >/dev/null 2>&1 || true
+  fi
 }
 
 trap cleanup EXIT
@@ -267,6 +270,36 @@ until nc -z 127.0.0.1 "$LOCAL_FORWARD_PORT" 2>/dev/null; do
 done
 export BDD_DCS_INTERNAL_ORIGIN="http://localhost:$LOCAL_FORWARD_PORT"
 echo "Port-forward on $LOCAL_FORWARD_PORT is ready"
+
+# The wallet-driven signing scenarios call the EU DSS demonstration webapp
+# (charts/dss) as the external SCA that computes getDataToSign/signDocument.
+# It is an in-cluster ClusterIP service; the harness reaches it through a
+# port-forward at the localhost:18099 default that BDD_DSS_URL points at. The
+# DSS Tomcat bundle boots slowly (readiness initialDelaySeconds 90), so allow a
+# generous availability timeout before forwarding.
+DSS_DEPLOYMENT="${HELM_RELEASE}-dss"
+DSS_SERVICE="${HELM_RELEASE}-dss"
+DSS_LOCAL_FORWARD_PORT="${DSS_LOCAL_FORWARD_PORT:-18099}"
+echo "Waiting for DSS deployment ($DSS_DEPLOYMENT) to be available"
+"$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=420s "deployment/$DSS_DEPLOYMENT"
+
+echo "Starting port-forward for DSS service ($DSS_SERVICE)"
+KUBECTL_BIN="$KUBECTL_BIN" K8S_NAMESPACE="$K8S_NAMESPACE" \
+  SERVICE_NAME="$DSS_SERVICE" PORT_MAPPING="$DSS_LOCAL_FORWARD_PORT:8080" \
+  bash "$PWD/scripts/keep_port_forward.sh" > .tmp/port-forward-dss.log 2>&1 &
+echo $! > .tmp/port-forward-dss.pid
+
+deadline=$(( $(date +%s) + 30 ))
+until nc -z 127.0.0.1 "$DSS_LOCAL_FORWARD_PORT" 2>/dev/null; do
+  if [ "$(date +%s)" -gt "$deadline" ]; then
+    echo "Timed out waiting for DSS port-forward on $DSS_LOCAL_FORWARD_PORT"
+    cat .tmp/port-forward-dss.log || true
+    exit 1
+  fi
+  sleep 1
+done
+export BDD_DSS_URL="http://localhost:$DSS_LOCAL_FORWARD_PORT"
+echo "DSS port-forward on $DSS_LOCAL_FORWARD_PORT is ready"
 
 # Archive notary and audit-log endpoints are intentionally not exposed by the
 # public ORCE ingress. Reach the release-scoped service directly and obtain the
