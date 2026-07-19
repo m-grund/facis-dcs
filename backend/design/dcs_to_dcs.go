@@ -162,6 +162,28 @@ var DCSToDCSContractActionResponse = Type("DCSToDCSContractActionResponse", func
 	Required("from_peer_did")
 })
 
+var DCSToDCSContractPdfRequest = Type("DCSToDCSContractPdfRequest", func() {
+	Description("A contract PDF shipped to the counterparty (ADR-13). The PDF is the wire format: it carries the machine-readable JSON-LD, the C2PA provenance chain, and any signatures. A bare PDF is a proposal (offer or negotiation counter); a PDF accompanied by a JAdES is a signature (acceptance).")
+
+	Attribute("secret_value", String, "Secret value")
+	Attribute("secret_hash", Bytes, "Secret hash")
+
+	Attribute("from_peer_did", String, "The did of the peer shipping the PDF")
+	Attribute("contract_iri", String, "IRI of the contract the PDF represents")
+	Attribute("pdf", Bytes, "The contract PDF")
+	Attribute("jades_signature", String, "The sender's JAdES over the contract, present only when this ship is a signature (acceptance); empty for a proposal")
+
+	Required("from_peer_did", "contract_iri", "pdf", "secret_value", "secret_hash")
+})
+
+var DCSToDCSContractPdfResponse = Type("DCSToDCSContractPdfResponse", func() {
+	Description("Result for receiving a contract PDF")
+
+	Attribute("from_peer_did", String, "Decentralized Identifier of the receiving peer")
+
+	Required("from_peer_did")
+})
+
 var _ = Service("DcsToDcs", func() {
 	Description("DCS supports direct interoperability between two or more DCS instances, enabling automated contract lifecycle operations across organizational boundaries.")
 
@@ -177,6 +199,24 @@ var _ = Service("DcsToDcs", func() {
 
 		HTTP(func() {
 			POST("/peer/contracts/")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("post_pdf", func() {
+		Description("Receive a contract PDF shipped by the counterparty (ADR-13): the PDF-exchange federation. The receiver verifies the sender via the same did:web challenge-response as post_sync, asks pdf-core to extract the embedded JSON-LD, and upserts its own local copy of the contract from it. A bare PDF is a proposal (the local copy moves to negotiation); a PDF with a JAdES is the counterparty's signature. Each DCS runs its own workflow/RBAC — no tasks cross the boundary.")
+		Meta("dcs:cwe:components", "DCS-to-DCS Synchronization")
+
+		Payload(DCSToDCSContractPdfRequest)
+		Result(DCSToDCSContractPdfResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			POST("/peer/contracts/pdf")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

@@ -46,17 +46,28 @@ never cross an instance boundary.
    origin and no forwarded `action`. A party changes terms on its own copy and
    ships the resulting PDF; the counterparty receives it as a proposal.
 
-3. **Negotiation is turn-based document exchange.** To counter, a party edits
-   its copy and ships a new PDF version. To accept, a party stops countering
-   and **signs** the current version. **The signature is the acceptance** — a
-   party only signs a version it agrees to, and a version both parties have
-   signed is the executed agreement (two AcroForm signatures over the same
-   content). Countering and accepting are the only moves, and both are just a
-   PDF (accept additionally carries the JAdES).
+3. **Negotiation, then settlement, then signing — three distinct phases.**
+   Signing must never overlap negotiation: a one-sided signature on a contract
+   that is not yet mutually settled is still a signed, and therefore
+   disputable, contract. So:
+   - **Negotiate.** To counter, a party edits its copy and ships a new PDF
+     version (a `proposed` C2PA lifecycle step). This is the only move while
+     terms are open.
+   - **Settle.** To accept the current terms, a party ships the same version
+     stamped as an `agreed` C2PA lifecycle step (not a counter, not a
+     signature). **Settlement is reached only when both parties have agreed to
+     the same version.** The PDF's provenance carries who agreed to what, so
+     settlement is provable from the artifact.
+   - **Sign.** Only after settlement does the signing phase open. Both parties
+     sign the settled version and ship the signed PDF + JAdES; two signatures
+     over the settled content is the executed agreement.
+   The receiver reads the latest `dcs.lifecycle` status from the PDF's C2PA
+   chain (via pdf-core) to tell a proposal from an agreement, and detects a
+   signature by the PAdES/JAdES it carries.
 
-4. **Review/approval are internal.** Between agreeing on terms and signing,
-   each DCS takes its own copy through its own review/approval gates under its
-   own RBAC. These transitions are local and never synced.
+4. **Review/approval are internal.** Between settlement and signing, each DCS
+   takes its own copy through its own review/approval gates under its own RBAC.
+   These transitions are local and never synced.
 
 5. **Counterparty is a single peer, not a role list.** A contract records the
    one counterparty DCS it is offered to (a did:web), which is where its PDFs
@@ -68,14 +79,16 @@ never cross an instance boundary.
 ```
    DCS A (owns its copy, own RBAC)          │   DCS B (owns its copy, own RBAC)
  ─────────────────────────────────────────────┼──────────────────────────────────────
-  offer: ship PDF(v1, terms A)  ──────────────┼──▶ extract JSON-LD, create local copy
-                                              │    counter: edit copy, ship PDF(v2) ◀──
+  offer: ship PDF(v1, proposed) ──────────────┼──▶ extract JSON-LD, create local copy
+                                              │    counter: ship PDF(v2, proposed) ◀────
   extract, update copy                         │
-  counter: edit, ship PDF(v3)   ──────────────┼──▶ extract, update copy
-                                              │    accept: internal review/approve,
-                                              │      sign v3, ship signed PDF + JAdES ◀─
-  see B's signature on v3, sign v3            │
-  ship signed PDF + JAdES        ─────────────┼──▶ two signatures over v3 → executed
+  counter: ship PDF(v3, proposed) ────────────┼──▶ extract, update copy
+                                              │    agree: ship PDF(v3, agreed)   ◀──────
+  agree: ship PDF(v3, agreed)   ──────────────┼──▶ both agreed → SETTLED
+   both agreed → SETTLED                       │    internal review/approve (local)
+  internal review/approve (local)             │    sign v3, ship signed PDF + JAdES ◀───
+  see B's signature, sign v3                  │
+  ship signed PDF + JAdES        ─────────────┼──▶ two signatures over settled v3 → executed
 ```
 
 ## What is removed

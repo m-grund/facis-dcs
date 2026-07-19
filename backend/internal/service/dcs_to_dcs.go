@@ -23,6 +23,8 @@ import (
 
 	"digital-contracting-service/internal/contractworkflowengine/command"
 
+	"digital-contracting-service/internal/pdfgeneration/pdfcore"
+
 	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"digital-contracting-service/internal/contractworkflowengine/remotesync"
@@ -59,6 +61,7 @@ type dcsToDcssrvc struct {
 	DIDDocument identity.DIDDocument
 	TrustPool   *identity.EUTrustPool
 	IPFSClient  *ipfs.APIClient
+	PDFCore     *pdfcore.Client
 	auth.JWTAuthenticator
 }
 
@@ -66,7 +69,7 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 	cRepo db.ContractRepo, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo,
 	ntRepo db.NegotiationTaskRepo, nRepo db.NegotiationRepo, ctRepo db.ContractTemplateRepo, syncRepo db2.SyncRepository,
 	trustPool *identity.EUTrustPool,
-	didDocument identity.DIDDocument, ipfsClient *ipfs.APIClient) dcstodcs.Service {
+	didDocument identity.DIDDocument, ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client) dcstodcs.Service {
 
 	return &dcsToDcssrvc{
 		JWTAuthenticator: jwtAuth,
@@ -81,7 +84,62 @@ func NewDcsToDcs(db *sqlx.DB, jwtAuth auth.JWTAuthenticator,
 		DIDDocument:      didDocument,
 		TrustPool:        trustPool,
 		IPFSClient:       ipfsClient,
+		PDFCore:          pdfCore,
 	}
+}
+
+// PostPdf receives a contract PDF a counterparty shipped (ADR-13). It
+// authenticates the peer (the same layers post_sync applied), asks pdf-core to
+// extract the embedded JSON-LD, and upserts this instance's own local copy of
+// the contract. No tasks cross the boundary — each DCS runs its own workflow.
+func (s *dcsToDcssrvc) PostPdf(ctx context.Context, req *dcstodcs.DCSToDCSContractPdfRequest) (res *dcstodcs.DCSToDCSContractPdfResponse, err error) {
+	senderHostname, err := identity.DIDWebToHostname(req.FromPeerDid)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	remoteDIDDocument, err := identity.FetchDIDDocumentFromHostname(senderHostname)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	if err := remoteDIDDocument.VerifyEIDASCertificate(s.TrustPool); err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+	if err := remoteDIDDocument.Verify([]byte(req.SecretValue), req.SecretHash); err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(err)
+	}
+
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	if req.FromPeerDid == localPeer {
+		return nil, contractworkflowengine.MakeBadRequest(errors.New("shipping a contract PDF to the same peer is not allowed"))
+	}
+	untrustedPeers, err := trustedpeer.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, []string{req.FromPeerDid})
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	if len(untrustedPeers) > 0 {
+		return nil, contractworkflowengine.MakeBadRequest(
+			fmt.Errorf("post_pdf rejected: peer %s is not in the trusted_peers allowlist", req.FromPeerDid))
+	}
+
+	payload, err := s.PDFCore.ExtractPayload(ctx, req.Pdf)
+	if err != nil {
+		return nil, contractworkflowengine.MakeBadRequest(
+			fmt.Errorf("post_pdf rejected: could not extract contract payload from PDF: %w", err))
+	}
+
+	receiver := command.PeerPdfReceiver{DB: s.DB, CRepo: s.CRepo}
+	if err := receiver.Handle(ctx, command.PeerPdfReceiveCmd{
+		ContractIRI:  req.ContractIri,
+		Counterparty: req.FromPeerDid,
+		Payload:      payload,
+	}); err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	return &dcstodcs.DCSToDCSContractPdfResponse{FromPeerDid: localPeer}, nil
 }
 
 func (s *dcsToDcssrvc) GetSync(ctx context.Context, req *dcstodcs.DCSToDCSContractGetSyncRequest) (res *dcstodcs.DCSToDCSContractGetSyncResponse, err error) {
