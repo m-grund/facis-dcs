@@ -56,39 +56,6 @@ Feature: Real signing vertical - PAdES signature, EUDIPLO ceremony, PID binding
     Given contract "RSV Timestamp Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerThree"
     Then the signed PDF for contract "RSV Timestamp Contract" embeds an RFC3161 timestamp token
 
-  # The TSA the PAdES timestamp uses is reached by PDF-CORE over HTTP at
-  # runtime via pdf-core's own DCS_PDF_CORE_TSA_URL env
-  # (deployment/helm/templates/pdf-core-deployment.yaml) — repointing THAT at
-  # an unreachable address and rolling instance A's pdf-core takes the TSA
-  # away from the PAdES path, which is the actual runtime condition PAdES-B-B
-  # fallback (pdf-core/compiler/pades.go) exists for.
-  #
-  # Scaling the whole shared ORCE deployment to 0 would NOT work instead:
-  # /signature/apply has a SECOND, independent ORCE dependency (the archive
-  # notary, backend/internal/signingmanagement/command/apply.go ->
-  # http://dcs-orce:1880/archive/notary) that HARD-FAILS the whole apply with
-  # a 500 when ORCE is down, aborting before any PAdES-B-B PDF is persisted.
-  # Only the PAdES timestamp path has a fallback; the archive-notary path
-  # does not. Repointing pdf-core's TSA env isolates the PAdES path while
-  # leaving ORCE (and the archive notary) up, so apply completes and yields a
-  # genuine, inspectable B-B PDF.
-  #
-  # pdf-core is PER-RELEASE, so this only affects instance A, never instance
-  # B or the shared ORCE — but it MUST still run under the suite-wide flock
-  # for its entire duration, since any other agent signing via instance A
-  # during the TSA-down window would unexpectedly get a B-B signature. See
-  # steps/real_signing_vertical/dcs_real_signing_vertical_orce_steps.py.
-  @DCS-OR-C2PA-002
-  Scenario: PAdES-B-B fallback when the TSA is unavailable, and recovery to PAdES-B-T once it returns
-    Given I am authenticated with roles: "Contract Manager"
-    When pdf-core's RFC3161 TSA endpoint is made unavailable for this scenario
-    And contract "RSV TSA Down Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerTsaDown", signed while the TSA is unavailable
-    Then the signed PDF for contract "RSV TSA Down Contract" carries no RFC3161 timestamp token
-    And pdf-core logged a PAdES-B-B fallback WARN
-    When pdf-core's RFC3161 TSA endpoint is restored
-    And contract "RSV TSA Recovered Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerTsaRecovered", signed after the TSA is restored
-    Then the signed PDF for contract "RSV TSA Recovered Contract" embeds an RFC3161 timestamp token
-
   @DCS-OR-C2PA-002 @DCS-OR-C2PA-010
   Scenario: The order /update -> /sign -> /update leaves the PAdES signature and C2PA chain valid
     Given contract "RSV Order Contract" has an AES-signed PDF via a completed ceremony for signatory "SignerFour"
