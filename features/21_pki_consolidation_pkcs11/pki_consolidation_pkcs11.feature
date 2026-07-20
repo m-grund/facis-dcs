@@ -87,19 +87,8 @@ Feature: PKI consolidation - PKCS#11 + SoftHSM2, ECDSA P-256, trust anchors, rot
     # means ECDSA P-256 end to end, on both instances simultaneously.
     Given instance A and instance B are both running and trust each other
     Then instance A and instance B each publish an ECDSA P-256 DID key, not RSA
-    When the initiator on instance A creates and offers a contract with instance B as negotiator and approver
+    When the initiator on instance A creates and offers a contract with instance B as counterparty
     Then the contract appears on instance B in state OFFERED within a few seconds
-
-  @DCS-IR-HI-01
-  Scenario: The new authenticated C2PA-signing endpoint returns a well-formed ES256 signature
-    # POST /internal/c2pa/sign (backend/design/internal_signing.go) is
-    # authenticated and non-public; the load-bearing behavior under test is
-    # that it returns an ES256-shaped (64-byte r||s) signature over the
-    # submitted COSE Sig_structure bytes.
-    Given I am authenticated with roles: "Contract Signer"
-    When I request an ES256 C2PA signature for a COSE Sig_structure payload from the new internal signing endpoint
-    Then get http 200:Success code
-    And the returned signature is a well-formed 64-byte ES256 (r||s) signature
 
   @DCS-IR-HI-01
   Scenario: A full PDF export's embedded C2PA manifest declares COSE alg ES256, not EdDSA

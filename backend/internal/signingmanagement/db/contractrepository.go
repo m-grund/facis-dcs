@@ -23,6 +23,9 @@ type Responsible struct {
 	Approvers   []string `json:"approvers"`
 	Reviewers   []string `json:"reviewers"`
 	Negotiators []string `json:"negotiators"`
+	// Counterparty is the single peer DCS this contract is offered to (ADR-13);
+	// with the origin it forms the two signing parties.
+	Counterparty string `json:"counterparty"`
 }
 
 func (r Responsible) Value() (driver.Value, error) {
@@ -114,6 +117,10 @@ type ContractSignature struct {
 	PDFHash        *string    `db:"pdf_hash"`
 	ContentHash    *string    `db:"content_hash"`
 	FieldName      *string    `db:"field_name"`
+	// JAdESSignature is the ETSI TS 119 182-1 compact JWS over the JSON-LD
+	// contract representation (DCS-FR-SM-02/-11) — the machine-readable
+	// counterpart to the visible PAdES signature on the PDF.
+	JAdESSignature *string `db:"jades_signature"`
 }
 
 type ContractSignatureEnvelope struct {
@@ -145,6 +152,9 @@ type SignatureRecord struct {
 	// FieldName is the declared signature field this signature covers
 	// (DCS-FR-SM-07/-17); nil on the single-signer flow.
 	FieldName *string `db:"field_name"`
+	// JAdESSignature is the ETSI TS 119 182-1 compact JWS over the JSON-LD
+	// contract representation (DCS-FR-SM-02/-11).
+	JAdESSignature *string `db:"jades_signature"`
 }
 
 type ContractRepo interface {

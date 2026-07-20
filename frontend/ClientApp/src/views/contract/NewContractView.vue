@@ -4,7 +4,6 @@ import BuilderPreviewDialog from '@template-repository/components/builder-editor
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
-import SemanticElementEditor from '@template-repository/components/SemanticElementEditor.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, type Ref, ref, watch } from 'vue'
@@ -441,15 +440,6 @@ onBeforeRouteLeave(() => {
                   </div>
                 </div>
               </div>
-              <!-- SEMANTIC RULES TAB -->
-              <div v-show="activeTab === 'semantic'">
-                <div class="card border border-base-300 bg-base-100 shadow-sm">
-                  <div class="card-body gap-5">
-                    <SemanticElementEditor />
-                  </div>
-                </div>
-              </div>
-
               <!-- CLAUSES TAB -->
               <div v-show="activeTab === 'clauses'">
                 <div class="card border border-base-300 bg-base-100 shadow-sm">

@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 )
@@ -16,7 +15,7 @@ func TestPageContentIsFullyCoveredByC2PA(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "All visible text must be provenanced."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +33,7 @@ func TestExtractPageContentByteRanges(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Visible text."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +66,7 @@ func TestCoverageFailsWhenExclusionOverlapsContent(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Visible content."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +96,7 @@ func TestCoverageRangesDoNotOverlapC2PAExclusion(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "This text is signed."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,12 +125,12 @@ func TestCoverageRangesDoNotOverlapC2PAExclusion(t *testing.T) {
 // region.
 func TestCoverageHoldsAfterVerification(t *testing.T) {
 	payload := []byte(referencePayload)
-	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	pdf, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
 
-	verified, err := AppendVerificationWitness(context.Background(), pdf, payload)
+	verified, err := AppendVerificationWitness(testSigningContext(), pdf, payload)
 	if err != nil {
 		t.Fatalf("AppendVerificationWitness: %v", err)
 	}
@@ -147,12 +146,12 @@ func TestCoverageHoldsAfterVerification(t *testing.T) {
 // re-rendering guarantee.
 func TestReRenderingStableAfterVerification(t *testing.T) {
 	payload := []byte(referencePayload)
-	pdf1, err := CompilePDF(context.Background(), payload, time.Now())
+	pdf1, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
 
-	verified, err := AppendVerificationWitness(context.Background(), pdf1, payload)
+	verified, err := AppendVerificationWitness(testSigningContext(), pdf1, payload)
 	if err != nil {
 		t.Fatalf("AppendVerificationWitness: %v", err)
 	}
@@ -162,7 +161,7 @@ func TestReRenderingStableAfterVerification(t *testing.T) {
 		t.Fatalf("ExtractLatestEmbeddedJSONLD from verified PDF: %v", err)
 	}
 
-	pdf2, err := CompilePDF(context.Background(), extracted, time.Now())
+	pdf2, err := CompilePDF(testSigningContext(), extracted, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF from extracted JSON-LD: %v", err)
 	}

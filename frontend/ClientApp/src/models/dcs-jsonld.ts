@@ -4,7 +4,7 @@ export interface JsonLdReference {
 
 export interface JsonLdTypedValue {
   '@value': string
-  '@type': `xsd:${'string' | 'decimal' | 'integer' | 'boolean' | 'date'}`
+  '@type': `xsd:${'string' | 'decimal' | 'integer' | 'boolean' | 'date' | 'dateTime'}`
 }
 
 export interface DcsTemplateMetadata {
@@ -28,7 +28,11 @@ export interface DcsContractMetadata {
 
 export interface DcsPlaceholder {
   '@type': 'dcs:Placeholder'
+  /** Machine binding: the requirement field this slot fills. Never rendered in prose. */
   'dcs:bindsTo': JsonLdReference
+  /** Human representation shown in prose in place of the unfilled value — a
+   *  plain label the filler reads, never a raw IRI. */
+  'dcs:label': string
 }
 
 export type DcsContentSegment = string | DcsPlaceholder
@@ -57,20 +61,6 @@ export interface DcsClause {
   'dcs:content': { '@list': DcsContentSegment[] } | string
   'dcs:title'?: string
   'dcs:signatureFields'?: DcsSignatureField[]
-  /**
-   * An optional typed clause instance nested inside a free-text dcs:Clause
-   * block. The nested object carries its own @type (e.g. "dcs:PaymentClause",
-   * from the Semantic Hub clause catalog, GET /semantic/clauses) and becomes
-   * its own JSON-LD/RDF node — server-side SHACL validation targets it by
-   * that @type regardless of nesting, so the palette-generated form and
-   * enforcement share one source of truth.
-   */
-  'dcs:typedClause'?: DcsTypedClauseInstance
-}
-
-export interface DcsTypedClauseInstance {
-  '@type': string
-  [property: string]: unknown
 }
 
 export interface DcsApprovedTemplate {
@@ -139,14 +129,61 @@ export interface OdrlConstraint {
   '@type': 'odrl:Constraint'
   'odrl:leftOperand': JsonLdReference
   'odrl:operator': JsonLdReference
-  'odrl:rightOperand'?: JsonLdTypedValue | JsonLdTypedValue[]
+  /**
+   * The boundary the left operand is checked against: a fixed literal (or list
+   * for set operators), or a reference to a RequirementField whose value is
+   * agreed during contract negotiation. SRS Appendix C is a template whose
+   * spatial and dateTime boundaries (the permitted region, the access deadline)
+   * are negotiated field references, resolved to their filled values at
+   * enforcement.
+   */
+  'odrl:rightOperand'?: JsonLdTypedValue | JsonLdTypedValue[] | JsonLdReference
+}
+
+/**
+ * An ODRL LogicalConstraint (IM §2.6): a logical operator over an ordered list
+ * of constraints. and/andSequence = all hold, or = any holds, xone = exactly
+ * one holds; children may themselves be logical (a tree).
+ */
+export interface OdrlLogicalConstraint {
+  '@type': 'odrl:LogicalConstraint'
+  'odrl:and'?: { '@list': OdrlConstraintNode[] }
+  'odrl:or'?: { '@list': OdrlConstraintNode[] }
+  'odrl:xone'?: { '@list': OdrlConstraintNode[] }
+  'odrl:andSequence'?: { '@list': OdrlConstraintNode[] }
+}
+
+export type OdrlConstraintNode = OdrlConstraint | OdrlLogicalConstraint
+
+export function isAtomicConstraint(node: OdrlConstraintNode): node is OdrlConstraint {
+  return node['@type'] === 'odrl:Constraint'
+}
+
+/**
+ * A Duty nested under a Permission (ODRL IM §2.5): an obligation the assignee
+ * must fulfil to exercise the permission. A duty is a *fragment* — it carries
+ * its own action and constraints, while the assigner/assignee/target are
+ * inherited from the enclosing rule (so, unlike a top-level rule, it declares
+ * none of them). A duty may carry a consequence: a further duty that becomes
+ * active when the duty itself is not fulfilled.
+ */
+export interface OdrlDuty {
+  '@id'?: string
+  '@type': 'odrl:Duty'
+  'odrl:action': JsonLdReference | JsonLdReference[]
+  'odrl:constraint'?: OdrlConstraintNode[]
+  'odrl:consequence'?: OdrlDuty[]
 }
 
 export interface OdrlRule {
   '@id': string
   '@type': 'odrl:Duty' | 'odrl:Permission' | 'odrl:Prohibition'
-  /** Every rule declares exactly one action (DCS ODRL profile). */
-  'odrl:action': JsonLdReference
+  /**
+   * The action(s) the rule governs. A single action is one reference; several
+   * actions are an array (ODRL Policy Rule Composition §2.7 — normatively the
+   * atomic equivalent is one rule per action).
+   */
+  'odrl:action': JsonLdReference | JsonLdReference[]
   /** Bound party DIDs for a contract instance (ODRL Agreement); open/placeholder party references for a template (ODRL Offer). */
   'odrl:assigner': JsonLdReference
   'odrl:assignee': JsonLdReference
@@ -154,7 +191,14 @@ export interface OdrlRule {
   'odrl:target': JsonLdReference
   /** The human-readable clause node this rule is backed by (required — machine rules operationalize audited prose). */
   'dcs:prose': JsonLdReference
-  'odrl:constraint'?: OdrlConstraint
+  /** The rule's constraints. A plain list is a conjunction (all hold, ODRL IM
+   *  §2.5); a single LogicalConstraint expresses or/xone/andSequence. Nodes may
+   *  nest (a constraint tree). */
+  'odrl:constraint'?: OdrlConstraintNode[]
+  /** Duties the assignee must fulfil to exercise this rule (ODRL IM §2.5 —
+   *  meaningful on a Permission). Each is a fragment with its own action and
+   *  constraints. */
+  'odrl:duty'?: OdrlDuty[]
 }
 
 /** The single enclosing ODRL 2.2 policy for a template (Offer) or contract (Agreement). */

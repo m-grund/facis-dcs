@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 )
@@ -14,12 +13,12 @@ const sampleVC = `{"@context":["https://www.w3.org/2018/credentials/v1"],"type":
 // VC bytes as an embedded "contract-lifecycle-vc.json" attachment in the
 // incremental update section.
 func TestUpdatePDFWithVCEmbedsAttachment(t *testing.T) {
-	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	original, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
 
-	result, err := UpdatePDFWithVC(context.Background(), original, []byte(minimalPayloadAmended), []byte(sampleVC), time.Now())
+	result, err := UpdatePDFWithVC(testSigningContext(), original, []byte(minimalPayloadAmended), []byte(sampleVC), time.Now())
 	if err != nil {
 		t.Fatalf("UpdatePDFWithVC: %v", err)
 	}
@@ -44,13 +43,13 @@ func TestUpdatePDFWithVCEmbedsAttachment(t *testing.T) {
 // succeeds even when the JSON-LD payload is identical to the current embedded
 // one, because the VC attachment itself is a meaningful provenance event.
 func TestUpdatePDFWithVCUnchangedPayloadProceeds(t *testing.T) {
-	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	original, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
 
 	// Same payload — UpdatePDF would return "no changes" here.
-	result, err := UpdatePDFWithVC(context.Background(), original, []byte(minimalPayloadBase), []byte(sampleVC), time.Now())
+	result, err := UpdatePDFWithVC(testSigningContext(), original, []byte(minimalPayloadBase), []byte(sampleVC), time.Now())
 	if err != nil {
 		t.Fatalf("UpdatePDFWithVC with unchanged payload: %v", err)
 	}
@@ -67,11 +66,11 @@ func TestUpdatePDFWithVCUnchangedPayloadProceeds(t *testing.T) {
 // TestExtractEmbeddedVC_ReturnsBytesWhenPresent verifies that ExtractEmbeddedVC
 // returns the VC bytes that were embedded by UpdatePDFWithVC.
 func TestExtractEmbeddedVC_ReturnsBytesWhenPresent(t *testing.T) {
-	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	original, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	result, err := UpdatePDFWithVC(context.Background(), original, []byte(minimalPayloadAmended), []byte(sampleVC), time.Now())
+	result, err := UpdatePDFWithVC(testSigningContext(), original, []byte(minimalPayloadAmended), []byte(sampleVC), time.Now())
 	if err != nil {
 		t.Fatalf("UpdatePDFWithVC: %v", err)
 	}
@@ -91,7 +90,7 @@ func TestExtractEmbeddedVC_ReturnsBytesWhenPresent(t *testing.T) {
 // TestExtractEmbeddedVC_AbsentWhenNoVC verifies that ExtractEmbeddedVC returns
 // ok=false for a PDF that has no VC attachment.
 func TestExtractEmbeddedVC_AbsentWhenNoVC(t *testing.T) {
-	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	original, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -108,18 +107,18 @@ func TestExtractEmbeddedVC_AbsentWhenNoVC(t *testing.T) {
 // TestUpdatePDFWithVCNilVCBehavesLikeUpdatePDF verifies that when vcBytes is
 // nil UpdatePDFWithVC behaves identically to UpdatePDF.
 func TestUpdatePDFWithVCNilVCBehavesLikeUpdatePDF(t *testing.T) {
-	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	original, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
 
 	now := time.Now()
-	want, err := UpdatePDF(context.Background(), original, []byte(minimalPayloadAmended), now)
+	want, err := UpdatePDF(testSigningContext(), original, []byte(minimalPayloadAmended), now)
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}
 
-	got, err := UpdatePDFWithVC(context.Background(), original, []byte(minimalPayloadAmended), nil, now)
+	got, err := UpdatePDFWithVC(testSigningContext(), original, []byte(minimalPayloadAmended), nil, now)
 	if err != nil {
 		t.Fatalf("UpdatePDFWithVC nil vc: %v", err)
 	}

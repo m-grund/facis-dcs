@@ -2,8 +2,6 @@ import { TemplateType } from '@template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import { DCS_ODRL_PROFILE_IRI, DEFAULT_FIELD_CONSTRAINT_ACTION } from '@template-repository/utils/sla-ontology-catalog'
 import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
-import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
-import jsonld from 'jsonld'
 import { defineStore } from 'pinia'
 import {
   type DcsApprovedTemplate,
@@ -20,11 +18,14 @@ import {
   type DcsSubTemplateSnapshot,
   type DcsTemplateData,
   type DcsTextBlock,
+  isAtomicConstraint,
   isDcsClause,
   isDcsDocumentData,
   isDcsTemplateData,
   type JsonLdReference,
   type JsonLdTypedValue,
+  type OdrlConstraint,
+  type OdrlConstraintNode,
   type OdrlRule,
   type OdrlSet,
 } from '@/models/dcs-jsonld'
@@ -32,7 +33,6 @@ import {
   applyInlineSemanticValues,
   applyInlineSemanticValuesToSnapshots,
 } from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
-import { getHubContext } from '@/services/semantic-hub-service'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
@@ -100,6 +100,20 @@ export const useDcsDraftStore = defineStore(storeId, {
     /** Enriched semantic conditions derived from stored JSON-LD contractData + policies. */
     semanticConditions(): SemanticCondition[] {
       return contractDataToSemanticConditions(this.contractData, this.policies)
+    },
+    /** Parties a clause rule can bind (assigner/assignee/target), by label. */
+    partyAnchors(): { id: string; label: string }[] {
+      const documentId = this.documentIri ?? this.did ?? undefined
+      return [
+        { id: objectIri('party', 'assigner', documentId), label: 'My organization' },
+        { id: objectIri('party', 'assignee', documentId), label: 'The counterparty' },
+        { id: objectIri('party', 'provider', documentId), label: 'Provider' },
+        { id: objectIri('party', 'customer', documentId), label: 'Customer' },
+      ]
+    },
+    /** The contract/asset IRI an ODRL rule targets. */
+    contractTargetIri(): string {
+      return targetReference(this.documentIri ?? this.did ?? undefined)['@id']
     },
     /** Assembles the canonical JSON-LD document from store state — no conversion needed. */
     templateDocument(): DcsTemplateData {
@@ -217,7 +231,6 @@ export const useDcsDraftStore = defineStore(storeId, {
         title?: string
         text?: string
         content?: DcsContentSegment[]
-        typedClause?: import('@/models/dcs-jsonld').DcsTypedClauseInstance
       },
     ): void {
       const block = this.blocks.find((b) => b['@id'] === blockId)
@@ -226,7 +239,6 @@ export const useDcsDraftStore = defineStore(storeId, {
         const clause = block as DcsClause
         if (payload.title !== undefined) clause['dcs:title'] = payload.title || undefined
         if (payload.content !== undefined) clause['dcs:content'] = { '@list': payload.content }
-        if (payload.typedClause !== undefined) clause['dcs:typedClause'] = payload.typedClause
       } else if ((block as DcsBlock)['@type'] === 'dcs:TextBlock') {
         const tb = block as DcsTextBlock
         if (payload.text !== undefined) tb['dcs:text'] = payload.text
@@ -248,7 +260,7 @@ export const useDcsDraftStore = defineStore(storeId, {
       const documentId = this.documentIri ?? this.did ?? undefined
       const requirement = requirementForField(this.contractData, fieldId)
       const role = requirement?.['dcs:entityRole']
-      this.policies = this.policies.filter((p) => p['odrl:constraint']?.['odrl:leftOperand']['@id'] !== fieldId)
+      this.policies = this.policies.filter((p) => !ruleLeftOperands(p).includes(fieldId))
       operators.forEach((operator, index) => {
         if (!isStandardOdrlOperator(operator.operate)) return
         const rightOperand = odrlRightOperand(operator, parameterType)
@@ -260,12 +272,14 @@ export const useDcsDraftStore = defineStore(storeId, {
           'odrl:assignee': partyReference(counterpartRole(role), documentId),
           'odrl:target': targetReference(documentId),
           'dcs:prose': proseBlockForField(this.blocks, fieldId),
-          'odrl:constraint': {
-            '@type': 'odrl:Constraint',
-            'odrl:leftOperand': { '@id': fieldId },
-            'odrl:operator': { '@id': operator.operate },
-            ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
-          },
+          'odrl:constraint': [
+            {
+              '@type': 'odrl:Constraint',
+              'odrl:leftOperand': { '@id': fieldId },
+              'odrl:operator': { '@id': operator.operate },
+              ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
+            },
+          ],
         } satisfies OdrlRule)
       })
     },
@@ -307,10 +321,7 @@ export const useDcsDraftStore = defineStore(storeId, {
         ...(payload.entityRole ? { 'dcs:entityRole': payload.entityRole } : {}),
         'dcs:fields': payload.parameters.map((p) => semanticParamToField(conditionId, p, documentId)),
       }
-      this.policies = this.policies.filter((p) => {
-        const leftOp = p['odrl:constraint']?.['odrl:leftOperand']['@id']
-        return !leftOp || !oldFieldIds.has(leftOp)
-      })
+      this.policies = this.policies.filter((p) => !ruleLeftOperands(p).some((op) => oldFieldIds.has(op)))
       this.policies.push(
         ...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId),
       )
@@ -335,10 +346,38 @@ export const useDcsDraftStore = defineStore(storeId, {
       }
 
       this.contractData = this.contractData.filter((r) => r['dcs:conditionId'] !== conditionId)
-      this.policies = this.policies.filter((p) => {
-        const leftOp = p['odrl:constraint']?.['odrl:leftOperand']['@id']
-        return !leftOp || !fieldIds.has(leftOp)
-      })
+      this.policies = this.policies.filter((p) => !ruleLeftOperands(p).some((op) => fieldIds.has(op)))
+    },
+    /** Adds a clause as prose + its machine-readable ODRL rule (linked by
+     *  dcs:prose), declaring the hub fields the rule constrains as requirement
+     *  fields — one clause, both readings, exactly as the SRS split editor. */
+    addClauseWithMeaning(payload: {
+      title: string
+      content: DcsContentSegment[]
+      fields: { id: string; parameterName: string; domainFieldIri: string }[]
+      rule: OdrlRule | null
+    }): void {
+      const documentId = this.documentIri ?? this.did ?? undefined
+      const blockId = this.addClause({ title: payload.title, content: payload.content })
+      if (payload.fields.length) {
+        this.contractData.push({
+          '@id': conditionIri(crypto.randomUUID(), documentId),
+          '@type': 'dcs:DataRequirement',
+          'dcs:conditionId': crypto.randomUUID(),
+          'dcs:name': payload.title,
+          'dcs:schemaVersion': 'v1',
+          'dcs:fields': payload.fields.map((f) => ({
+            '@id': f.id,
+            '@type': 'dcs:RequirementField',
+            'dcs:parameterName': f.parameterName,
+            'dcs:domainField': { '@id': f.domainFieldIri },
+            'dcs:required': true,
+          })),
+        })
+      }
+      if (payload.rule) {
+        this.policies.push({ ...payload.rule, 'dcs:prose': { '@id': blockId } })
+      }
     },
     addClause(payload: { title?: string; content: DcsContentSegment[] }): string {
       const blockId = crypto.randomUUID()
@@ -351,87 +390,6 @@ export const useDcsDraftStore = defineStore(storeId, {
       }
       this.blocks.push(block)
       return id
-    },
-    /**
-     * Phase 3 (DCS-FR-TR-03/TR-04, ADR-10): adds a typed clause instance
-     * generated from the Semantic Hub's clause catalog (TypedClausePalette
-     * .vue). Nested inside a plain dcs:Clause block (dcs:typedClause) so it
-     * renders/places/persists through the existing free-text clause
-     * machinery, while still becoming its own JSON-LD node server-side
-     * validation (validateAgainstHubShapes) targets by its @type.
-     */
-    async addTypedClause(payload: {
-      clauseType: string
-      title?: string
-      instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
-    }): Promise<string> {
-      const blockId = crypto.randomUUID()
-      const id = blockIri(blockId, this.did ?? undefined)
-      const trimmedTitle = payload.title?.trim()
-      const typeTail = payload.clauseType.split(/[#/:]/).pop()
-      const title = trimmedTitle?.length ? trimmedTitle : typeTail?.length ? typeTail : payload.clauseType
-      const instance = payload.instance
-
-      const compacted = await compactAgainstHubContext(instance)
-      if (isOdrlRuleInstance(compacted['@type'])) {
-        // A hub-templated ODRL rule: the clause block is its human-readable
-        // prose, the compacted rule joins dcs:policies backed by it.
-        const block: import('@/models/dcs-jsonld').DcsClause = {
-          '@type': 'dcs:Clause',
-          '@id': id,
-          'dcs:title': title,
-          'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
-        }
-        this.blocks.push(block)
-        const root = this.layout.find((node) => node['dcs:isRoot'])
-        if (root) {
-          const children = root['dcs:children']['@list'].map((ref) => ref['@id'])
-          children.push(id)
-          root['dcs:children'] = { '@list': children.map((childId) => ({ '@id': childId })) }
-        }
-        const documentId = this.documentIri ?? this.did ?? undefined
-        this.policies.push({
-          'odrl:assigner': partyReference(undefined, documentId),
-          'odrl:assignee': partyReference(undefined, documentId),
-          'odrl:target': targetReference(documentId),
-          'odrl:action': { '@id': DEFAULT_FIELD_CONSTRAINT_ACTION },
-          ...compacted,
-          '@id': `urn:uuid:${crypto.randomUUID()}`,
-          '@type': compacted['@type'],
-          'dcs:prose': { '@id': id },
-        } as OdrlRule)
-        return id
-      }
-
-      const block: import('@/models/dcs-jsonld').DcsClause = {
-        '@type': 'dcs:Clause',
-        '@id': id,
-        'dcs:title': title,
-        'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
-        'dcs:typedClause': instance,
-      }
-      this.blocks.push(block)
-      return id
-    },
-    /**
-     * Re-fills a typed clause with new shape-conformant values: the nested
-     * machine-readable instance and the clause's human-readable summary text
-     * change together, so the two representations cannot drift apart
-     * (DCS-FR-CWE-04). Available in both workflows — the template freezes
-     * the clause's shape, the contract creator fills its values.
-     */
-    updateTypedClause(
-      blockId: string,
-      payload: { title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance },
-    ): void {
-      const block = this.blocks.find((b) => b['@id'] === blockId)
-      if (!block || !isDcsClause(block as DcsBlock)) return
-      const clause = block as DcsClause
-      if (!clause['dcs:typedClause']) return
-      clause['dcs:typedClause'] = payload.instance
-      clause['dcs:content'] = { '@list': [typedClauseValuesSummary(payload.instance)] }
-      const trimmedTitle = payload.title?.trim()
-      if (trimmedTitle?.length) clause['dcs:title'] = trimmedTitle
     },
     deleteClause(blockId: string): void {
       removeClauseFromLayout(this.layout, blockId)
@@ -850,7 +808,6 @@ function createBlock(id: string, payload: AddBlockPayload): DcsBlock | MergedApp
         '@id': id,
         'dcs:content': { '@list': payload.content ?? [] },
         ...(payload.title ? { 'dcs:title': payload.title } : {}),
-        ...(payload.typedClause ? { 'dcs:typedClause': payload.typedClause } : {}),
       }
     case 'dcs:ApprovedTemplate':
       return {
@@ -1022,27 +979,6 @@ function semanticParamToField(
   }
 }
 
-/** The clause block whose text carries a placeholder bound to fieldId — the prose an ODRL rule over that field is backed by. */
-
-const ODRL_RULE_TYPES = new Set(['odrl:Duty', 'odrl:Permission', 'odrl:Prohibition'])
-
-/** Compacts a shacl-form instance (absolute IRIs) against the hub context. */
-async function compactAgainstHubContext(
-  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance,
-): Promise<Record<string, unknown>> {
-  const compacted = (await jsonld.compact(instance as object, (await getHubContext()) as never)) as Record<
-    string,
-    unknown
-  >
-  delete compacted['@context']
-  return compacted
-}
-
-/** Whether a compacted instance is an ODRL rule the policy buckets accept. */
-export function isOdrlRuleInstance(compactedType: unknown): boolean {
-  return typeof compactedType === 'string' && ODRL_RULE_TYPES.has(compactedType)
-}
-
 function proseBlockForField(
   blocks: readonly (DcsBlock | MergedApprovedTemplateBlock)[],
   fieldId: string,
@@ -1086,15 +1022,43 @@ function semanticConditionToPolicies(
           'odrl:assignee': partyReference(counterpartRole(role), documentId),
           'odrl:target': targetReference(documentId),
           'dcs:prose': proseBlockForField(blocks, field['@id']),
-          'odrl:constraint': {
-            '@type': 'odrl:Constraint',
-            'odrl:leftOperand': { '@id': field['@id'] },
-            'odrl:operator': { '@id': operator.operate },
-            ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
-          },
+          'odrl:constraint': [
+            {
+              '@type': 'odrl:Constraint',
+              'odrl:leftOperand': { '@id': field['@id'] },
+              'odrl:operator': { '@id': operator.operate },
+              ...(rightOperand !== undefined ? { 'odrl:rightOperand': rightOperand } : {}),
+            },
+          ],
         } satisfies OdrlRule,
       ]
     }),
+  )
+}
+
+/** Flattens a constraint list to its atomic leaves, descending logical constraints.
+ * ODRL/JSON-LD lets `odrl:constraint` be a single node or a list, so a bare
+ * constraint object is normalized to a one-element list before descent. */
+function atomicConstraintLeaves(nodes: readonly OdrlConstraintNode[] | OdrlConstraintNode): OdrlConstraint[] {
+  const list = Array.isArray(nodes) ? nodes : [nodes]
+  const leaves: OdrlConstraint[] = []
+  for (const node of list) {
+    if (isAtomicConstraint(node)) {
+      leaves.push(node)
+      continue
+    }
+    for (const op of ['odrl:and', 'odrl:or', 'odrl:xone', 'odrl:andSequence'] as const) {
+      const list = node[op]
+      if (list) leaves.push(...atomicConstraintLeaves(list['@list']))
+    }
+  }
+  return leaves
+}
+
+/** The left-operand IRIs a rule's constraints reference (across logical trees). */
+function ruleLeftOperands(rule: OdrlRule): string[] {
+  return atomicConstraintLeaves(rule['odrl:constraint'] ?? []).map(
+    (constraint) => constraint['odrl:leftOperand']['@id'],
   )
 }
 
@@ -1104,19 +1068,28 @@ function contractDataToSemanticConditions(
 ): SemanticCondition[] {
   const operatorsByField = new Map<string, SemanticParameterOperator[]>()
   for (const policy of policies) {
-    const constraint = policy['odrl:constraint']
-    if (!constraint) continue
-    const operate = constraint['odrl:operator']['@id'] as DcsOperator
-    if (!isStandardOdrlOperator(operate)) continue
-    const rightOperand = constraint['odrl:rightOperand']
-    const targets =
-      rightOperand === undefined
-        ? []
-        : Array.isArray(rightOperand)
-          ? rightOperand.map(jsonLdValue)
-          : [jsonLdValue(rightOperand)]
-    const fieldId = constraint['odrl:leftOperand']['@id']
-    operatorsByField.set(fieldId, [...(operatorsByField.get(fieldId) ?? []), { operate, targets }])
+    for (const constraint of atomicConstraintLeaves(policy['odrl:constraint'] ?? [])) {
+      const operate = constraint['odrl:operator']['@id'] as DcsOperator
+      if (!isStandardOdrlOperator(operate)) continue
+      const rightOperand = constraint['odrl:rightOperand']
+      // A right operand may be a bare literal (95), a typed value ({@value}), a
+      // field reference ({@id} — a negotiated boundary, not a fixed target), or
+      // a list. Only an OBJECT can be probed with `in`; guarding it keeps a
+      // primitive operand from throwing and blanking the whole clause render.
+      const isReference =
+        typeof rightOperand === 'object' &&
+        rightOperand !== null &&
+        !Array.isArray(rightOperand) &&
+        '@id' in rightOperand
+      const targets =
+        rightOperand === undefined || isReference
+          ? []
+          : Array.isArray(rightOperand)
+            ? rightOperand.map(jsonLdValue)
+            : [jsonLdValue(rightOperand)]
+      const fieldId = constraint['odrl:leftOperand']['@id']
+      operatorsByField.set(fieldId, [...(operatorsByField.get(fieldId) ?? []), { operate, targets }])
+    }
   }
 
   return requirements.map((requirement) => ({
@@ -1232,6 +1205,7 @@ function jsonLdValue(value: JsonLdTypedValue): unknown {
       return value['@value'] === 'true'
     case 'xsd:string':
     case 'xsd:date':
+    case 'xsd:dateTime':
       return value['@value']
   }
 }

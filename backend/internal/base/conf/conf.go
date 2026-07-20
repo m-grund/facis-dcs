@@ -5,11 +5,19 @@
 package conf
 
 import (
+	"os"
 	"time"
 )
 
 func TransactionTimeout() time.Duration {
 	return 1 * time.Minute
+}
+
+// SystemToken is the in-cluster service credential the background PDF
+// regenerator presents to the internal signing primitives (it runs on NATS
+// events with no user JWT). Empty when unset — no system caller is accepted.
+func SystemToken() string {
+	return os.Getenv("DCS_SYSTEM_TOKEN")
 }
 
 func HTTPClientTimeout() time.Duration {

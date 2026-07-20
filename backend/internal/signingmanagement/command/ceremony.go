@@ -94,12 +94,21 @@ var ErrWebhookUnauthorized = errors.New("incorrect webhook shared secret")
 // ErrCeremonyNotFound is returned when a webhook references an unknown ceremony.
 var ErrCeremonyNotFound = errors.New("ceremony not found")
 
-// WebhookCmd carries a completed PID presentation from EUDIPLO.
+// ErrPoAUnauthorized is returned when the signing presentation carries no Power
+// of Attorney, or a PoA that authorizes a different organization than the party
+// (signature field) being signed — signing is not authorized (UC-14, FR-SM-03).
+var ErrPoAUnauthorized = errors.New("power of attorney does not authorize this signature")
+
+// WebhookCmd carries a completed signing-ceremony presentation from EUDIPLO: the
+// PID (the natural-person signatory) and the Power of Attorney presented at
+// signing (UC-14, FR-SM-03), whose organization the signature is checked against.
 type WebhookCmd struct {
-	Secret     string
-	CeremonyID string
-	VpToken    string
-	PidClaims  any
+	Secret          string
+	CeremonyID      string
+	VpToken         string
+	PidClaims       any
+	PoAOrganization string
+	PoARoles        any
 }
 
 // WebhookHandler validates a PID presentation and marks the ceremony verified.
@@ -142,7 +151,28 @@ func (h *WebhookHandler) Handle(ctx context.Context, cmd WebhookCmd) (*db.Signat
 		}
 	}
 
-	if err := h.CeremonyRepo.MarkCeremonyVerified(ctx, tx, cmd.CeremonyID, signerDID, cmd.VpToken, pidBytes, sdHash); err != nil {
+	// The Power of Attorney presented at signing authorizes the signatory to act
+	// for its organization. UC-14 requires a valid PoA BEFORE a contract can be
+	// signed and only "then authorizes the signing operation", so a missing PoA is
+	// a hard failure here: the ceremony does not verify and signing cannot proceed.
+	// It must also authorize the party actually signed — the signature field is the
+	// participating org DID (seedSignatureFields), so the PoA organization must
+	// equal the ceremony's field (FR-SM-03).
+	poaOrganization := strings.TrimSpace(cmd.PoAOrganization)
+	if poaOrganization == "" {
+		return nil, fmt.Errorf("%w: no Power of Attorney credential was presented at signing", ErrPoAUnauthorized)
+	}
+	if poaOrganization != ceremony.FieldName {
+		return nil, fmt.Errorf("%w: Power of Attorney authorizes %q, not the signed party %q", ErrPoAUnauthorized, poaOrganization, ceremony.FieldName)
+	}
+	var poaRoles []byte
+	if cmd.PoARoles != nil {
+		if b, mErr := json.Marshal(cmd.PoARoles); mErr == nil {
+			poaRoles = b
+		}
+	}
+
+	if err := h.CeremonyRepo.MarkCeremonyVerified(ctx, tx, cmd.CeremonyID, signerDID, cmd.VpToken, pidBytes, sdHash, poaOrganization, poaRoles); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {

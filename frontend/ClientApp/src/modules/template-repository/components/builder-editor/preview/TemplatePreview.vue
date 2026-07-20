@@ -81,12 +81,6 @@ const clauseContent = computed((): DcsContentSegment[] => {
   return content['@list']
 })
 
-const clauseTypedInstance = computed(() => {
-  const b = block.value
-  if (b?.['@type'] !== 'dcs:Clause') return undefined
-  return b['dcs:typedClause']
-})
-
 const clauseSemanticConditions = computed(() => {
   if (!isMergedBlockId(props.blockId ?? '')) return props.semanticConditions
   return subTemplateSemanticConditions.value
@@ -192,7 +186,6 @@ const hasApprovedTemplateChildren = computed(
       :semantic-condition-values="semanticConditionValues"
       :verification-result="verificationResult"
       :set-semantic-condition-value="setSemanticConditionValue"
-      :typed-clause="clauseTypedInstance"
     />
     <!-- Approved template block -->
     <ConditionalWrapper

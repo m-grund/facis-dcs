@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { registerSchema } from '@/services/semantic-hub-service'
 
 /**
@@ -26,10 +26,16 @@ const emit = defineEmits<{
 
 const name = ref('')
 const kind = ref<(typeof KINDS)[number]>('shapes')
+const source = ref<'inline' | 'url'>('inline')
 const content = ref('')
+const sourceUrl = ref('')
 const activate = ref(true)
 const submitting = ref(false)
 const error = ref<string | null>(null)
+
+const canSubmit = computed(
+  () => !!name.value.trim() && (source.value === 'url' ? !!sourceUrl.value.trim() : !!content.value.trim()),
+)
 
 async function onFileSelected(event: Event) {
   const input = event.target as HTMLInputElement
@@ -40,7 +46,7 @@ async function onFileSelected(event: Event) {
 }
 
 async function submit() {
-  if (!name.value.trim() || !content.value.trim() || submitting.value) return
+  if (!canSubmit.value || submitting.value) return
   submitting.value = true
   error.value = null
   try {
@@ -48,12 +54,13 @@ async function submit() {
       name: name.value.trim(),
       kind: kind.value,
       media_type: MEDIA_TYPE_BY_KIND[kind.value],
-      content: content.value,
+      ...(source.value === 'url' ? { source_url: sourceUrl.value.trim() } : { content: content.value }),
       activate: activate.value,
     })
     emit('published', name.value.trim(), kind.value, result.version)
     name.value = ''
     content.value = ''
+    sourceUrl.value = ''
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Publishing failed'
   } finally {
@@ -82,7 +89,14 @@ async function submit() {
         </select>
       </div>
     </div>
-    <div class="form-control">
+    <div role="tablist" class="tabs-boxed tabs w-fit tabs-sm">
+      <a role="tab" class="tab" :class="{ 'tab-active': source === 'inline' }" @click="source = 'inline'">
+        Paste / upload
+      </a>
+      <a role="tab" class="tab" :class="{ 'tab-active': source === 'url' }" @click="source = 'url'">From URL</a>
+    </div>
+
+    <div v-if="source === 'inline'" class="form-control">
       <label class="label py-1">
         <span class="label-text text-xs">Content ({{ MEDIA_TYPE_BY_KIND[kind] }})</span>
         <label class="label-text-alt link cursor-pointer text-xs">
@@ -98,12 +112,25 @@ async function submit() {
         aria-label="Entry content"
       />
     </div>
+    <div v-else class="form-control">
+      <label class="label py-1">
+        <span class="label-text text-xs">Source URL</span>
+        <span class="label-text-alt text-xs text-base-content/50">follows redirects · snapshotted as a version</span>
+      </label>
+      <input
+        v-model="sourceUrl"
+        type="url"
+        class="input-bordered input input-sm w-full font-mono text-xs"
+        placeholder="https://w3id.org/gaia-x/development#…"
+        aria-label="Schema source URL"
+      />
+    </div>
     <div class="flex items-center justify-between gap-3">
       <label class="label cursor-pointer gap-2 py-0">
         <input v-model="activate" type="checkbox" class="checkbox checkbox-sm" />
         <span class="label-text text-xs">Activate immediately</span>
       </label>
-      <button type="submit" class="btn btn-sm btn-primary" :disabled="!name.trim() || !content.trim() || submitting">
+      <button type="submit" class="btn btn-sm btn-primary" :disabled="!canSubmit || submitting">
         <span v-if="submitting" class="loading loading-xs loading-spinner" />
         Publish entry
       </button>

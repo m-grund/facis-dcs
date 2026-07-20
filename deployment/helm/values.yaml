@@ -401,5 +401,10 @@ kubeStateMetrics:
 # setting the backend's DSS_URL env (e.g. http://<release>-dss:8080) — is an
 # explicit operator decision. The backend HARD-FAILS signature validation if
 # DSS_URL is configured but the instance is unreachable.
+# EU DSS for signature VALIDATION (DCS-FR-SM-18) and the wallet-driven
+# /signature/submit acceptance path (ADR-12). When enabled the backend gets
+# DSS_URL; the DCS validates a signature the SIGNATORY produced and holds no
+# contract-signing key. Disabled by default (an operator decision).
 dss:
   enabled: false
+  # url: http://<release>-dss:8080  # defaults to the in-cluster dss service

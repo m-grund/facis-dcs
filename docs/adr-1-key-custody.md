@@ -2,11 +2,15 @@
 
 ## Context
 
-DCS signs five distinct kinds of artifact: PAdES contract signatures, C2PA
+DCS signs several distinct kinds of artifact with **its own** identity: C2PA
 claim signatures, C2PA lifecycle-assertion signatures, the PID-binding
-signing-summary VC, and OID4VP request objects (JAR). Each needs an
-asymmetric key and a signing operation, so each could plausibly grow its
-own key-storage mechanism.
+signing-summary VC, OID4VP request objects (JAR), and the DCS-to-DCS
+synchronizer's JAdES transport envelope. Each needs an asymmetric key and a
+signing operation, so each could plausibly grow its own key-storage mechanism.
+
+(The **contract AES** is deliberately absent from this list: per
+[ADR-12](adr-12-wallet-driven-signing.md) it is produced by the signatory's
+wallet/QTSP, not a DCS key. The DCS holds no contract-signing key.)
 
 The SRS requires a standardized, swappable key-custody interface
 (IR-HI-01) and eIDAS-aligned crypto-agility with rotation and revocation

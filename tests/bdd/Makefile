@@ -58,6 +58,10 @@ KIND_BIN ?= kind
 KUBECTL_BIN ?= kubectl
 HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
+
+# What run_bdd_helm runs against the live stack: bdd (behave, default) or e2e
+# (Playwright). See run_e2e_kind_ci.
+RUN_MODE ?= bdd
 CERT_CHAIN_SECRET ?= $(DCS_SERVICE)-hsm-c2pa-x5chain
 COREDNS_REWRITE_SCRIPT ?= scripts/kind_coredns_rewrite.sh
 ORCE_PERSISTENCE_SCRIPT ?= scripts/ensure_orce_persistence.sh
@@ -83,7 +87,7 @@ BDD_HELM_SET_B := \
 	--set-string hydra.clients[0].redirect_uris[0]="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/callback" \
 	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/logout-complete"
 
-.PHONY: kind_export_kubeconfig setup_environment ensure_venv run_bdd_test run_bdd_fast run_bdd_helm ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci run_bdd_audit_kind_ci build_dcs_image clean help kind_up kind_up_audit run_bdd_kind_once run_bdd_audit_kind_once kind_down
+.PHONY: kind_export_kubeconfig setup_environment ensure_venv run_bdd_test run_bdd_fast run_bdd_helm ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci run_e2e_kind run_e2e_kind_ci run_bdd_audit_kind_ci build_dcs_image clean help kind_up kind_up_audit run_bdd_kind_once run_bdd_audit_kind_once kind_down
 
 help:
 	@echo "make setup_environment   # Create venv and install bdd-executor"
@@ -161,13 +165,23 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 		BDD_PUBLIC_ORIGIN_B="$(BDD_PUBLIC_ORIGIN_B)" \
 		ARG_BDD_JUNIT="$(ARG_BDD_JUNIT)" \
 		ARG_BDD="$(ARG_BDD)" \
+		RUN_MODE="$(RUN_MODE)" \
 		bash "$(BDD_RUNNER_SCRIPT)"
 
+# Image build command + optional per-image layer-cache flags. CI overrides
+# DOCKER_BUILD to `docker buildx build --load` and passes GitHub Actions layer
+# cache flags (see .github/workflows/bdd-kind.yml) so the Go build's base +
+# module-download layers persist across runs; locally these default to a plain
+# docker build with no cache flags.
+DOCKER_BUILD ?= docker build
+DCS_BUILD_CACHE ?=
+PDF_CORE_BUILD_CACHE ?=
+
 build_dcs_image:
-	@docker build -f ../../deployment/docker/Dockerfile -t "$(DOCKER_IMAGE)" ../..
+	@$(DOCKER_BUILD) $(DCS_BUILD_CACHE) -f ../../deployment/docker/Dockerfile -t "$(DOCKER_IMAGE)" ../..
 
 build_pdf_core_image:
-	@docker build -f ../../pdf-core/Dockerfile -t "$(PDF_CORE_IMAGE)" ../..
+	@$(DOCKER_BUILD) $(PDF_CORE_BUILD_CACHE) -f ../../pdf-core/Dockerfile -t "$(PDF_CORE_IMAGE)" ../..
 
 ensure_kind:
 	@command -v "$(KIND_BIN)" >/dev/null 2>&1 || (echo "kind not found in PATH" && exit 1)
@@ -183,6 +197,7 @@ ensure_k8s_tools:
 KIND_KUBECONFIG := $(CURDIR)/.tmp/kind-kubeconfig
 KIND_GOALS := kind_create kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b \
 	kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci \
+	run_e2e_kind run_e2e_kind_ci \
 	run_bdd_audit_kind_ci kind_up kind_up_audit run_bdd_kind_once run_bdd_audit_kind_once kind_down
 $(KIND_GOALS): export KUBECONFIG := $(KIND_KUBECONFIG)
 
@@ -229,7 +244,7 @@ kind_load_pdf_core_image: kind_create
 	@docker image inspect "$(PDF_CORE_IMAGE)" >/dev/null 2>&1 || (echo "Missing local image $(PDF_CORE_IMAGE). Build it first." && exit 1)
 	@"$(KIND_BIN)" load docker-image "$(PDF_CORE_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
 
-kind_deploy: kind_load_image kind_load_pdf_core_image
+kind_deploy: kind_load_image kind_load_pdf_core_image kind_load_dss_image
 	@"$(HELM_BIN)" repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update
 	@"$(HELM_BIN)" repo add traefik https://traefik.github.io/charts --force-update
 	@"$(HELM_BIN)" repo update
@@ -388,8 +403,31 @@ run_bdd_kind_all: kind_deploy_b
 
 run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind
 
+# The Playwright E2E counterpart of run_bdd_kind_ci: same build + two-instance
+# deploy, but RUN_MODE=e2e makes run_bdd_helm run the Playwright suite against
+# the live stack (with the DSS forward + both instances up) instead of behave.
+# Split into its own CI job so it runs in parallel with the BDD suite on a
+# separate runner (own kind cluster, own disk/memory budget).
+run_e2e_kind: kind_deploy_b
+	@$(MAKE) run_bdd_helm \
+		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
+		HELM_RELEASE="$(HELM_RELEASE)" \
+		RUN_MODE="e2e"
+
+run_e2e_kind_ci: build_dcs_image build_pdf_core_image run_e2e_kind
+
 run_bdd_audit_kind_ci: build_dcs_image build_pdf_core_image kind_deploy
 	@$(MAKE) run_bdd_audit_kind_once
+
+# The community-packaged EU DSS 6.2 demonstration webapp (visible-PAdES rQES).
+DSS_IMAGE ?= conectx/dss-demo:6.2.1
+
+# Pull (if absent) and load the DSS image into the kind cluster. The DSS is the
+# signature VALIDATOR for the wallet-driven /signature/submit path (ADR-12,
+# DCS-FR-SM-18); the DCS holds no signing key.
+kind_load_dss_image: kind_create
+	@docker image inspect "$(DSS_IMAGE)" >/dev/null 2>&1 || docker pull "$(DSS_IMAGE)"
+	@"$(KIND_BIN)" load docker-image "$(DSS_IMAGE)" --name "$(KIND_CLUSTER_NAME)"
 
 clean:
 	rm -rf "$(VENV_PATH)" .tmp .reports

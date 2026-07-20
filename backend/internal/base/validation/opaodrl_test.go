@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -21,26 +23,46 @@ func evaluateODRLConstraint(operator string, actualValue any, rightOperand any) 
 	actualValue = compactJSONLDValue(actualValue)
 	rightOperand = compactJSONLDValue(rightOperand)
 	switch op {
-	case "eq":
+	case "eq", "isA":
 		return odrlValuesEqual(actualValue, rightOperand)
 	case "neq":
 		return !odrlValuesEqual(actualValue, rightOperand)
 	case "gt":
-		f1, ok1 := toFloat(actualValue)
-		f2, ok2 := toFloat(rightOperand)
-		return ok1 && ok2 && f1 > f2+floatTolerance
+		if f1, ok1 := toFloat(actualValue); ok1 {
+			if f2, ok2 := toFloat(rightOperand); ok2 {
+				return f1 > f2+floatTolerance
+			}
+		}
+		t1, ok1 := toTime(actualValue)
+		t2, ok2 := toTime(rightOperand)
+		return ok1 && ok2 && t1.After(t2)
 	case "gteq":
-		f1, ok1 := toFloat(actualValue)
-		f2, ok2 := toFloat(rightOperand)
-		return ok1 && ok2 && f1+floatTolerance >= f2
+		if f1, ok1 := toFloat(actualValue); ok1 {
+			if f2, ok2 := toFloat(rightOperand); ok2 {
+				return f1+floatTolerance >= f2
+			}
+		}
+		t1, ok1 := toTime(actualValue)
+		t2, ok2 := toTime(rightOperand)
+		return ok1 && ok2 && !t1.Before(t2)
 	case "lt":
-		f1, ok1 := toFloat(actualValue)
-		f2, ok2 := toFloat(rightOperand)
-		return ok1 && ok2 && f1 < f2-floatTolerance
+		if f1, ok1 := toFloat(actualValue); ok1 {
+			if f2, ok2 := toFloat(rightOperand); ok2 {
+				return f1 < f2-floatTolerance
+			}
+		}
+		t1, ok1 := toTime(actualValue)
+		t2, ok2 := toTime(rightOperand)
+		return ok1 && ok2 && t1.Before(t2)
 	case "lteq":
-		f1, ok1 := toFloat(actualValue)
-		f2, ok2 := toFloat(rightOperand)
-		return ok1 && ok2 && f1 <= f2+floatTolerance
+		if f1, ok1 := toFloat(actualValue); ok1 {
+			if f2, ok2 := toFloat(rightOperand); ok2 {
+				return f1 <= f2+floatTolerance
+			}
+		}
+		t1, ok1 := toTime(actualValue)
+		t2, ok2 := toTime(rightOperand)
+		return ok1 && ok2 && !t1.After(t2)
 	case "isAnyOf":
 		items, ok := asArray(rightOperand)
 		if !ok {
@@ -71,6 +93,36 @@ func evaluateODRLConstraint(operator string, actualValue any, rightOperand any) 
 			return false
 		}
 		return strings.Contains(str, fmt.Sprint(compactJSONLDValue(rightOperand)))
+	case "isPartOf":
+		if items, ok := asArray(rightOperand); ok {
+			normalized := strings.ToUpper(strings.TrimSpace(fmt.Sprint(actualValue)))
+			for _, item := range items {
+				if strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(item)))) == normalized {
+					return true
+				}
+			}
+			return false
+		}
+		str, ok := rightOperand.(string)
+		if !ok {
+			return false
+		}
+		return strings.Contains(str, fmt.Sprint(actualValue))
+	case "isAllOf":
+		items, ok := asArray(rightOperand)
+		if !ok {
+			items = []any{rightOperand}
+		}
+		if len(items) == 0 {
+			return false
+		}
+		normalized := strings.ToUpper(strings.TrimSpace(fmt.Sprint(actualValue)))
+		for _, item := range items {
+			if strings.ToUpper(strings.TrimSpace(fmt.Sprint(compactJSONLDValue(item)))) != normalized {
+				return false
+			}
+		}
+		return true
 	default:
 		return false
 	}
@@ -106,12 +158,30 @@ func toFloat(value any) (float64, bool) {
 		float, err := typed.Float64()
 		return float, err == nil
 	case string:
-		var parsed float64
-		_, err := fmt.Sscanf(strings.TrimSpace(typed), "%f", &parsed)
+		// Whole-string parse, matching Rego's to_number: "2025-05-10T…" is not
+		// a number (Sscanf would greedily read the leading year).
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(typed), 64)
 		return parsed, err == nil
 	default:
 		return 0, false
 	}
+}
+
+// toTime parses an ISO-8601 instant — RFC3339, or timezone-less dateTime/date
+// read as UTC — mirroring normalizeTemporal + the Rego time.parse_rfc3339_ns
+// branch, so the oracle and OPA agree on temporal ordering.
+func toTime(value any) (time.Time, bool) {
+	s, ok := value.(string)
+	if !ok {
+		return time.Time{}, false
+	}
+	trimmed := strings.TrimSpace(s)
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02T15:04:05", "2006-01-02"} {
+		if parsed, err := time.Parse(layout, trimmed); err == nil {
+			return parsed.UTC(), true
+		}
+	}
+	return time.Time{}, false
 }
 
 // TestOPAConstraintParityWithHandRolled is the ADR-11 parity gate: the OPA
@@ -153,6 +223,16 @@ func TestOPAConstraintParityWithHandRolled(t *testing.T) {
 		{"lteq", float64(99.6), float64(99.5)},
 		{"lteq", "9500", float64(10000)}, // numeric-string coercion
 		{"gt", "notanumber", float64(1)}, // non-numeric -> false both sides
+		// dateTime ordering (SRS Appendix C): tz-less instants and dates,
+		// before/at/after the boundary, and mixed number/dateTime operands.
+		{"lteq", "2025-05-09T10:00:00", "2025-05-10T23:59:59"},
+		{"lteq", "2025-05-10T23:59:59", "2025-05-10T23:59:59"},
+		{"lteq", "2025-05-11T00:00:00", "2025-05-10T23:59:59"},
+		{"gteq", "2025-05-11T00:00:00", "2025-05-10T23:59:59"},
+		{"lt", "2025-05-09", "2025-05-10"},
+		{"gt", "2025-05-11T00:00:00Z", "2025-05-10T23:59:59Z"},
+		{"lteq", "2025-05-10T10:00:00", float64(500)}, // dateTime vs number -> false
+		{"eq", "2025-05-10", "2025-05-10"},            // string equality unaffected
 		// isAnyOf / isNoneOf (upper/trim-normalised membership)
 		{"isAnyOf", "DEU", []any{"DEU", "AUT", "CHE"}},
 		{"isAnyOf", "deu", []any{"DEU", "AUT", "CHE"}},
@@ -164,6 +244,23 @@ func TestOPAConstraintParityWithHandRolled(t *testing.T) {
 		// hasPart (substring)
 		{"hasPart", "hello world", "world"},
 		{"hasPart", "hello", "xyz"},
+		// isPartOf: membership over a set, substring over a spelled-out whole
+		{"isPartOf", "DEU", []any{"DEU", "AUT", "CHE"}},
+		{"isPartOf", "deu", []any{"DEU", "AUT"}},
+		{"isPartOf", "ZZZ", []any{"DEU"}},
+		{"isPartOf", "Bay", "Bayern, Germany"},
+		{"isPartOf", "xyz", "Bayern"},
+		{"isPartOf", "DEU", float64(5)}, // non-string, non-array right -> false
+		// isA: value-level class-identifier equality (case-insensitive)
+		{"isA", "odrl:Asset", "odrl:Asset"},
+		{"isA", "odrl:asset", "odrl:Asset"},
+		{"isA", "odrl:Asset", "odrl:Party"},
+		// isAllOf: the actual must match every member of the right set
+		{"isAllOf", "DEU", []any{"DEU"}},
+		{"isAllOf", "DEU", []any{"DEU", "DEU"}},
+		{"isAllOf", "DEU", []any{"DEU", "AUT"}}, // not all equal -> false
+		{"isAllOf", "DEU", "DEU"},               // scalar coerces to singleton set
+		{"isAllOf", "DEU", []any{}},             // empty set -> false
 		// unknown operator -> false
 		{"unknownOp", "DEU", "DEU"},
 	}

@@ -278,7 +278,11 @@ def step_then_archive_entry_generated_summary(context, name):
     # to assert are the version and lifecycle state.
     entry = _archive_entry_for(context, name)
     generated = entry.get("archive_summary") or ""
-    assert "version" in generated.lower() and "SIGNED" in generated, (
+    # The contract reached SIGNED; signing completion auto-deploys to ACTIVE
+    # (DCS-FR-CWE-06/SM-12), so by archive time the summary's state token is
+    # legitimately either. The invariant is that the derived summary names the
+    # version and the current lifecycle state.
+    assert "version" in generated.lower() and ("SIGNED" in generated or "ACTIVE" in generated), (
         f"Expected a metadata-derived summary naming the version and state, got: {generated!r}"
     )
 

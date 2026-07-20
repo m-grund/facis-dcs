@@ -8,25 +8,30 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/json"
 	"math/big"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"time"
 )
 
-// startTestSigningServer generates a P-256 key + self-signed leaf, writes the
-// leaf as an x5chain PEM, starts an HTTP server mirroring the backend's
-// POST /internal/c2pa/sign (deterministic ES256 over the posted Sig_structure),
-// and points the pdf-core signing env at it. pdf-core holds no key material and
-// delegates every C2PA signature to this endpoint (DCS-IR-HI-01).
-func startTestSigningServer(dir string) (*httptest.Server, error) {
+// testMainC2PASigner stands in for the DCS backend's dcs-c2pa key: svc_test signs
+// the Sig_structures a prepare step returns and posts them to /c2pa/embed, exactly
+// as the backend does. pdf-core holds no key material.
+var testMainC2PASigner *ecdsa.PrivateKey
+
+// setupTestSigning generates the test P-256 key + self-signed x5chain leaf and
+// sets the x5chain env pdf-core embeds. It starts no signing server: pdf-core
+// signs nothing.
+func setupTestSigning() error {
+	dir, err := os.MkdirTemp("", "dcs-c2pa-test")
+	if err != nil {
+		return err
+	}
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, err
+		return err
 	}
+	testMainC2PASigner = key
 	tmpl := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
 		Subject:               pkix.Name{CommonName: "DCS-PDF-CORE test c2pa signer"},
@@ -37,43 +42,20 @@ func startTestSigningServer(dir string) (*httptest.Server, error) {
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, key.Public(), key)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	chainPath := filepath.Join(dir, "x5chain.pem")
 	if err := os.WriteFile(chainPath, certPEM(der), 0o644); err != nil {
-		return nil, err
+		return err
 	}
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			SigStructure string `json:"sig_structure"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		sigStructure, err := base64.StdEncoding.DecodeString(req.SigStructure)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		sig := deterministicES256(key, sigStructure)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"signature": base64.StdEncoding.EncodeToString(sig),
-		})
-	}))
-
-	_ = os.Setenv("DCS_PDF_CORE_C2PA_SIGNING_ENDPOINT", srv.URL)
 	_ = os.Setenv("DCS_PDF_CORE_C2PA_X5CHAIN_PEM_FILE", chainPath)
-	return srv, nil
+	return nil
 }
 
-func setupTestSigning() (*httptest.Server, error) {
-	dir, err := os.MkdirTemp("", "dcs-c2pa-test")
-	if err != nil {
-		return nil, err
-	}
-	return startTestSigningServer(dir)
+// signSigStructure signs one COSE Sig_structure with the test key, as the DCS
+// backend signs a prepare step's captured Sig_structures before /c2pa/embed.
+func signSigStructure(sigStructure []byte) []byte {
+	return deterministicES256(testMainC2PASigner, sigStructure)
 }
 
 func certPEM(der []byte) []byte {

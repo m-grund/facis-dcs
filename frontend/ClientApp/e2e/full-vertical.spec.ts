@@ -1,23 +1,16 @@
-import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import type { Page } from '@playwright/test'
-import { E2E_API_BASE, E2E_STATUSLIST_URL } from '../playwright.config'
 import { type DcsRole, expect, test } from './dcs-test'
+import { signApprovedContractViaViewer } from './lifecycle-helpers'
 
 /**
- * Full vertical: a component template with a hub typed clause travels the
- * whole product surface through the real UI — build, review, approval,
- * composition into a contract template, registration, contract derivation,
- * negotiation, review/approval, signing (the wallet leg arrives over the
- * wallet's own webhook channel), PDF/bundle export, and audit.
+ * Full vertical: a component template with a semantic clause — human prose
+ * beside its machine-readable ODRL meaning, both bound to a hub field —
+ * travels the whole product surface through the real UI: build, review,
+ * approval, composition into a contract template, registration, contract
+ * derivation, negotiation, review/approval, signing (the wallet leg arrives
+ * over the wallet's own webhook channel), PDF/bundle export, and audit.
  */
-
-const here = path.dirname(fileURLToPath(import.meta.url))
-const repoRoot = path.resolve(here, '../../..')
-const python = process.env.E2E_BDD_PYTHON || path.join(homedir(), '.dcs-bdd-venv', 'bin', 'python3')
 
 type LoginAs = (role: DcsRole) => Promise<void>
 
@@ -55,6 +48,24 @@ async function waitForTemplateLoaded(page: Page, name: string): Promise<void> {
   await expect(page.getByRole('group').filter({ hasText: 'Global Name' }).getByRole('textbox')).toHaveValue(name)
 }
 
+/**
+ * Asserts a PDF/A can be exported for a document at the current lifecycle step.
+ * Uses the active session's bearer token (the app keeps it in localStorage) so
+ * it exercises the same authenticated GET /pdf/export/{kind}/{did} the Export
+ * PDF button issues — proving export works at every step, not only post-sign.
+ */
+async function assertPdfExport(page: Page, kind: 'template' | 'contract', did: string, step: string): Promise<void> {
+  const token = await page.evaluate(() => window.localStorage.getItem('access_token'))
+  const resp = await page.request.get(`/api/pdf/export/${kind}/${encodeURIComponent(did)}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  expect(resp.ok(), `export ${kind} PDF at "${step}": HTTP ${resp.status()} ${await resp.text().catch(() => '')}`).toBe(
+    true,
+  )
+  const bytes = await resp.body()
+  expect(bytes.subarray(0, 5).toString('latin1'), `PDF/A magic bytes at "${step}"`).toBe('%PDF-')
+}
+
 /** DRAFT → SUBMITTED → REVIEWED → APPROVED for one template, via the UI. */
 async function submitReviewApproveTemplate(page: Page, loginAs: LoginAs, did: string, name: string): Promise<void> {
   await test.step(`submit template ${name} for review`, async () => {
@@ -64,11 +75,13 @@ async function submitReviewApproveTemplate(page: Page, loginAs: LoginAs, did: st
     )
     await page.getByRole('button', { name: 'Submit', exact: true }).click()
     await submitted
+    await assertPdfExport(page, 'template', did, `${name} SUBMITTED`)
   })
 
   await test.step(`review template ${name}`, async () => {
     await gotoAs(page, loginAs, 'Template Reviewer', `/ui/templates/review/${did}`)
     await waitForTemplateLoaded(page, name)
+    await assertPdfExport(page, 'template', did, `${name} REVIEWED (in review)`)
     // The backend accepts the reviewer recommendation only after a
     // verification run — the Verify dialog is part of the review flow.
     const verified = page.waitForResponse(
@@ -94,6 +107,7 @@ async function submitReviewApproveTemplate(page: Page, loginAs: LoginAs, did: st
     await page.getByRole('button', { name: 'Approve', exact: true }).click()
     await confirmModal(page, 'Submit')
     await approved
+    await assertPdfExport(page, 'template', did, `${name} APPROVED`)
   })
 }
 
@@ -107,10 +121,9 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
 
   // ---- Stage 1: Template Creator builds a Component template ----
   let componentDid = ''
-  await test.step('create component template with typed clause + prose', async () => {
+  await test.step('create component template with a semantic clause', async () => {
     await gotoAs(page, loginAs, 'Template Creator', '/ui/templates/new')
 
-    // Component templates carry typed clauses (contract templates compose components).
     await page.getByRole('button', { name: /Component/ }).click()
     await page.getByRole('group').filter({ hasText: 'Global Name' }).getByRole('textbox').fill(componentName)
     // An empty description is a verification finding at review time.
@@ -120,45 +133,38 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
       .getByRole('textbox')
       .fill('Payment component for the full vertical.')
 
-    await page.getByRole('tab', { name: /Builder/ }).click()
-    await page
-      .getByRole('button', { name: /add.*block/i })
-      .first()
-      .click()
+    // A clause = human prose beside its machine-readable ODRL meaning, both
+    // bound to a hub field picked from the Semantic Hub — the split editor.
+    await page.getByRole('tab', { name: /Clauses/ }).click()
+    const editor = page.getByTestId('split-clause-editor')
+    await editor.getByPlaceholder('Clause title').fill('Payment terms')
+    await editor.locator('select').first().selectOption({ label: 'Payment Amount' })
+    await editor.locator('.clause-editor').first().click()
+    await page.keyboard.type('The provider invoices the agreed payment amount.')
 
+    const ruleSelect = (label: string) =>
+      editor.locator('label.form-control').filter({ hasText: label }).locator('select')
+    // A Permission bounded by the payment-amount field: at template time the
+    // field carries no value yet (the contract fills it), so a permission's
+    // constraint is informational — an obligation would error as "value not
+    // provided" and block create.
+    await ruleSelect('Rule').selectOption({ label: 'Permission — the assignee MAY' })
+    await ruleSelect('Action').selectOption({ label: 'use' })
+    await editor.getByRole('button', { name: '+ constraint' }).click()
+    const constraint = editor.locator('.flex.flex-wrap.items-center.gap-1').last()
+    await constraint.locator('select').nth(0).selectOption({ label: 'Payment Amount' })
+    await constraint.locator('select').nth(1).selectOption({ label: 'must be at most' })
+    await constraint.locator('input[placeholder="value"]').fill('500')
+
+    await editor.getByRole('button', { name: 'Add clause', exact: true }).click()
+    await expect(editor.getByPlaceholder('Clause title')).toHaveValue('')
+
+    // Place the authored clause into the document outline.
     const modal = page.getByRole('dialog')
-    await expect(modal.getByRole('heading', { name: 'Add block' })).toBeVisible()
-    await expect(modal.getByText('Typed clauses (Semantic Hub):')).toBeVisible()
-
-    // The palette label comes from the hub's clause catalog — look the
-    // PaymentClause entry up the same way the palette does (metadata read
-    // only; every app action stays in the UI).
-    const catalog = (await (await page.request.get('/api/semantic/clauses')).json()) as {
-      clauses?: { type: string; label: string }[]
-    }
-    const paymentClause = (catalog.clauses ?? []).find(
-      (c) => c.type === 'dcs:PaymentClause' || c.type.endsWith('#PaymentClause'),
-    )
-    expect(paymentClause, 'the hub catalog serves the PaymentClause').toBeTruthy()
-    await modal.getByRole('button', { name: paymentClause!.label, exact: true }).click()
-
-    const shaclForm = modal.locator('shacl-form')
-    await expect(shaclForm).toBeVisible()
-    // amount (xsd:integer, first property of the shape) and currency
-    // (sh:in EUR/USD renders as shacl-form's filterable combobox).
-    await shaclForm.locator('input[type="number"]').first().fill('100')
-    await shaclForm.getByPlaceholder('Type to filter list...').first().click()
-    await modal.getByRole('option', { name: 'EUR', exact: true }).click()
-
-    await modal.getByRole('button', { name: 'Add to document' }).click()
+    await page.getByRole('button', { name: 'Place in document' }).first().click()
+    await expect(modal.getByText('Selected clause')).toBeVisible()
+    await modal.getByRole('button', { name: /Payment terms/ }).click()
     await expect(page.getByRole('dialog')).toBeHidden()
-
-    // A prose text block alongside the typed clause (a populated outline
-    // offers per-block insert buttons instead of the empty-state add).
-    await page.getByRole('button', { name: 'Insert block below' }).first().click()
-    await modal.getByRole('button', { name: 'Text', exact: true }).click()
-    await expect(page.getByRole('dialog')).toBeHidden()
-    await page.locator('textarea').last().fill('Prose block for the full vertical.')
 
     const created = page.waitForResponse(
       (r) => r.url().includes('/template/create') && r.request().method() === 'POST' && r.ok(),
@@ -166,6 +172,7 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     await page.getByRole('button', { name: 'Create', exact: true }).click()
     componentDid = ((await (await created).json()) as { did: string }).did
     expect(componentDid).toBeTruthy()
+    await assertPdfExport(page, 'template', componentDid, 'component DRAFT')
   })
 
   // ---- Stage 2: submit → review → approve the component ----
@@ -240,25 +247,25 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     expect(contractDid).toBeTruthy()
   })
 
-  // ---- Stage 6: the SHACL-typed clause travelled hub → component →
+  // ---- Stage 6: the semantic clause travelled hub → component →
   //      contract template → contract, and persists on the contract doc ----
-  await test.step('typed clause travels into the contract document', async () => {
+  await test.step('semantic clause travels into the contract document', async () => {
     await gotoAs(page, loginAs, 'Contract Creator', `/ui/contracts/edit/${contractDid}`)
     await page
       .getByRole('tab', { name: /content/i })
       .or(page.getByText('Contract Content', { exact: true }))
       .first()
       .click()
-    // The component's typed clause renders through its regenerated
-    // human-readable summary (composed sub-template clauses are immutable at
-    // contract time, so there is no in-place editor here — the machine
-    // instance rode along from the hub shape).
-    await expect(page.getByText(/amount: 100 · currency: EUR/).first()).toBeVisible()
+    // The component's clause renders its prose (composed sub-template clauses
+    // are immutable at contract time — the ODRL rule and its field rode along
+    // from the component).
+    await expect(page.getByText(/The provider invoices the agreed payment amount/).first()).toBeVisible()
 
     const updated = page.waitForRequest((r) => r.url().includes('/contract/update') && r.method() === 'PUT')
     await page.getByRole('button', { name: 'Update', exact: true }).click()
     const payload = JSON.stringify((await updated).postDataJSON())
-    expect(payload, 'the machine-readable typed instance rides along').toContain('PaymentClause')
+    expect(payload, 'the clause and its machine-readable meaning ride along').toContain('Payment terms')
+    await assertPdfExport(page, 'contract', contractDid, 'contract DRAFT')
   })
 
   // ---- Stage 7: DRAFT → NEGOTIATION → SUBMITTED → REVIEWED → APPROVED ----
@@ -284,6 +291,7 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     )
     await page.getByRole('button', { name: 'Submit', exact: true }).click()
     await accepted
+    await assertPdfExport(page, 'contract', contractDid, 'contract in negotiation')
   })
 
   await test.step('review contract', async () => {
@@ -294,6 +302,7 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     await page.getByRole('button', { name: 'Approve', exact: true }).click()
     await confirmModal(page, 'Submit')
     await forwarded
+    await assertPdfExport(page, 'contract', contractDid, 'contract REVIEWED')
   })
 
   await test.step('approve contract', async () => {
@@ -306,41 +315,27 @@ test('full vertical through the real UI', async ({ page, loginAs }) => {
     await approved
   })
 
-  // ---- Stage 8: signing ceremony, wallet leg over its own channel ----
+  // ---- Stage 8: signing through the Secure Contract Viewer, wallet leg over
+  // its own channel (ADR-12) ----
   await test.step('sign contract', async () => {
-    await gotoAs(page, loginAs, 'Contract Signer', '/ui/signing')
-    const row = page.getByRole('row').filter({ hasText: contractDid })
-    await expect(row).toBeVisible()
-    await expect(row.getByText('UNSIGNED')).toBeVisible()
-
-    const ceremonyStarted = page.waitForResponse(
-      (r) => r.url().includes('/signature/request') && r.request().method() === 'POST' && r.ok(),
-    )
-    await row.getByRole('button', { name: 'Sign', exact: true }).click()
-    const ceremony = (await (await ceremonyStarted).json()) as { ceremony_id: string }
-    expect(ceremony.ceremony_id).toBeTruthy()
-
-    // The wallet presents its PID over the webhook channel; the ceremony
-    // dialog's poll then sees "verified" and the view applies the signature.
-    execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.ceremony_id], {
-      cwd: repoRoot,
-      env: { ...process.env, STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL, BDD_DCS_BASE_URL: E2E_API_BASE },
-      stdio: 'pipe',
-    })
-
-    await expect(row.getByText('SIGNED', { exact: true })).toBeVisible({ timeout: 120_000 })
+    await signApprovedContractViaViewer(page, loginAs, contractDid)
   })
 
   // ---- Stage 9: Contract Manager exports PDF + evidence bundle ----
   await test.step('export PDF and bundle', async () => {
     await gotoAs(page, loginAs, 'Contract Manager', `/ui/contracts/view/${contractDid}`)
 
-    const pdfDownload = page.waitForEvent('download')
+    // The signed-PDF export fetches the frozen PDF (and evidence bundle its ZIP)
+    // from IPFS before the browser download fires; against the post-behave
+    // loaded stack this legitimately runs longer than the 15s waitForEvent
+    // default (cf. the secure-contract-viewer/compliance steps that take ~1m),
+    // so give it a realistic window.
+    const pdfDownload = page.waitForEvent('download', { timeout: 90_000 })
     await page.getByRole('button', { name: 'Export PDF' }).click()
     const pdfBytes = readFileSync((await (await pdfDownload).path())!)
     expect(pdfBytes.subarray(0, 5).toString('latin1')).toBe('%PDF-')
 
-    const bundleDownload = page.waitForEvent('download')
+    const bundleDownload = page.waitForEvent('download', { timeout: 90_000 })
     await page.getByRole('button', { name: 'Export bundle' }).click()
     const bundleBytes = readFileSync((await (await bundleDownload).path())!)
     expect(bundleBytes.subarray(0, 2).toString('latin1')).toBe('PK')

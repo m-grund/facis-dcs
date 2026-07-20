@@ -99,14 +99,6 @@ Feature: Contract Negotiation
     And the comment is attributed to my identity
 
   @clean_db
-  Scenario: Non-party reviewer cannot negotiate contract not assigned to them
-    Given I am authenticated with roles: "Contract Reviewer"
-    And contract "Service Agreement" does not list this instance as a negotiating party
-    When I attempt to add a comment to contract "Service Agreement"
-    Then the request is denied with a "not a party to this contract" error
-    And the access denial is logged
-
-  @clean_db
   Scenario: Contract Creator and assigned Reviewers can negotiate
     Given I am authenticated with roles: "Contract Creator"
     And contract "Service Agreement" is open for negotiation

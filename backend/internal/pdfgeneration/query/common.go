@@ -195,15 +195,6 @@ func ptrToString(s string) *string {
 	return &s
 }
 
-// isFrozenC2PAState reports whether a cached PDF's C2PA state means it
-// already carries (or once carried) a PAdES signature and must never be
-// mutated again — see stampLifecycle's doc comment. Only the pre-signing
-// "draft" state (and the empty/never-cached state) may still be safely
-// updated in place.
-func isFrozenC2PAState(c2paState string) bool {
-	return c2paState != "" && c2paState != "draft"
-}
-
 func payloadHash(jsonld []byte) string {
 	h := sha256.Sum256(jsonld)
 	return hex.EncodeToString(h[:])

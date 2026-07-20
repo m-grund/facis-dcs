@@ -184,26 +184,53 @@ func doRequest(method, path string, body io.Reader, contentType string) *httptes
 	return rec
 }
 
-// compilePDF is a test helper that compiles minimalPayload and returns the PDF bytes.
+// signPrepared drives the stateless two-step signing a prepare recorder began:
+// it decodes the prepared PDF + Sig_structures, signs each with the test key (as
+// the DCS backend signs with dcs-c2pa), posts them to /c2pa/embed, and returns
+// the final signed PDF. Use it for every success-path /render or /render/amendment call.
+func signPrepared(t *testing.T, rec *httptest.ResponseRecorder) []byte {
+	t.Helper()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("prepare: status %d, body: %s", rec.Code, rec.Body.String())
+	}
+	var prepared preparedResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &prepared); err != nil {
+		t.Fatalf("decode prepared response: %v", err)
+	}
+	signatures := make([]string, len(prepared.C2PASigStructures))
+	for i, s := range prepared.C2PASigStructures {
+		sigStructure, decErr := base64.StdEncoding.DecodeString(s)
+		if decErr != nil {
+			t.Fatalf("decode sig_structure %d: %v", i, decErr)
+		}
+		signatures[i] = base64.StdEncoding.EncodeToString(signSigStructure(sigStructure))
+	}
+	body, err := json.Marshal(embedRequest{PDFBase64: prepared.PDFBase64, C2PASignatures: signatures})
+	if err != nil {
+		t.Fatalf("marshal embed request: %v", err)
+	}
+	embedRec := doRequest(http.MethodPost, "/c2pa/embed", bytes.NewReader(body), "application/json")
+	if embedRec.Code != http.StatusOK {
+		t.Fatalf("embed: status %d, body: %s", embedRec.Code, embedRec.Body.String())
+	}
+	return embedRec.Body.Bytes()
+}
+
+// compilePDF is a test helper that compiles minimalPayload and returns the final
+// signed PDF bytes (prepare -> sign -> embed).
 func compilePDF(t *testing.T) []byte {
 	t.Helper()
-	rec := doRequest(http.MethodPost, "/download",
+	rec := doRequest(http.MethodPost, "/render",
 		bytes.NewBufferString(minimalPayload), "application/ld+json")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("compile: status %d, body: %s", rec.Code, rec.Body.String())
-	}
-	return rec.Body.Bytes()
+	return signPrepared(t, rec)
 }
 
 // ---- Download ---------------------------------------------------------------
 
 func TestDownload_ValidPayload(t *testing.T) {
-	rec := doRequest(http.MethodPost, "/download",
+	rec := doRequest(http.MethodPost, "/render",
 		bytes.NewBufferString(minimalPayload), "application/ld+json")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	pdf := rec.Body.Bytes()
+	pdf := signPrepared(t, rec)
 	if len(pdf) == 0 {
 		t.Fatal("expected non-empty PDF bytes")
 	}
@@ -213,18 +240,15 @@ func TestDownload_ValidPayload(t *testing.T) {
 }
 
 func TestDownload_ApplicationJSON(t *testing.T) {
-	rec := doRequest(http.MethodPost, "/download",
+	rec := doRequest(http.MethodPost, "/render",
 		bytes.NewBufferString(minimalPayload), "application/json")
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if !bytes.HasPrefix(rec.Body.Bytes(), []byte("%PDF-")) {
+	if !bytes.HasPrefix(signPrepared(t, rec), []byte("%PDF-")) {
 		t.Fatal("result does not start with PDF header")
 	}
 }
 
 func TestDownload_WrongContentType(t *testing.T) {
-	rec := doRequest(http.MethodPost, "/download",
+	rec := doRequest(http.MethodPost, "/render",
 		bytes.NewBufferString("hello"), "text/plain")
 	if rec.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("expected 415, got %d", rec.Code)
@@ -235,7 +259,7 @@ func TestDownload_WrongContentType(t *testing.T) {
 }
 
 func TestDownload_InvalidPayload(t *testing.T) {
-	rec := doRequest(http.MethodPost, "/download",
+	rec := doRequest(http.MethodPost, "/render",
 		bytes.NewBufferString("not valid json-ld"), "application/ld+json")
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -249,7 +273,7 @@ func TestDownload_EquivalentJSONLDFlavorsProduceIdenticalPDF(t *testing.T) {
 	bodies := []string{minimalPayload, minimalPayloadFlavorPrefixed, minimalPayloadFlavorExpanded}
 	results := make([][]byte, 0, len(bodies))
 	for i, payload := range bodies {
-		rec := doRequest(http.MethodPost, "/download",
+		rec := doRequest(http.MethodPost, "/render",
 			bytes.NewBufferString(payload), "application/ld+json")
 		if rec.Code != http.StatusOK {
 			t.Fatalf("Download flavor %d failed: status %d", i+1, rec.Code)
@@ -271,7 +295,7 @@ func TestDownload_MalformedPayloadReportsValidationDetails(t *testing.T) {
 		"@id": "urn:doc:svc-bad",
 		"@type": "ContractTemplate"
 	}`
-	rec := doRequest(http.MethodPost, "/download",
+	rec := doRequest(http.MethodPost, "/render",
 		bytes.NewBufferString(malformed), "application/ld+json")
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -279,7 +303,9 @@ func TestDownload_MalformedPayloadReportsValidationDetails(t *testing.T) {
 	if name := errorName(t, rec.Body.Bytes()); name != "bad_request" {
 		t.Fatalf("expected bad_request, got %q", name)
 	}
-	var v struct{ Message string `json:"message"` }
+	var v struct {
+		Message string `json:"message"`
+	}
 	_ = json.Unmarshal(rec.Body.Bytes(), &v)
 	msg := v.Message
 	if !strings.Contains(msg, "path=<https://w3id.org/facis/dcs/ontology/v1#metadata>") ||
@@ -321,7 +347,7 @@ func TestVerify_WrongContentType(t *testing.T) {
 // ---- Update -----------------------------------------------------------------
 
 func TestUpdate_WrongContentType(t *testing.T) {
-	rec := doRequest(http.MethodPost, "/update",
+	rec := doRequest(http.MethodPost, "/render/amendment",
 		bytes.NewBufferString("{}"), "application/json")
 	if rec.Code != http.StatusUnsupportedMediaType {
 		t.Fatalf("expected 415, got %d", rec.Code)
@@ -333,7 +359,7 @@ func TestUpdate_WrongContentType(t *testing.T) {
 
 func TestUpdate_MissingPDFField(t *testing.T) {
 	multipartBody := []byte("--boundary\r\nContent-Disposition: form-data; name=\"payload\"\r\n\r\nhello\r\n--boundary--\r\n")
-	rec := doRequest(http.MethodPost, "/update",
+	rec := doRequest(http.MethodPost, "/render/amendment",
 		bytes.NewReader(multipartBody), "multipart/form-data; boundary=boundary")
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -382,7 +408,7 @@ func TestVersionEndpointReturnsVersion(t *testing.T) {
 // TestDownloadResponseCarriesVersionHeader verifies that POST /download
 // includes an X-PDF-Core-Version header in the response.
 func TestDownloadResponseCarriesVersionHeader(t *testing.T) {
-	rec := doRequest(http.MethodPost, "/download",
+	rec := doRequest(http.MethodPost, "/render",
 		strings.NewReader(minimalPayload), "application/ld+json")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -396,12 +422,12 @@ func TestDownloadResponseCarriesVersionHeader(t *testing.T) {
 // includes an X-PDF-Core-Version header in the response.
 func TestUpdateResponseCarriesVersionHeader(t *testing.T) {
 	// First compile a base PDF.
-	baseRec := doRequest(http.MethodPost, "/download",
+	baseRec := doRequest(http.MethodPost, "/render",
 		strings.NewReader(minimalPayload), "application/ld+json")
 	if baseRec.Code != http.StatusOK {
 		t.Fatalf("compile base PDF: expected 200, got %d", baseRec.Code)
 	}
-	basePDF := baseRec.Body.Bytes()
+	basePDF := signPrepared(t, baseRec)
 
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -411,7 +437,7 @@ func TestUpdateResponseCarriesVersionHeader(t *testing.T) {
 	_, _ = payloadPart.Write([]byte(minimalPayloadAmended))
 	mw.Close()
 
-	rec := doRequest(http.MethodPost, "/update", &buf, mw.FormDataContentType())
+	rec := doRequest(http.MethodPost, "/render/amendment", &buf, mw.FormDataContentType())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
@@ -424,12 +450,12 @@ func TestUpdateResponseCarriesVersionHeader(t *testing.T) {
 // "vc" multipart field embeds the VC bytes as "contract-lifecycle-vc.json" in
 // the returned PDF.
 func TestUpdateWithVCEmbedsAttachment(t *testing.T) {
-	baseRec := doRequest(http.MethodPost, "/download",
+	baseRec := doRequest(http.MethodPost, "/render",
 		strings.NewReader(minimalPayload), "application/ld+json")
 	if baseRec.Code != http.StatusOK {
 		t.Fatalf("compile base PDF: %d", baseRec.Code)
 	}
-	basePDF := baseRec.Body.Bytes()
+	basePDF := signPrepared(t, baseRec)
 
 	vcBytes := []byte(`{"type":["VerifiableCredential"],"id":"urn:dcs:vc:test"}`)
 
@@ -443,11 +469,11 @@ func TestUpdateWithVCEmbedsAttachment(t *testing.T) {
 	_, _ = vcPart.Write(vcBytes)
 	mw.Close()
 
-	rec := doRequest(http.MethodPost, "/update", &buf, mw.FormDataContentType())
+	rec := doRequest(http.MethodPost, "/render/amendment", &buf, mw.FormDataContentType())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte("contract-lifecycle-vc.json")) {
+	if !bytes.Contains(signPrepared(t, rec), []byte("contract-lifecycle-vc.json")) {
 		t.Error("response PDF must contain the VC attachment name")
 	}
 }
@@ -456,12 +482,12 @@ func TestUpdateWithVCEmbedsAttachment(t *testing.T) {
 // "vc" field succeeds even when the payload is identical to the current
 // embedded one, because the VC attachment is itself a provenance event.
 func TestUpdateWithVCUnchangedPayloadProceeds(t *testing.T) {
-	baseRec := doRequest(http.MethodPost, "/download",
+	baseRec := doRequest(http.MethodPost, "/render",
 		strings.NewReader(minimalPayload), "application/ld+json")
 	if baseRec.Code != http.StatusOK {
 		t.Fatalf("compile base PDF: %d", baseRec.Code)
 	}
-	basePDF := baseRec.Body.Bytes()
+	basePDF := signPrepared(t, baseRec)
 
 	vcBytes := []byte(`{"type":["VerifiableCredential"],"id":"urn:dcs:vc:genesis"}`)
 
@@ -475,11 +501,11 @@ func TestUpdateWithVCUnchangedPayloadProceeds(t *testing.T) {
 	_, _ = vcPart.Write(vcBytes)
 	mw.Close()
 
-	rec := doRequest(http.MethodPost, "/update", &buf, mw.FormDataContentType())
+	rec := doRequest(http.MethodPost, "/render/amendment", &buf, mw.FormDataContentType())
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 (VC-only update), got %d: %s", rec.Code, rec.Body.String())
 	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte("contract-lifecycle-vc.json")) {
+	if !bytes.Contains(signPrepared(t, rec), []byte("contract-lifecycle-vc.json")) {
 		t.Error("response PDF must contain the VC attachment name")
 	}
 }
@@ -532,11 +558,11 @@ func TestVerify_AmendedDocument(t *testing.T) {
 	original := compilePDF(t)
 
 	body, ct := buildMultipartBody(t, original, minimalPayloadAmended)
-	recUpdate := doRequest(http.MethodPost, "/update", body, ct)
+	recUpdate := doRequest(http.MethodPost, "/render/amendment", body, ct)
 	if recUpdate.Code != http.StatusOK {
 		t.Fatalf("update: status %d: %s", recUpdate.Code, recUpdate.Body.String())
 	}
-	amended := recUpdate.Body.Bytes()
+	amended := signPrepared(t, recUpdate)
 	if !bytes.HasPrefix(amended, original) {
 		t.Fatal("amended PDF must preserve original bytes as prefix (C2PA invariant)")
 	}
@@ -561,11 +587,11 @@ func TestVerify_AmendedDocumentRejectsCorruption(t *testing.T) {
 	original := compilePDF(t)
 
 	body, ct := buildMultipartBody(t, original, minimalPayloadAmended)
-	recUpdate := doRequest(http.MethodPost, "/update", body, ct)
+	recUpdate := doRequest(http.MethodPost, "/render/amendment", body, ct)
 	if recUpdate.Code != http.StatusOK {
 		t.Fatalf("update: status %d", recUpdate.Code)
 	}
-	amended := recUpdate.Body.Bytes()
+	amended := signPrepared(t, recUpdate)
 
 	corrupted := append([]byte(nil), amended...)
 	corrupted[len(original)+50] ^= 0xFF
@@ -731,11 +757,11 @@ func TestVerify_JSONIncludesVCBytesWhenPresent(t *testing.T) {
 	vcJSON := []byte(`{"type":["VerifiableCredential"],"credentialSubject":{"status":"active"}}`)
 
 	body, ct := buildMultipartBodyWithVC(t, original, minimalPayloadAmended, vcJSON)
-	recUpdate := doRequest(http.MethodPost, "/update", body, ct)
+	recUpdate := doRequest(http.MethodPost, "/render/amendment", body, ct)
 	if recUpdate.Code != http.StatusOK {
 		t.Fatalf("update: status %d: %s", recUpdate.Code, recUpdate.Body.String())
 	}
-	withVC := recUpdate.Body.Bytes()
+	withVC := signPrepared(t, recUpdate)
 
 	recVerify := doRequest(http.MethodPost, "/verify",
 		bytes.NewReader(withVC), "application/pdf")
@@ -812,5 +838,55 @@ func TestVerify_JSONMatchFalseOnMismatch(t *testing.T) {
 		bytes.NewReader(corrupted), "application/pdf")
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected 409 for tampered PDF, got %d", rec.Code)
+	}
+}
+
+// TestEmbedEvidenceAttachesAndRoundTrips verifies POST /evidence/embed attaches
+// the posted evidence to the PDF WITHOUT signing (the attach-only seam a remote
+// DSS signer needs: embed evidence first so the PAdES ByteRange covers it, then
+// have the DSS sign the returned PDF). The result must carry the evidence
+// filespec and extract back byte-for-byte via /evidence/extract.
+func TestEmbedEvidenceAttachesAndRoundTrips(t *testing.T) {
+	baseRec := doRequest(http.MethodPost, "/render",
+		strings.NewReader(minimalPayload), "application/ld+json")
+	if baseRec.Code != http.StatusOK {
+		t.Fatalf("compile base PDF: %d", baseRec.Code)
+	}
+	basePDF := signPrepared(t, baseRec)
+
+	evidence := []byte(`{"type":["VerifiablePresentation"],"id":"urn:dcs:evidence:test"}`)
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	pdfPart, _ := mw.CreateFormField("pdf")
+	_, _ = pdfPart.Write(basePDF)
+	evPart, _ := mw.CreateFormField("evidence")
+	_, _ = evPart.Write(evidence)
+	mw.Close()
+
+	rec := doRequest(http.MethodPost, "/evidence/embed", &buf, mw.FormDataContentType())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/pdf" {
+		t.Errorf("expected application/pdf, got %q", ct)
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("signing-evidence.json")) {
+		t.Error("embedded PDF must contain the signing-evidence.json filespec")
+	}
+
+	// The embedded PDF is unsigned (no PAdES dictionary yet — a DSS signs it next).
+	if bytes.Contains(rec.Body.Bytes(), []byte("/SubFilter/ETSI.CAdES.detached")) {
+		t.Error("/evidence/embed must NOT sign the PDF")
+	}
+
+	// Round-trips back out.
+	extractRec := doRequest(http.MethodPost, "/evidence/extract",
+		bytes.NewReader(rec.Body.Bytes()), "application/pdf")
+	if extractRec.Code != http.StatusOK {
+		t.Fatalf("extract expected 200, got %d: %s", extractRec.Code, extractRec.Body.String())
+	}
+	if !bytes.Equal(bytes.TrimSpace(extractRec.Body.Bytes()), evidence) {
+		t.Errorf("extracted evidence mismatch: got %q", extractRec.Body.String())
 	}
 }

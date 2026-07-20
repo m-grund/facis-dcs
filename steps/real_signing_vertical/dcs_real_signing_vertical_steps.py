@@ -63,7 +63,6 @@ import uuid
 from behave import given, then, when
 
 from steps.support.api_client import (
-    signature_apply_url,
     signature_request_by_id_url,
     signature_request_url,
     signature_request_webhook_url,
@@ -163,7 +162,7 @@ def _start_ceremony(context, name, field_name, headers):
     return resp
 
 
-def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_did, given_name, family_name, *, secret=None):
+def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_did, given_name, family_name, *, poa_organization=None, secret=None):
     payload = {
         "ceremony_id": ceremony_id,
         "vp_token": presentation,
@@ -173,6 +172,9 @@ def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_d
             "family_name": family_name,
         },
     }
+    if poa_organization is not None:
+        payload["poa_organization"] = poa_organization
+        payload["poa_roles"] = ["signatory"]
     header_value = _webhook_secret() if secret is None else secret
     headers = {"Content-Type": "application/json"}
     if header_value is not None:
@@ -180,11 +182,18 @@ def _complete_ceremony_via_webhook(context, ceremony_id, presentation, subject_d
     return post_json(context, signature_request_webhook_url(context), payload, headers=headers)
 
 
-def _run_full_ceremony(context, name, field_name, signatory_name, holder_private=None):
+def _run_full_ceremony(context, name, field_name, signatory_name, holder_private=None, poa_organization=None):
     """Start a ceremony, complete it headlessly via the assumed webhook
     contract (see module docstring point 3), and stash the presentation +
     ceremony id on context for later PDF-embedding assertions.
+
+    field_name is the party the signatory signs as — the participating DCS
+    instance DID. poa_organization is the organization the signatory presents a
+    Power of Attorney for; it must equal field_name for the ceremony to verify
+    (UC-14), so it defaults to field_name.
     """
+    if poa_organization is None:
+        poa_organization = field_name
     signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
     start_resp = _start_ceremony(context, name, field_name, signer_h)
     assert start_resp.status_code == 200, (
@@ -201,7 +210,8 @@ def _run_full_ceremony(context, name, field_name, signatory_name, holder_private
         holder_private=holder_private,
     )
     webhook_resp = _complete_ceremony_via_webhook(
-        context, ceremony_id, presentation, subject_did, given_name, family_name
+        context, ceremony_id, presentation, subject_did, given_name, family_name,
+        poa_organization=poa_organization,
     )
     assert webhook_resp.status_code == 200, (
         f"POST /signature/request/webhook failed for ceremony '{ceremony_id}': "
@@ -223,17 +233,29 @@ def _run_full_ceremony(context, name, field_name, signatory_name, holder_private
 
 
 def _apply_signature(context, name, *, signer_did, credential_type="AES", field_name=None):
-    did, updated_at = ContractService._contract_data(context, name)
-    signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
-    payload = {
-        "did": did,
-        "signer_did": signer_did,
-        "credential_type": credential_type,
-        "updated_at": updated_at,
-    }
-    if field_name is not None:
-        payload["field_name"] = field_name
-    return post_json(context, signature_apply_url(context), payload, headers=signer_h)
+    """Drive the wallet-driven signing ceremony (ADR-12): prepare the
+    to-be-signed PDF, sign it with the signatory's own key via the external SCA
+    (a real EU DSS), then submit it. The DCS holds no signing key — it validates
+    and records what the signatory produced. Replaces the removed
+    /signature/apply. A precondition failure (e.g. no completed ceremony)
+    surfaces from /signature/prepare, so error scenarios see the same responses.
+    """
+    from steps.support.signing import wallet_sign  # noqa: PLC0415
+
+    did, _ = ContractService._contract_data(context, name)
+    # The signatory name is the natural person (wallet key identity / certificate
+    # subject), taken from the ceremony's PID. It is distinct from the signature
+    # field, which names the party (instance DID) — passed separately as field_name.
+    presentation = (getattr(context, "pid_presentations", {}) or {}).get(name) or {}
+    signatory = presentation.get("given_name") or name
+    return wallet_sign(
+        context,
+        did,
+        signer_did=signer_did,
+        signatory=signatory,
+        field_name=field_name,
+        credential_type=credential_type,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -244,17 +266,19 @@ def _apply_signature(context, name, *, signer_did, credential_type="AES", field_
 
 @given('contract "{name}" is APPROVED and has completed a signing ceremony for signatory "{signatory_name}"')
 def step_given_approved_with_completed_ceremony(context, name, signatory_name):
-    ContractService._create_contract_in_draft_with_signature_field(context, name, signatory_name)
+    party_did = ContractService._local_peer_did(context)
+    ContractService._create_contract_in_draft(context, name)
     _advance_to_approved(context, name)
-    _run_full_ceremony(context, name, signatory_name, signatory_name)
+    _run_full_ceremony(context, name, field_name=party_did, signatory_name=signatory_name)
 
 
 @given('contract "{name}" has an AES-signed PDF via a completed ceremony for signatory "{signatory_name}"')
 def step_given_aes_signed_pdf_via_ceremony(context, name, signatory_name):
-    ContractService._create_contract_in_draft_with_signature_field(context, name, signatory_name)
+    party_did = ContractService._local_peer_did(context)
+    ContractService._create_contract_in_draft(context, name)
     _advance_to_approved(context, name)
 
-    ceremony_id, presentation, subject_did = _run_full_ceremony(context, name, signatory_name, signatory_name)
+    ceremony_id, presentation, subject_did = _run_full_ceremony(context, name, field_name=party_did, signatory_name=signatory_name)
 
     apply_resp = _apply_signature(context, name, signer_did=subject_did, credential_type="AES")
     assert apply_resp.status_code == 200, (
@@ -377,6 +401,7 @@ def step_when_start_ceremony_as_role(context, name, field_name, role):
             "subject_did": subject_did,
             "given_name": given_name,
             "family_name": family_name,
+            "field_name": field_name,
         }
 
 
@@ -401,6 +426,7 @@ def step_when_webhook_confirms_correct_secret(context, name):
         presentation_info["subject_did"],
         presentation_info["given_name"],
         presentation_info["family_name"],
+        poa_organization=presentation_info["field_name"],
     )
 
 
@@ -465,18 +491,19 @@ def _offset_covered(pdf_bytes: bytes, needle: bytes, ranges) -> bool:
     return (a0 <= pos < a1) or (b0 <= pos < b1)
 
 
-@then('the signed PDF for contract "{name}" contains a PAdES signature naming AcroForm field "{field_name}"')
-def step_then_pades_names_field(context, name, field_name):
+@then('the signed PDF for contract "{name}" contains a PAdES signature naming the signing party AcroForm field')
+def step_then_pades_names_field(context, name):
     pdf_bytes = _pdf_bytes_for(context, name)
+    field_name = ContractService._local_peer_did(context)
     needle_ascii = f"/T ({field_name})".encode()
     needle_ascii_nospace = f"/T({field_name})".encode()
     needle_utf16 = _utf16be(field_name.encode())
     assert (
         needle_ascii in pdf_bytes or needle_ascii_nospace in pdf_bytes or needle_utf16 in pdf_bytes
     ), (
-        f"Expected the signed PDF to name AcroForm field '/T' == '{field_name}' "
-        "(the signer signs an existing signature field by name: /T == signatoryName "
-        "from the JSON-LD, NOT title), found neither ASCII nor UTF-16BE form"
+        f"Expected the signed PDF to name AcroForm field '/T' == the party DID '{field_name}' "
+        "(the signer signs the seeded field: /T == signatoryName == the participating "
+        "instance DID), found neither ASCII nor UTF-16BE form"
     )
     assert b"/ByteRange" in pdf_bytes, (
         "Expected a /ByteRange entry (PAdES signature dictionary) in the signed PDF - none found"
@@ -564,21 +591,28 @@ def step_then_pades_still_valid_after_update(context, name):
     step_then_byte_range_structurally_valid(context, name)
 
 
-@then('the SD-JWT VC presentation for contract "{name}" is embedded verbatim inside the PAdES ByteRange')
-def step_then_presentation_embedded_verbatim_covered(context, name):
+@then('the signer PID for contract "{name}" is NOT embedded in the signed PDF, only the pseudonymous binding')
+def step_then_pid_not_embedded_only_binding(context, name):
     pdf_bytes = _pdf_bytes_for(context, name)
-    presentation = context.pid_presentations[name]["presentation"]
-    needle = presentation.encode("ascii")
+    info = context.pid_presentations[name]
+    # Privacy (eIDAS/GDPR data-minimisation): neither the verbatim PID
+    # presentation nor its disclosed personal attributes may appear in the
+    # shared PDF. (given_name is the ceremony's signatory label == the AcroForm
+    # field name, legitimately in the PDF, so the distinct family_name is the
+    # unambiguous disclosure to prove absence of.)
+    for secret in (info["presentation"], info["family_name"]):
+        assert secret.encode("ascii") not in pdf_bytes, (
+            f"Privacy leak: signer PID data ({secret!r}) appears in the shared signed PDF; "
+            "the PID must never be embedded (only a pseudonymous binding may be)"
+        )
+    # The pseudonymous signer binding (holder DID) IS embedded under the signature.
+    needle = info["subject_did"].encode("ascii")
     assert needle in pdf_bytes, (
-        "Expected the exact, verbatim SD-JWT VC + KB-JWT compact presentation string to appear "
-        "unmodified somewhere in the signed PDF (the presentation must be embedded verbatim "
-        "do NOT re-filter or re-serialize it) - not found at all"
+        "Expected the pseudonymous holder DID (the signer binding) embedded in the signed PDF"
     )
     ranges = _last_byte_range(pdf_bytes)
     assert _offset_covered(pdf_bytes, needle, ranges), (
-        "The embedded SD-JWT VC presentation was found, but its byte offset falls OUTSIDE the "
-        "PAdES signature's /ByteRange-covered regions - the identity credential must be embedded "
-        "BEFORE signing, embed-first-sign-second, so the ByteRange covers it)"
+        "The embedded signer binding must fall inside the PAdES /ByteRange (embed-first-sign-second)"
     )
 
 
@@ -755,8 +789,8 @@ def step_then_webhook_rejected(context):
     )
 
 
-@then('the signature validation findings for contract "{name}" cross-check the embedded PID evidence')
-def step_then_validate_crosschecks_pid_evidence(context, name):
+@then('the signature validation findings for contract "{name}" cross-check the embedded signer binding')
+def step_then_validate_crosschecks_signer_binding(context, name):
     resp = context.requests_response
     assert resp.status_code == 200, f"/signature/validate failed: {resp.status_code} {resp.text}"
     findings = resp.json().get("findings") or []
@@ -786,3 +820,68 @@ def step_then_signature_linked_to_ceremony(context, name):
             f"contract_signatures.{ceremony_key} ({row.get(ceremony_key)!r}) does not match the "
             f"ceremony this contract was actually signed through ({expected_ceremony_id!r})"
         )
+
+
+@then(
+    'the signature view for contract "{name}" carries a JAdES signature '
+    "that verifies over the contract JSON-LD"
+)
+def step_then_jades_verifies(context, name):
+    """The completed ceremony must produce a JAdES (ETSI TS 119 182-1) compact
+    JWS over the machine-readable JSON-LD alongside the visible PAdES on the
+    PDF (DCS-FR-SM-02/-11). Assert it is present, well-formed (ES256 + critical
+    sigT + x5c), cryptographically valid against its x5c leaf, and bound to
+    this contract's DID.
+    """
+    import base64  # noqa: PLC0415
+    import json  # noqa: PLC0415
+
+    import requests as _requests  # noqa: PLC0415
+    from cryptography.hazmat.primitives import hashes  # noqa: PLC0415
+    from cryptography.hazmat.primitives.asymmetric import ec, utils  # noqa: PLC0415
+    from cryptography.x509 import load_der_x509_certificate  # noqa: PLC0415
+
+    from steps.support.api_client import signature_view_url  # noqa: PLC0415
+
+    def b64url(seg):
+        return base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
+
+    did, _ = ContractService._contract_data(context, name)
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    view = _requests.get(
+        signature_view_url(context), params={"did": did}, headers=manager_h,
+        timeout=context.http_timeout_seconds,
+    )
+    assert view.status_code == 200, f"signature view failed: {view.status_code} {view.text}"
+    signatures = view.json().get("signatures") or []
+    assert signatures, f"Expected an applied signature on '{name}', got: {view.json()}"
+
+    jws = signatures[0].get("jades")
+    assert jws, f"Expected a JAdES signature on the signature view for '{name}', got: {signatures[0]}"
+    parts = jws.split(".")
+    assert len(parts) == 3, f"JAdES must be a compact JWS with 3 segments, got {len(parts)}"
+
+    header = json.loads(b64url(parts[0]))
+    assert header.get("alg") == "ES256", f"JAdES alg must be ES256, got {header.get('alg')}"
+    assert "sigT" in header and header.get("sigT"), "JAdES must carry a sigT (claimed signing time)"
+    assert "sigT" in (header.get("crit") or []), "JAdES sigT must be marked critical"
+    x5c = header.get("x5c") or []
+    assert x5c, "JAdES must carry an x5c certificate chain"
+
+    payload = json.loads(b64url(parts[1]))
+    assert payload.get("dcs:contractDid") == did, (
+        f"JAdES payload must bind this contract's DID; got {payload.get('dcs:contractDid')!r}"
+    )
+    assert "dcs:contractDocument" in payload, "JAdES payload must carry the contract document"
+
+    leaf = load_der_x509_certificate(base64.b64decode(x5c[0]))
+    pub = leaf.public_key()
+    assert isinstance(pub, ec.EllipticCurvePublicKey), "JAdES x5c leaf key must be EC"
+    raw_sig = b64url(parts[2])
+    assert len(raw_sig) == 64, f"JOSE ES256 signature must be 64 bytes, got {len(raw_sig)}"
+    der_sig = utils.encode_dss_signature(
+        int.from_bytes(raw_sig[:32], "big"), int.from_bytes(raw_sig[32:], "big")
+    )
+    signing_input = (parts[0] + "." + parts[1]).encode()
+    # Raises InvalidSignature if the signature does not verify.
+    pub.verify(der_sig, signing_input, ec.ECDSA(hashes.SHA256()))

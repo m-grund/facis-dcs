@@ -21,7 +21,6 @@ import (
 	"digital-contracting-service/internal/signingmanagement/db"
 	"digital-contracting-service/internal/signingmanagement/dss"
 	signingmanagementevents "digital-contracting-service/internal/signingmanagement/event"
-	"digital-contracting-service/internal/signingmanagement/pidverify"
 )
 
 type ValidateQry struct {
@@ -33,6 +32,31 @@ type ValidateQry struct {
 
 type ValidationResult struct {
 	Findings []string
+	// DSSReport is the structured EU DSS validation report (nil when no DSS is
+	// configured or the contract carries no signed PDF). The viewer renders its
+	// SignedBy / SignatureFormat / SigningTime as signer identity, signature
+	// level, and timestamp (DCS-FR-SM-26).
+	DSSReport *dss.Report
+	// SigningEvidence is the per-signer proof extracted from the embedded
+	// ContractSigningSummaryCredential(s): the content/PDF hashes and the
+	// credential binding the signature covers (DCS-FR-SM-26). Empty for an
+	// unsigned contract.
+	SigningEvidence []SigningEvidence
+}
+
+// SigningEvidence is one signer's ContractSigningSummaryCredential, distilled
+// to the compliance-relevant fields the Signature Compliance Viewer surfaces
+// (DCS-FR-SM-26): who signed, through which ceremony, and the integrity proof
+// (content/PDF hashes) plus the credential binding the signature covers.
+type SigningEvidence struct {
+	SignerDID            string
+	CeremonyID           string
+	FieldName            string
+	ContentHash          string
+	PDFHash              string
+	CredentialType       string
+	KBSDHash             string
+	ValidationReportHash string
 }
 
 type Validator struct {
@@ -69,13 +93,15 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 	findings = append(findings, h.crossCheckEmbeddedPID(ctx, tx, cmd.DID)...)
 	findings = append(findings, h.crossCheckSHACLDrift(ctx, tx, cmd.DID)...)
 
-	dssFindings, err := h.validateWithDSS(ctx, tx, cmd.DID)
+	dssReport, dssFindings, err := h.validateWithDSS(ctx, tx, cmd.DID)
 	if err != nil {
 		// A CONFIGURED DSS is a required validator: its unavailability is an
 		// error the caller sees, never a silently thinner findings list.
 		return nil, err
 	}
 	findings = append(findings, dssFindings...)
+
+	signingEvidence := h.collectSigningEvidence(ctx, tx, cmd.DID)
 
 	evt := signingmanagementevents.ValidateEvent{
 		DID:             cmd.DID,
@@ -96,7 +122,9 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 	}
 
 	return &ValidationResult{
-		Findings: findings,
+		Findings:        findings,
+		DSSReport:       dssReport,
+		SigningEvidence: signingEvidence,
 	}, nil
 }
 
@@ -105,24 +133,106 @@ func (h *Validator) Handle(ctx context.Context, cmd ValidateQry) (*ValidationRes
 // EN 319 102-1 indication as a finding. No DSS_URL means no DSS leg (the
 // internal PKCS#11-based checks stand alone); a configured-but-failing DSS
 // is an error. An unsigned contract (no stored PDF) yields no DSS finding.
-func (h *Validator) validateWithDSS(ctx context.Context, tx *sqlx.Tx, did string) ([]string, error) {
+func (h *Validator) validateWithDSS(ctx context.Context, tx *sqlx.Tx, did string) (*dss.Report, []string, error) {
 	dssURL := dss.URL()
 	if dssURL == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
 	pdfBytes, err := h.CRepo.FetchContractPDFBytes(ctx, tx, did)
 	if err != nil || len(pdfBytes) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	report, err := dss.New(dssURL).ValidatePDF(ctx, pdfBytes, did+".pdf")
 	if err != nil {
-		return nil, fmt.Errorf("EU DSS validation of %s failed: %w", did, err)
+		return nil, nil, fmt.Errorf("EU DSS validation of %s failed: %w", did, err)
 	}
-	finding := fmt.Sprintf("EU DSS validation report: indication=%s", report.Indication)
-	if report.SubIndication != "" {
-		finding += fmt.Sprintf(" (subIndication=%s)", report.SubIndication)
+	// A wallet-produced signature is an AES (eIDAS Art. 26), not a QES: DSS's
+	// AES acceptance criteria (integrity sound + signatory certificate present)
+	// are the passing bar, NOT TOTAL-PASSED — which additionally demands a
+	// qualified EU-trust-list chain (see dss.Report.AssertValidAES). So an
+	// INDETERMINATE whose sub-indication is only a trust/POE gap
+	// (NO_CERTIFICATE_CHAIN_FOUND for the wallet's non-qualified dev CA) is a
+	// PASSING confirmation here, consistent with what the signing path already
+	// accepts; only a crypto/integrity failure is a defect finding.
+	if err := report.AssertValidAES(); err != nil {
+		finding := fmt.Sprintf("EU DSS validation report: indication=%s", report.Indication)
+		if report.SubIndication != "" {
+			finding += fmt.Sprintf(" (subIndication=%s)", report.SubIndication)
+		}
+		return report, []string{finding}, nil
 	}
-	return []string{finding}, nil
+	return report, []string{ValidAESFinding}, nil
+}
+
+// ValidAESFinding is the passing confirmation recorded when the EU DSS leg
+// accepts the signature as a valid Advanced Electronic Signature.
+const ValidAESFinding = "EU DSS validation confirms a valid Advanced Electronic Signature"
+
+// collectSigningEvidence extracts the ContractSigningSummaryCredential(s)
+// embedded in the stored signed PDF and distills each to the compliance
+// fields the Signature Compliance Viewer surfaces (DCS-FR-SM-26): signer DID,
+// ceremony, content/PDF hashes, credential type, and the KB-JWT binding. An
+// unsigned contract (no PDF or no embedded evidence) yields no evidence; this
+// is a read-only enrichment for the viewer, so an extraction hiccup degrades
+// to no evidence rather than failing the whole validation.
+func (h *Validator) collectSigningEvidence(ctx context.Context, tx *sqlx.Tx, did string) []SigningEvidence {
+	if h.PDFCore == nil {
+		return nil
+	}
+	pdfBytes, err := h.CRepo.FetchContractPDFBytes(ctx, tx, did)
+	if err != nil || len(pdfBytes) == 0 {
+		return nil
+	}
+	evidence, found, err := h.PDFCore.ExtractEvidence(ctx, pdfBytes)
+	if err != nil || !found || len(evidence) == 0 {
+		return nil
+	}
+
+	documents := []json.RawMessage{evidence}
+	var bundle []json.RawMessage
+	if err := json.Unmarshal(evidence, &bundle); err == nil && len(bundle) > 0 {
+		documents = bundle
+	}
+
+	out := make([]SigningEvidence, 0, len(documents))
+	for _, doc := range documents {
+		if ev, ok := parseSigningEvidence(doc); ok {
+			out = append(out, ev)
+		}
+	}
+	return out
+}
+
+// parseSigningEvidence reads the credentialSubject of a
+// ContractSigningSummaryCredential. The signer DID lives in credentialSubject.id;
+// ok is false for a document that is not a signing-summary VC (no signer id).
+func parseSigningEvidence(evidence []byte) (SigningEvidence, bool) {
+	var vc struct {
+		CredentialSubject struct {
+			ID                   string `json:"id"`
+			CeremonyID           string `json:"ceremony_id"`
+			FieldName            string `json:"field_name"`
+			ContentHash          string `json:"content_hash"`
+			PDFHash              string `json:"pdf_hash"`
+			CredentialType       string `json:"credential_type"`
+			KBSDHash             string `json:"kb_sd_hash"`
+			ValidationReportHash string `json:"validation_report_hash"`
+		} `json:"credentialSubject"`
+	}
+	if err := json.Unmarshal(evidence, &vc); err != nil || vc.CredentialSubject.ID == "" {
+		return SigningEvidence{}, false
+	}
+	cs := vc.CredentialSubject
+	return SigningEvidence{
+		SignerDID:            cs.ID,
+		CeremonyID:           cs.CeremonyID,
+		FieldName:            cs.FieldName,
+		ContentHash:          cs.ContentHash,
+		PDFHash:              cs.PDFHash,
+		CredentialType:       cs.CredentialType,
+		KBSDHash:             cs.KBSDHash,
+		ValidationReportHash: cs.ValidationReportHash,
+	}, true
 }
 
 // crossCheckEmbeddedPID re-verifies the embedded PID presentation against the
@@ -159,20 +269,17 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 		documents = bundle
 	}
 
+	// Privacy: the PID is never embedded (no personal data in the shared PDF),
+	// so the cross-check binds on what IS carried — the pseudonymous holder DID
+	// and the KB-JWT sd_hash — matching them against the signature record rather
+	// than re-verifying the full credential from the PDF.
 	verifiedSigners := map[string]bool{}
 	for _, doc := range documents {
-		presentation, subject := signingSummaryPIDFields(doc)
-		if presentation == "" {
-			return []string{"Embedded signing evidence is missing the PID presentation"}
+		subject, sdHash := signingSummarySignerFields(doc)
+		if subject == "" || sdHash == "" {
+			return []string{"Embedded signing evidence is missing the signer binding"}
 		}
-		signerDID, _, err := pidverify.Verify(presentation)
-		if err != nil {
-			return []string{fmt.Sprintf("PID verification failed: %v", err)}
-		}
-		if subject != "" && subject != signerDID {
-			return []string{"Evidence mismatch: embedded PID subject does not match the credential subject"}
-		}
-		verifiedSigners[signerDID] = true
+		verifiedSigners[subject] = true
 	}
 
 	records, err := h.CRepo.LoadSignatures(ctx, tx, did)
@@ -182,12 +289,12 @@ func (h *Validator) crossCheckEmbeddedPID(ctx context.Context, tx *sqlx.Tx, did 
 				continue
 			}
 			if rec.SignerDID != "" && !verifiedSigners[rec.SignerDID] {
-				return []string{"Evidence mismatch: re-verified PID signer does not match the signature record"}
+				return []string{"Evidence mismatch: embedded signer does not match the signature record"}
 			}
 		}
 	}
 
-	return []string{"Embedded PID presentation re-verified and cross-checked against the signature record"}
+	return []string{"Embedded signer binding cross-checked against the signature record"}
 }
 
 // crossCheckSHACLDrift (Phase 4, ADR-9) re-runs the Semantic Hub SHACL
@@ -259,17 +366,18 @@ func signingSummarySHACLHash(evidence []byte) string {
 	return vc.CredentialSubject.ValidationReportHash
 }
 
-// signingSummaryPIDFields extracts the verbatim PID presentation and credential
-// subject from a ContractSigningSummaryCredential evidence document.
-func signingSummaryPIDFields(evidence []byte) (presentation, subject string) {
+// signingSummarySignerFields extracts the pseudonymous signer binding — the
+// holder DID (credentialSubject.id) and the KB-JWT sd_hash — from a
+// ContractSigningSummaryCredential. The PID itself is never embedded.
+func signingSummarySignerFields(evidence []byte) (subject, sdHash string) {
 	var vc struct {
 		CredentialSubject struct {
-			ID              string `json:"id"`
-			PIDPresentation string `json:"pid_presentation"`
+			ID       string `json:"id"`
+			KBSDHash string `json:"kb_sd_hash"`
 		} `json:"credentialSubject"`
 	}
 	if err := json.Unmarshal(evidence, &vc); err != nil {
 		return "", ""
 	}
-	return vc.CredentialSubject.PIDPresentation, vc.CredentialSubject.ID
+	return vc.CredentialSubject.ID, vc.CredentialSubject.KBSDHash
 }

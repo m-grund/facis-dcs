@@ -29,9 +29,9 @@ from steps.support.api_client import (
     get_with_headers,
     post_json,
     put_json,
-    signature_apply_url,
 )
 from steps.support.services import odrl_fixture_service as odrl
+from steps.support.signing import wallet_sign
 from steps.support.services.auth_service import AuthService
 from steps.support.services.contract_service import ContractService
 
@@ -192,13 +192,11 @@ def step_when_full_workflow_to_signed(context, name):
 @when('a direct signing API call is attempted against contract "{name}" before it is approved')
 def step_when_direct_sign_before_approval(context, name):
     _advance_to_reviewed(context, name)
-    did, updated_at = ContractService._contract_data(context, name)
-    signer_h = AuthService.get_headers_for_roles(["Contract Signer"])
-    context.requests_response = post_json(
-        context,
-        signature_apply_url(context),
-        {"did": did, "signer_did": "did:example:bdd-odrl-signer", "updated_at": updated_at},
-        headers=signer_h,
+    did, _updated_at = ContractService._contract_data(context, name)
+    # Signing an un-APPROVED contract must be refused; the transition gate in
+    # /signature/prepare rejects it before any signature is produced.
+    context.requests_response = wallet_sign(
+        context, did, signer_did="did:example:bdd-odrl-signer", signatory="bdd-odrl-signer"
     )
     if context.requests_response.status_code == 200:
         ContractService._refresh_contract(context, name)

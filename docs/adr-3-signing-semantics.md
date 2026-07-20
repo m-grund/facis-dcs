@@ -1,5 +1,14 @@
 # ADR-3: Signing semantics — org-key AES with PID identity binding under the signature
 
+> **Superseded in part by [ADR-12](adr-12-wallet-driven-signing.md)
+> (2026-07-18).** The "organizational signature produced by the org's HSM-held
+> key over the PDF" decision below is **withdrawn**: a DCS-held key cannot
+> satisfy eIDAS sole control. The contract AES is now **wallet-driven** — the
+> DCS is the OID4VP relying party and validator, and the signatory's key lives
+> in their wallet/QTSP. The rest of this ADR — the mandatory PID ceremony, and
+> embedding the PID presentation + signing-summary VC **inside** the signed
+> byte range before signing — is unchanged and still binding.
+
 ## Context
 
 SRS §1.2 describes the signing act as: "the company will sign the DCS

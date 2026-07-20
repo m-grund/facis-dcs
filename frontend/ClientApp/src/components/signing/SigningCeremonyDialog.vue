@@ -121,7 +121,9 @@ defineExpose<DialogExpose>({ reveal })
         </div>
 
         <div v-else-if="phase === 'pending'" class="flex flex-col items-center gap-3">
-          <p class="text-sm opacity-80">Scan the QR code with your wallet to present your PID and sign.</p>
+          <p class="text-sm opacity-80">
+            Scan the QR code with your wallet to present your PID and Power of Attorney, then sign.
+          </p>
           <figure class="rounded-box bg-white p-3">
             <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="Signing ceremony QR code" class="mx-auto h-48 w-48" />
           </figure>

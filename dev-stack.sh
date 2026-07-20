@@ -78,13 +78,6 @@ bash scripts/c2pa-cert-provision.sh "$HSM_TOKEN_DIR" dcs 1234 \
   "$PDF_CORE_DIR/certs/dev/c2pa-x5chain-8991.pem"
 echo "✓ C2PA x5chain provisioned for pdf-core"
 
-# Issue the PAdES x5chain binding the dcs-contract-pades token key so pdf-core
-# can embed it as the CMS signing certificate of a PAdES contract signature
-# (the ECDSA operation itself runs in the backend, DCS-IR-HI-01).
-KEY_LABEL=dcs-contract-pades bash scripts/c2pa-cert-provision.sh "$HSM_TOKEN_DIR" dcs 1234 \
-  "$PDF_CORE_DIR/certs/dev/pades-x5chain-8991.pem"
-echo "✓ PAdES x5chain provisioned for pdf-core"
-
 # Publish an initial (empty) CRL for the dev signing CA so the leaf's
 # crlDistributionPoints resolves to a fresh, valid list. crlcheck (ops) or the
 # AC11 test path can later revoke the signing cert against this CA.
@@ -113,6 +106,32 @@ for i in $(seq 1 15); do
   fi
   sleep 1
 done
+
+# Signing is wallet-driven (ADR-12): the DCS holds no signing key. It prepares
+# the to-be-signed document, and validates + records whatever the signatory
+# signs. Local signing therefore NEEDS a reachable EU DSS (the signature
+# validator, DCS-FR-SM-18) and the test wallet (which signs with a per-signatory
+# key, driving the DSS as its external SCA). Both are provisioned here by default
+# so devs can always sign locally — DCS_DEV_DSS=0 opts out only if you know you
+# don't need signing.
+DSS_LOCAL_URL="http://localhost:18099"
+WALLET_KEYS_DIR="$HOME/.dcs/wallet-keys"
+if [ "${DCS_DEV_DSS:-1}" = "1" ]; then
+  echo ""
+  echo "=== Starting the local EU DSS (signature validation + test-wallet SCA) ==="
+  docker rm -f dcs-dev-dss >/dev/null 2>&1 || true
+  docker run -d --name dcs-dev-dss -p 18099:8080 \
+    --entrypoint /dss/apache-tomcat-11.0.4/bin/catalina.sh \
+    conectx/dss-demo:6.2.1 run >/dev/null
+  echo "✓ DSS 6.2 demo webapp starting on $DSS_LOCAL_URL (boots in ~90s)"
+  echo "DSS_URL=$DSS_LOCAL_URL" >> backend/.env
+  mkdir -p "$WALLET_KEYS_DIR"
+  echo "✓ backend .env wired to the DSS validator; test-wallet keys dir: $WALLET_KEYS_DIR"
+  echo ""
+  echo "  Sign a contract locally with the test wallet (plays wallet+QTSP):"
+  echo "    make -C testWallet sign DCS_URL=http://localhost:8991/api \\"
+  echo "      CONTRACT_DID=<did> FIELD=<field> USER=<signatory> TOKEN=<jwt>"
+fi
 
 echo ""
 echo "=== Starting Vite dev server ==="

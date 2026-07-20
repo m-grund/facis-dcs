@@ -113,11 +113,40 @@ func (c *APIClient) FetchFile(cid string) (*IPFSResult, error) {
 		return c.fetchKuboFile(cid)
 	}
 
-	body, err := c.fetchTenantFileWithRetry(cid)
-	if err != nil {
-		return nil, err
+	// Fast path: one tenant attempt, then the durable pinned Kubo copy. Both are
+	// written synchronously by CreateFile (copyToMFS), so the common case — the
+	// tenant document-manager dropped its DataIdentifier mapping under load —
+	// resolves in two quick calls. Doing the multi-second tenant retry first
+	// would compound over a long audit-chain walk into a request-deadline
+	// timeout (DCS-FR-CSA: the tamper-proof trail read must not 404 or hang on a
+	// link the tenant index transiently forgot; the Kubo copy is identical and
+	// the hash chain still verifies).
+	if body, status, err := c.getOnce(fmt.Sprintf("%s/api/ipfs/%s", c.baseURL, cid)); err == nil && status == http.StatusOK {
+		return decodeTenantBody(body)
+	}
+	if c.mfsBaseURL != "" {
+		if kubo, kerr := c.fetchKuboFile(cid); kerr == nil {
+			return kubo, nil
+		}
 	}
 
+	// Neither resolved on the first try — treat as genuine read-after-write lag
+	// and retry the tenant path with backoff, falling back to Kubo once more.
+	body, err := c.fetchTenantFileWithRetry(cid)
+	if err != nil {
+		if c.mfsBaseURL != "" {
+			if kubo, kerr := c.fetchKuboFile(cid); kerr == nil {
+				return kubo, nil
+			}
+		}
+		return nil, err
+	}
+	return decodeTenantBody(body)
+}
+
+// decodeTenantBody unwraps a tenant-gateway response into an IPFSResult,
+// decoding the base64-in-JSON-string data payload the tenant store wraps.
+func decodeTenantBody(body []byte) (*IPFSResult, error) {
 	var result IPFSResult
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)

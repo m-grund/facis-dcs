@@ -120,9 +120,6 @@ class ContractService:
         return {
             "did": did,
             "updated_at": updated_at,
-            "reviewers": [peer_did],
-            "approvers": [peer_did],
-            "negotiators": [peer_did],
         }
 
     @staticmethod
@@ -218,9 +215,6 @@ class ContractService:
         peer_did = ContractService._local_peer_did(context)
         create_payload = {
             "template_did": t_did,
-            "reviewers": [peer_did],
-            "negotiators": [peer_did],
-            "approvers": [peer_did],
         }
         create_resp = post_json(context, contract_create_url(context), create_payload, headers=creator_h)
         assert create_resp.status_code == 200, create_resp.text
@@ -243,9 +237,6 @@ class ContractService:
         peer_did = ContractService._local_peer_did(context)
         create_payload = {
             "template_did": t_did,
-            "reviewers": [peer_did],
-            "negotiators": [peer_did],
-            "approvers": [peer_did],
         }
         create_resp = post_json(context, contract_create_url(context), create_payload, headers=creator_h)
         assert create_resp.status_code == 200, create_resp.text
@@ -285,9 +276,7 @@ class ContractService:
         other_peer_did = ContractService._other_trusted_peer_did(context)
         create_payload = {
             "template_did": t_did,
-            "reviewers": [other_peer_did],
-            "negotiators": [other_peer_did],
-            "approvers": [other_peer_did],
+            "counterparty": other_peer_did,
         }
         create_resp = post_json(context, contract_create_url(context), create_payload, headers=creator_h)
         assert create_resp.status_code == 200, create_resp.text
@@ -300,9 +289,7 @@ class ContractService:
         submit_payload = {
             "did": c_did,
             "updated_at": updated_at,
-            "reviewers": [other_peer_did],
-            "approvers": [other_peer_did],
-            "negotiators": [other_peer_did],
+            "counterparty": other_peer_did,
         }
         submit_resp = post_json(context, contract_submit_url(context), submit_payload, headers=creator_h)
         assert submit_resp.status_code == 200, submit_resp.text
@@ -424,9 +411,6 @@ class ContractService:
         peer_did = ContractService._local_peer_did(context)
         create_payload = {
             "template_did": t_did,
-            "reviewers": [peer_did],
-            "negotiators": [peer_did],
-            "approvers": [peer_did],
         }
         create_resp = post_json(context, contract_create_url(context), create_payload, headers=creator_h)
         assert create_resp.status_code == 200, create_resp.text

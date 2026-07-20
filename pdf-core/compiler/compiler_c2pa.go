@@ -690,16 +690,82 @@ func ZeroCOSESignatures(pdf []byte) []byte {
 	return out
 }
 
-func signClaimSigStructure(ctx context.Context, protected []byte, claimPayload []byte) ([]byte, error) {
-	signer := mustSigningMaterial().signer
-	sigStructure := cborArray(
-		cborText("Signature1"),
-		cborBytes(protected),
-		cborBytes([]byte{}),
-		cborBytes(claimPayload),
-	)
-	return signer.Sign(ctx, sigStructure)
+// InjectCOSESignatures splices signatures into the zeroed 64-byte COSE_Sign1
+// slots a CapturingSigner left behind, in document order — the stateless "embed"
+// step. Each element of signatures must be a 64-byte ES256 r||s. Only all-zero
+// slots are filled, so an update PDF's pre-existing real signatures are left
+// untouched; the number of zeroed slots must equal len(signatures). No recompile
+// happens, so embed depends on nothing but its inputs and any replica can serve
+// it.
+func InjectCOSESignatures(pdf []byte, signatures [][]byte) ([]byte, error) {
+	for i, sig := range signatures {
+		if len(sig) != 64 {
+			return nil, fmt.Errorf("signature %d is %d bytes, want 64 (ES256 r||s)", i, len(sig))
+		}
+	}
+	out := append([]byte(nil), pdf...)
+	next := 0
+	from := 0
+	for {
+		idx := bytes.Index(out[from:], coseDetachedSig64Marker)
+		if idx < 0 {
+			break
+		}
+		sigStart := from + idx + len(coseDetachedSig64Marker)
+		sigEnd := sigStart + 64
+		if sigEnd > len(out) {
+			break
+		}
+		if isAllZero(out[sigStart:sigEnd]) {
+			if next >= len(signatures) {
+				return nil, fmt.Errorf("prepared PDF has more empty signature slots than the %d signatures provided", len(signatures))
+			}
+			copy(out[sigStart:sigEnd], signatures[next])
+			next++
+		}
+		from = sigEnd
+	}
+	if next != len(signatures) {
+		return nil, fmt.Errorf("prepared PDF has %d empty signature slots but %d signatures were provided", next, len(signatures))
+	}
+	return out, nil
 }
+
+// CountZeroedCOSESignatureSlots returns how many empty (all-zero) 64-byte
+// COSE_Sign1 signature slots the PDF carries — the slots a CapturingSigner left
+// for the embed step to fill. A render stabilises its byte layout over several
+// passes, signing each pass but keeping only the last; this counts the slots that
+// actually survived, so prepare returns exactly the final pass's Sig_structures.
+func CountZeroedCOSESignatureSlots(pdf []byte) int {
+	count := 0
+	from := 0
+	for {
+		idx := bytes.Index(pdf[from:], coseDetachedSig64Marker)
+		if idx < 0 {
+			break
+		}
+		sigStart := from + idx + len(coseDetachedSig64Marker)
+		sigEnd := sigStart + 64
+		if sigEnd > len(pdf) {
+			break
+		}
+		if isAllZero(pdf[sigStart:sigEnd]) {
+			count++
+		}
+		from = sigEnd
+	}
+	return count
+}
+
+func isAllZero(b []byte) bool {
+	for _, x := range b {
+		if x != 0 {
+			return false
+		}
+	}
+	return len(b) > 0
+}
+
 
 func mustSigningMaterial() signingMaterial {
 	signingMaterialOnce.Do(func() {
@@ -712,11 +778,6 @@ func mustSigningMaterial() signingMaterial {
 }
 
 func loadSigningMaterialFromEnv(getenv func(string) string, readFile func(string) ([]byte, error)) (signingMaterial, error) {
-	endpoint := strings.TrimSpace(getenv(envSigningEndpoint))
-	if endpoint == "" {
-		return signingMaterial{}, fmt.Errorf("%s is required: pdf-core signs C2PA manifests via the backend's internal signing endpoint", envSigningEndpoint)
-	}
-
 	chainInline := strings.TrimSpace(getenv(envX5ChainPEM))
 	chainFile := strings.TrimSpace(getenv(envX5ChainPEMFile))
 	chainPEM, chainProvided, err := resolveSigningConfigValue(readFile, chainInline, chainFile, envX5ChainPEM, envX5ChainPEMFile)
@@ -730,7 +791,7 @@ func loadSigningMaterialFromEnv(getenv func(string) string, readFile func(string
 	if err != nil {
 		return signingMaterial{}, err
 	}
-	return signingMaterial{signer: newHTTPCallbackSigner(endpoint), certChainDER: certs}, nil
+	return signingMaterial{certChainDER: certs}, nil
 }
 
 func resolveSigningConfigValue(readFile func(string) ([]byte, error), inlineValue string, filePath string, inlineName string, fileName string) (string, bool, error) {

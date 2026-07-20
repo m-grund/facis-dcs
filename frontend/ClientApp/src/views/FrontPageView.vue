@@ -44,10 +44,10 @@ const stages: Stage[] = [
   {
     name: 'Signing',
     description:
-      'Contract Signers apply verifiable signatures to approved contracts from the Signing Dashboard. Once all required signatures are in place, the contract is legally executed.',
+      'Contract Signers apply verifiable signatures to approved contracts in the Secure Contract Viewer. Once all required signatures are in place, the contract is legally executed.',
     roles: 'Contract Signer, Contract Manager, Contract Observer',
-    routeName: ROUTES.SIGNING.DASHBOARD,
-    linkLabel: 'Open Signing Dashboard',
+    routeName: ROUTES.SIGNING.LIST,
+    linkLabel: 'Open Signing',
   },
   {
     name: 'Lifecycle & KPIs',

@@ -145,8 +145,12 @@ def contract_peer_post_sync_url(context) -> str:
     return f"{context.base_url}/peer/contracts/"
 
 
-def signature_apply_url(context) -> str:
-    return f"{context.base_url}/signature/apply"
+def signature_prepare_url(context) -> str:
+    return f"{context.base_url}/signature/prepare"
+
+
+def signature_submit_url(context) -> str:
+    return f"{context.base_url}/signature/submit"
 
 
 def signature_revoke_url(context) -> str:
@@ -183,12 +187,16 @@ def signature_request_webhook_url(context) -> str:
     return f"{context.base_url}/signature/request/webhook"
 
 
-# Authenticated, non-public backend endpoint that signs a COSE
-# Sig_structure via hsm.Signer("dcs-c2pa") for pdf-core
-# (backend/design/internal_signing.go).
+def signature_request_publish_url(context, ceremony_id: str) -> str:
+    return f"{context.base_url}/signature/request/{ceremony_id}/publish"
 
-def c2pa_internal_sign_url(context) -> str:
-    return f"{context.base_url}/internal/c2pa/sign"
+
+def signature_request_leaf_url(context, ceremony_id: str, leaf: str) -> str:
+    """Harness-reachable URL for a per-ceremony signing-request sub-resource
+    (object/document/callback). The request object the DCS publishes carries these
+    URLs built from its advertised public base; this rebuilds them on the origin
+    the harness actually routes to."""
+    return f"{context.base_url}/signature/request/{ceremony_id}/{leaf}"
 
 
 def template_create_url(context) -> str:

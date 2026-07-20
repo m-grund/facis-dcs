@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
 	"fmt"
 	"strings"
@@ -46,7 +45,7 @@ func TestGeneratedPDFICCProfileIsStructurallyValid(t *testing.T) {
 		NamespaceMap:  map[string]string{},
 	}
 
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}

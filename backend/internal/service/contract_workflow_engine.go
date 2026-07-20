@@ -102,6 +102,7 @@ func mapContractCommandError(err error) error {
 	}
 	if errors.Is(err, contractstate.ErrInvalidTransition) ||
 		errors.Is(err, validation.ErrContractHierarchyInvalid) ||
+		errors.Is(err, validation.ErrContractNotClosed) ||
 		errors.Is(err, command.ErrContractHierarchyCycle) ||
 		errors.Is(err, command.ErrDeploymentNotFound) ||
 		errors.Is(err, command.ErrSigningIncomplete) ||
@@ -129,37 +130,28 @@ func (s *contractWorkflowEnginesrvc) Create(ctx context.Context, req *contractwo
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
-	untrustedReviewers, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, req.Reviewers)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
+	counterparty := ""
+	if req.Counterparty != nil {
+		counterparty = *req.Counterparty
 	}
-
-	untrustedAprovers, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, req.Approvers)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	untrustedNegotiators, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, req.Negotiators)
-	if err != nil {
-		return nil, contractworkflowengine.MakeInternalError(err)
-	}
-
-	untrustedPeers := base.Unique(untrustedReviewers, untrustedAprovers, untrustedNegotiators)
-	if len(untrustedPeers) > 0 {
-		err := fmt.Errorf("untrusted peers are not allowed: %v", untrustedPeers)
-		return nil, contractworkflowengine.MakeBadRequest(err)
+	if counterparty != "" {
+		untrustedPeers, err := dcstodcs.CheckForUntrustedPeers(ctx, s.DB, s.SRepo, localPeer, []string{counterparty})
+		if err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+		if len(untrustedPeers) > 0 {
+			return nil, contractworkflowengine.MakeBadRequest(fmt.Errorf("untrusted counterparty is not allowed: %v", untrustedPeers))
+		}
 	}
 
 	cmd := command.CreateCmd{
-		DID:         *did,
-		TemplateDID: req.TemplateDid,
-		CreatedBy:   middleware.GetParticipantID(ctx),
-		HolderDID:   middleware.GetHolderDID(ctx),
-		UserRoles:   middleware.GetUserRoles(ctx),
-		Reviewers:   req.Reviewers,
-		Approvers:   req.Approvers,
-		Negotiators: req.Negotiators,
-		Parties:     req.Parties,
+		DID:          *did,
+		TemplateDID:  req.TemplateDid,
+		CreatedBy:    middleware.GetParticipantID(ctx),
+		HolderDID:    middleware.GetHolderDID(ctx),
+		UserRoles:    middleware.GetUserRoles(ctx),
+		Counterparty: counterparty,
+		Parties:      req.Parties,
 		OriginatorRole: func() string {
 			if req.OriginatorRole != nil {
 				return *req.OriginatorRole
@@ -320,9 +312,6 @@ func (s *contractWorkflowEnginesrvc) Submit(ctx context.Context, req *contractwo
 		ActionFlag:   actionFlag,
 		Comments:     req.Comments,
 		ContractData: contractData,
-		Reviewers:    req.Reviewers,
-		Approvers:    req.Approvers,
-		Negotiators:  req.Negotiators,
 		CauserDID:    localPeer,
 	}
 	handler := command.Submitter{

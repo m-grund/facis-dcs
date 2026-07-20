@@ -48,10 +48,13 @@ func (r *PostgresContractRepo) ReadDataByDID(ctx context.Context, tx *sqlx.Tx, d
 }
 
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
+	// ACTIVE belongs here too: signing completion auto-deploys the contract
+	// (SIGNED -> ACTIVE), so a fully-signed contract that the Signature Compliance
+	// Viewer must still inspect lives in ACTIVE, not SIGNED.
 	query := `
         SELECT did, state, name, description, created_by, created_at, updated_at, contract_version, start_date, exp_date, exp_policy, exp_notice_period, responsible
         FROM contracts
-        WHERE state IN ('APPROVED', 'SIGNED')
+        WHERE state IN ('APPROVED', 'SIGNED', 'ACTIVE')
     `
 
 	var params []any
@@ -121,10 +124,10 @@ func (r *PostgresContractRepo) CreateSignature(ctx context.Context, tx *sqlx.Tx,
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO contract_signatures
 			(contract_did, signer_did, credential_type, signature_bytes, status, key_version,
-			 ipfs_cid, ceremony_id, pdf_hash, content_hash, field_name)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+			 ipfs_cid, ceremony_id, pdf_hash, content_hash, field_name, jades_signature)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 		signature.ContractDID, signature.SignerDID, signature.CredentialType, signature.SignatureBytes, signature.Status, signature.KeyVersion,
-		signature.IpfsCID, signature.CeremonyID, signature.PDFHash, signature.ContentHash, signature.FieldName,
+		signature.IpfsCID, signature.CeremonyID, signature.PDFHash, signature.ContentHash, signature.FieldName, signature.JAdESSignature,
 	)
 	if err != nil {
 		return fmt.Errorf("could not create contract signature: %w", err)
@@ -330,7 +333,7 @@ func (r *PostgresContractRepo) CollectValidationFindings(ctx context.Context, tx
 func (r *PostgresContractRepo) LoadSignatures(ctx context.Context, tx *sqlx.Tx, did string) ([]db.SignatureRecord, error) {
 	var records []db.SignatureRecord
 	err := tx.SelectContext(ctx, &records,
-		`SELECT signer_did, credential_type, status, signed_at, revoked_at, cert_revoked_at, field_name
+		`SELECT signer_did, credential_type, status, signed_at, revoked_at, cert_revoked_at, field_name, jades_signature
 		   FROM contract_signatures
 		  WHERE contract_did = $1
 		  ORDER BY created_at`, did,

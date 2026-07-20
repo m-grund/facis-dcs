@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
-import TypedClauseForm from '@template-repository/components/clauses-editor/TypedClauseForm.vue'
 import {
   getPlaceholderLabelFromConditions,
   parseSegmentsFromContent,
@@ -9,10 +8,8 @@ import {
 } from '@template-repository/composables/useClauseTextChips'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { useClauseCatalogStore } from '@/stores/clause-catalog-store'
 import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
 import { TemplateType } from '../../models/contract-template.ts'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
@@ -71,44 +68,9 @@ function clauseContentText(clause: DcsClause): string {
   return content['@list'].map((seg) => (typeof seg === 'string' ? seg : '')).join(' ')
 }
 
-// Typed clauses (ADR-10): the palette refetches the Semantic Hub's active
-// clause catalog every time the modal opens, so a catalog version
-// registered+activated in the hub is placeable immediately — no reload.
-const clauseCatalog = useClauseCatalogStore()
-const { clauses: typedClauseTypes } = storeToRefs(clauseCatalog)
-const selectedTypedClauseType = ref<string | null>(null)
-const selectedTypedClause = computed(() => typedClauseTypes.value.find((c) => c.type === selectedTypedClauseType.value))
-
-watch(addBlockModalContext, (ctx) => {
+watch(addBlockModalContext, () => {
   clauseSearch.value = ''
-  selectedTypedClauseType.value = null
-  if (ctx !== null) void clauseCatalog.refresh()
 })
-
-function handleAddTypedClause(payload: {
-  clauseType: string
-  title: string
-  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
-}) {
-  const ctx = addBlockModalContext.value
-  if (ctx === null) return
-  const instanceType = String(payload.instance['@type'] ?? '')
-  if (instanceType.startsWith('http://www.w3.org/ns/odrl/2/')) {
-    // A hub-templated ODRL rule: the store derives the policy entry plus
-    // its prose clause block (placed via the clauses editor).
-    void draftStore.addTypedClause(payload)
-    uiStore.closeAddBlockModal()
-    return
-  }
-  const instance = payload.instance
-  draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, {
-    blockType: 'dcs:Clause',
-    title: payload.title || clauseCatalog.labelFor(payload.clauseType),
-    content: [typedClauseValuesSummary(instance)],
-    typedClause: instance,
-  })
-  uiStore.closeAddBlockModal()
-}
 
 function getSegments(clause: DcsClause): Segment[] {
   const content = clause['dcs:content']
@@ -185,30 +147,6 @@ function handleAddClause(clauseBlockId: string) {
                 :key="item.blockType"
                 :label="item.label"
                 @select="handleAddBlock(item.blockType)"
-              />
-            </div>
-          </div>
-
-          <div v-if="typedClauseTypes.length" class="border-t border-base-300 pt-4">
-            <p class="mb-2 text-sm text-base-content/70">Typed clauses (Semantic Hub):</p>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="clause in typedClauseTypes"
-                :key="clause.type"
-                type="button"
-                class="btn btn-xs"
-                :class="selectedTypedClauseType === clause.type ? 'btn-primary' : 'btn-outline'"
-                @click="selectedTypedClauseType = selectedTypedClauseType === clause.type ? null : clause.type"
-              >
-                {{ clause.label }}
-              </button>
-            </div>
-            <div v-if="selectedTypedClause" class="mt-3 rounded-lg border border-base-300 bg-base-200/40 p-3">
-              <TypedClauseForm
-                :clause="selectedTypedClause"
-                :shapes="clauseCatalog.shapes"
-                submit-label="Add to document"
-                @submit="handleAddTypedClause"
               />
             </div>
           </div>

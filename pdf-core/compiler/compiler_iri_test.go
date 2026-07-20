@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"testing"
 )
 
@@ -44,7 +43,7 @@ func TestTitleExtractedFromMetadata(t *testing.T) {
 	if doc.Title != "My Canonical Title" {
 		t.Errorf("title = %q, want %q", doc.Title, "My Canonical Title")
 	}
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}

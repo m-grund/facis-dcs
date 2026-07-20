@@ -55,7 +55,6 @@ import (
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	cweevent "digital-contracting-service/internal/contractworkflowengine/event"
 	contractquery "digital-contracting-service/internal/contractworkflowengine/query/contract"
-	"digital-contracting-service/internal/pdfgeneration/manifest"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
 	pdfquery "digital-contracting-service/internal/pdfgeneration/query"
@@ -271,7 +270,7 @@ func (b *Bundler) collectContract(ctx context.Context, did, pathPrefix string, v
 	}
 	files[pathPrefix+"manifest-store.c2pa"] = manifestBytes
 
-	chain, err := manifest.ParseChain(manifestBytes)
+	chain, err := b.PDFCore.ExtractManifestChain(ctx, pdfBytes)
 	if err != nil {
 		return &ErrRefused{Findings: []string{fmt.Sprintf("contract %s: C2PA manifest chain unparsable: %v", did, err)}}
 	}

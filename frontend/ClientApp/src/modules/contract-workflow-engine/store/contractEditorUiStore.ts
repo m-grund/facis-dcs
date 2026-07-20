@@ -11,7 +11,6 @@ const defaultState: Readonly<ContractEditorUiState> = {
   tabs: [
     { id: 'details', label: 'Contract Details' },
     { id: 'content', label: 'Contract Content' },
-    { id: 'semantic', label: 'Semantic Rules' },
     { id: 'clauses', label: 'Clauses' },
     { id: 'builder', label: 'Builder' },
     { id: 'diff', label: 'Diff View' },

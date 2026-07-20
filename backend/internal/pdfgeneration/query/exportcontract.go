@@ -3,11 +3,9 @@ package query
 import (
 	"bytes"
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"io"
-	"log"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 
@@ -15,6 +13,15 @@ import (
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
+)
+
+// A contract PDF is produced only by the event-driven background regenerator
+// (pdfgeneration/event). Export serves the current cached PDF, waits while a
+// regeneration triggered by the latest change is still in flight, and never
+// returns the stale cache — nor renders one on demand.
+const (
+	pdfExportWaitTimeout  = 25 * time.Second
+	pdfExportPollInterval = 400 * time.Millisecond
 )
 
 type ExportContractPdfQry struct {
@@ -31,17 +38,7 @@ type ExportContractPdfHandler struct {
 }
 
 func (h *ExportContractPdfHandler) Handle(ctx context.Context, qry ExportContractPdfQry) (io.ReadCloser, error) {
-	tx, err := h.DB.BeginTxx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("begin tx: %w", err)
-	}
-	defer func(tx *sqlx.Tx) {
-		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			log.Printf("could not rollback transaction: %v", err)
-		}
-	}(tx)
-
-	contract, err := h.CRepo.ReadDataByDID(ctx, tx, qry.DID)
+	contract, err := h.readContract(ctx, qry.DID)
 	if err != nil {
 		return nil, fmt.Errorf("contract %s: %w", qry.DID, err)
 	}
@@ -51,97 +48,61 @@ func (h *ExportContractPdfHandler) Handle(ctx context.Context, qry ExportContrac
 		jsonldBytes = []byte(*contract.ContractData)
 	}
 	currentPayloadHash := payloadHash(jsonldBytes)
-
-	pdfState, err := h.CRepo.ReadPDFState(ctx, tx, qry.DID)
-	if err != nil {
-		return nil, fmt.Errorf("read cached contract PDF state for %s: %w", qry.DID, err)
-	}
-
 	currentC2PAState, err := provenance.MapCWEStateToC2PA(contract.State)
 	if err != nil {
 		return nil, fmt.Errorf("map contract state %q to C2PA state: %w", contract.State, err)
 	}
 
-	log.Printf("pdfgeneration: ExportContractPdf %s cidStr=%q lastC2PAState=%q currentState=%s c2paState=%q",
-		qry.DID, pdfState.IPFSCID, pdfState.C2PAState, contract.State, currentC2PAState)
-
-	updater := func(ctx context.Context, tx *sqlx.Tx, did string, state PDFStateData) error {
-		return h.CRepo.UpdatePDFState(ctx, tx, did, cwedb.ContractPDFState{
-			IPFSCID:         state.IPFSCID,
-			RendererVersion: state.RendererVersion,
-			C2PAState:       state.C2PAState,
-			PayloadHash:     state.PayloadHash,
-		})
-	}
-
-	if pdfState.IPFSCID != "" && pdfState.C2PAState == currentC2PAState && pdfState.PayloadHash == currentPayloadHash {
-		r, err := h.IPFSClient.FetchFile(pdfState.IPFSCID)
-		if err != nil || len(r.Data) == 0 {
-			return nil, fmt.Errorf("fetch cached PDF from IPFS %s: %w", pdfState.IPFSCID, err)
-		}
-		log.Printf("pdfgeneration: ExportContractPdf %s state matches — returning cached PDF (%d bytes)", qry.DID, len(r.Data))
-		return io.NopCloser(bytes.NewReader(r.Data)), nil
-	}
-
-	if pdfState.IPFSCID != "" && isFrozenC2PAState(pdfState.C2PAState) {
-		// Already PAdES-signed: never mutate this PDF's embedded attachments
-		// again, even though its lifecycle state has since moved on (e.g.
-		// SIGNED/ACTIVE -> TERMINATED/EXPIRED/SUSPENDED). Any incremental
-		// update to the embedded C2PA manifest after signing is flagged as an
-		// illegal modification by standards-compliant PAdES validators (Adobe
-		// Reader, pyHanko), regardless of how carefully it preserves the CMS
-		// ByteRange. Serve the frozen signed bytes as-is and only refresh the
-		// bookkeeping columns so this branch doesn't keep re-triggering.
-		log.Printf("pdfgeneration: ExportContractPdf %s already signed (c2paState=%q); serving frozen PDF, no post-signature mutation", qry.DID, pdfState.C2PAState)
-		r, err := h.IPFSClient.FetchFile(pdfState.IPFSCID)
-		if err != nil || len(r.Data) == 0 {
-			return nil, fmt.Errorf("fetch frozen signed PDF from IPFS %s: %w", pdfState.IPFSCID, err)
-		}
-		if pdfState.C2PAState != currentC2PAState || pdfState.PayloadHash != currentPayloadHash {
-			if err := updater(ctx, tx, qry.DID, PDFStateData{
-				IPFSCID:         pdfState.IPFSCID,
-				RendererVersion: pdfState.RendererVersion,
-				C2PAState:       currentC2PAState,
-				PayloadHash:     currentPayloadHash,
-			}); err != nil {
-				return nil, fmt.Errorf("refresh frozen PDF bookkeeping for %s: %w", qry.DID, err)
-			}
-			if err := tx.Commit(); err != nil {
-				return nil, fmt.Errorf("commit frozen PDF bookkeeping for %s: %w", qry.DID, err)
-			}
-		}
-		return io.NopCloser(bytes.NewReader(r.Data)), nil
-	}
-
-	if pdfState.IPFSCID != "" {
-		log.Printf("pdfgeneration: ExportContractPdf %s state/payload changed (state %q→%q, payloadHash %q→%q); appending", qry.DID, pdfState.C2PAState, currentC2PAState, pdfState.PayloadHash, currentPayloadHash)
-		r, err := h.IPFSClient.FetchFile(pdfState.IPFSCID)
-		if err != nil || len(r.Data) == 0 {
-			return nil, fmt.Errorf("fetch PDF from IPFS %s for update: %w", pdfState.IPFSCID, err)
-		}
-		pdfBytes, err := appendAndCache(ctx, tx, qry.DID, contract.State, jsonldBytes, r.Data,
-			h.IPFSClient, h.PDFCore, h.VCIssuer, h.IssuerDID, updater)
+	deadline := time.Now().Add(pdfExportWaitTimeout)
+	for {
+		pdfState, err := h.readPDFState(ctx, qry.DID)
 		if err != nil {
-			return nil, fmt.Errorf("append C2PA assertion for contract %s: %w", qry.DID, err)
+			return nil, fmt.Errorf("read contract PDF state for %s: %w", qry.DID, err)
 		}
-		if err := tx.Commit(); err != nil {
-			return nil, fmt.Errorf("commit contract PDF append tx for %s: %w", qry.DID, err)
+
+		// A PAdES-signed PDF is frozen: serve it as-is regardless of later
+		// lifecycle bookkeeping — post-signature mutation breaks PAdES validators.
+		if pdfState.IPFSCID != "" && provenance.IsFrozenC2PAState(pdfState.C2PAState) {
+			return h.fetch(qry.DID, pdfState.IPFSCID)
 		}
-		return io.NopCloser(bytes.NewReader(pdfBytes)), nil
-	}
+		// Serve only when the cached PDF reflects the current content and state.
+		if pdfState.IPFSCID != "" && pdfState.C2PAState == currentC2PAState && pdfState.PayloadHash == currentPayloadHash {
+			return h.fetch(qry.DID, pdfState.IPFSCID)
+		}
 
-	pdfBytes, _, err := h.PDFCore.Download(ctx, jsonldBytes)
-	if err != nil {
-		return nil, fmt.Errorf("pdf-core download for contract %s: %w", qry.DID, err)
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("contract %s PDF is being regenerated after the latest change; retry shortly", qry.DID)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(pdfExportPollInterval):
+		}
 	}
+}
 
-	pdfBytes, err = appendAndCache(ctx, tx, qry.DID, contract.State, jsonldBytes, pdfBytes,
-		h.IPFSClient, h.PDFCore, h.VCIssuer, h.IssuerDID, updater)
+func (h *ExportContractPdfHandler) fetch(did, cid string) (io.ReadCloser, error) {
+	r, err := h.IPFSClient.FetchFile(cid)
+	if err != nil || len(r.Data) == 0 {
+		return nil, fmt.Errorf("fetch PDF from IPFS %s for contract %s: %w", cid, did, err)
+	}
+	return io.NopCloser(bytes.NewReader(r.Data)), nil
+}
+
+func (h *ExportContractPdfHandler) readContract(ctx context.Context, did string) (*cwedb.Contract, error) {
+	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
-		return nil, fmt.Errorf("append and cache contract PDF for %s: %w", qry.DID, err)
+		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit contract PDF export tx for %s: %w", qry.DID, err)
+	defer func() { _ = tx.Rollback() }()
+	return h.CRepo.ReadDataByDID(ctx, tx, did)
+}
+
+func (h *ExportContractPdfHandler) readPDFState(ctx context.Context, did string) (*cwedb.ContractPDFState, error) {
+	tx, err := h.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	return io.NopCloser(bytes.NewReader(pdfBytes)), nil
+	defer func() { _ = tx.Rollback() }()
+	return h.CRepo.ReadPDFState(ctx, tx, did)
 }

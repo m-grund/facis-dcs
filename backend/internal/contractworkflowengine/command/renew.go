@@ -192,13 +192,7 @@ func (h *Renewer) Handle(ctx context.Context, cmd RenewCmd) (*RenewResult, error
 	// negotiation tasks for the new instance follow the exact same rules as
 	// a plain create — automatic metadata carryover (DCS-FR-CWE-22) extends
 	// to who is responsible, not just contract fields.
-	if err := createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, CreateCmd{
-		DID:         cmd.DID,
-		CreatedBy:   cmd.RenewedBy,
-		Reviewers:   resp.Reviewers,
-		Approvers:   resp.Approvers,
-		Negotiators: resp.Negotiators,
-	}); err != nil {
+	if err := createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd.DID, cmd.RenewedBy, resp); err != nil {
 		return nil, err
 	}
 

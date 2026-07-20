@@ -263,3 +263,34 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// TestFetchFileFallsBackToPinnedKuboOnTenantMiss proves a lost tenant
+// DataIdentifier mapping does not fail a read: the tenant path 404s
+// ("DataIdentifier not found"), and FetchFile transparently retrieves the
+// durable pinned copy from Kubo (the copy CreateFile made via copyToMFS).
+func TestFetchFileFallsBackToPinnedKuboOnTenantMiss(t *testing.T) {
+	const cid = "bafy-audit-cid"
+	tenantServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v0/cat" {
+			if got := r.URL.Query().Get("arg"); got != cid {
+				t.Fatalf("unexpected cat arg %q", got)
+			}
+			_, _ = w.Write([]byte(`{"audit":"entry"}`))
+			return
+		}
+		// Tenant path: the document-manager no longer has the mapping.
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":"DataIdentifier not found"}`))
+	}))
+	defer tenantServer.Close()
+
+	// baseURL (tenant) and mfsBaseURL (Kubo) served by the same test server.
+	client := NewClient(tenantServer.URL, tenantServer.URL)
+	result, err := client.FetchFile(cid)
+	if err != nil {
+		t.Fatalf("FetchFile should fall back to the pinned Kubo copy, got error: %v", err)
+	}
+	if string(result.Data) != `{"audit":"entry"}` {
+		t.Fatalf("unexpected fallback data %s", result.Data)
+	}
+}

@@ -21,7 +21,6 @@ import (
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
 	"digital-contracting-service/internal/contractworkflowengine/negotiationmerging"
-	"digital-contracting-service/internal/contractworkflowengine/remotesync/remoteaction"
 	db2 "digital-contracting-service/internal/dcstodcs/db"
 
 	"github.com/jmoiron/sqlx"
@@ -31,9 +30,6 @@ type SubmitCmd struct {
 	DID          string                 `json:"did"`
 	UpdatedAt    time.Time              `json:"updated_at"`
 	SubmittedBy  string                 `json:"submitted_by"`
-	Reviewers    []string               `json:"reviewers"`
-	Approvers    []string               `json:"approvers"`
-	Negotiators  []string               `json:"negotiators"`
 	ActionFlag   *actionflag.ActionFlag `json:"action_flag"`
 	Comments     []string               `json:"comments"`
 	ContractData *datatype.JSON         `json:"contract_data"`
@@ -73,25 +69,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 	localPeer, err := h.DIDDocument.GetID()
 	if err != nil {
 		return err
-	}
-
-	if processData.Origin != localPeer && cmd.CauserDID != processData.Origin {
-		/*
-			Not the Origin peer for this contract: forward unchanged instead of
-			mutating locally (single-writer-per-aggregate, see package doc).
-		*/
-
-		err := tx.Commit()
-		if err != nil {
-			return fmt.Errorf("could not commit transaction: %w", err)
-		}
-
-		err = remoteaction.Submit.Execute(ctx, h.DB, h.DIDDocument, processData.Origin, processData.DID, cmd)
-		if err != nil {
-			return err
-		}
-
-		return nil
 	}
 
 	// Optimistic concurrency: reject if the caller's view of the contract is
@@ -137,18 +114,6 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return errors.New("invalid participant")
 		}
 
-		if len(cmd.Reviewers) == 0 {
-			return errors.New("no reviewers provided")
-		}
-
-		if len(cmd.Negotiators) == 0 {
-			return errors.New("no negotiators provided")
-		}
-
-		if len(cmd.Approvers) == 0 {
-			return errors.New("no approvers provided")
-		}
-
 		contractData, err := h.contractDataForSemanticValidation(ctx, tx, cmd)
 		if err != nil {
 			return err
@@ -160,25 +125,25 @@ func (h *Submitter) Handle(ctx context.Context, cmd SubmitCmd) error {
 			return fmt.Errorf("contract submission blocked: %w", err)
 		}
 
-		resp := db.Responsible{
-			// Responsible.Creator is the ORIGIN PEER DID (see create.go,
-			// db.Responsible.GetUniqueResponsibleList treating it as a
-			// federation peer), not the human/org display name — using
-			// processData.CreatedBy here silently broke every subsequent
-			// PostSync broadcast for this contract, since a non-DID string
-			// fails CheckForUntrustedPeers and aborts the whole delivery.
-			Creator:     processData.Origin,
-			Reviewers:   cmd.Reviewers,
-			Approvers:   cmd.Approvers,
-			Negotiators: cmd.Negotiators,
-		}
-		updateData := db.ContractUpdateData{
-			DID:         cmd.DID,
-			Responsible: &resp,
-		}
-		err = h.CRepo.Update(ctx, tx, updateData)
+		existing, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
 		if err != nil {
-			return fmt.Errorf("could not update contract: %w", err)
+			return fmt.Errorf("could not read contract: %w", err)
+		}
+		updateData := db.ContractUpdateData{DID: cmd.DID}
+
+		// Submission into NEGOTIATION finalizes the participating parties, so
+		// seed one AcroForm signature field per party — origin and counterparty
+		// (dcs:signatoryName == the party's DCS instance DID) — which prepare
+		// renders and the signatory's wallet signs (ADR-13).
+		seeded, changed, err := seedSignatureFields(*contractData, existing.Responsible.GetParties())
+		if err != nil {
+			return fmt.Errorf("could not seed signature fields: %w", err)
+		}
+		if changed {
+			updateData.ContractData = &seeded
+			if err := h.CRepo.Update(ctx, tx, updateData); err != nil {
+				return fmt.Errorf("could not update contract: %w", err)
+			}
 		}
 
 		nextState = contractstate.Negotiation

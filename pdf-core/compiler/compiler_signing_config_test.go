@@ -1,17 +1,14 @@
 package compiler
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/base64"
-	"encoding/json"
 	"math/big"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,12 +39,8 @@ func mustTestX5ChainPEM(t *testing.T) string {
 	return string(certPEM(der))
 }
 
-func TestLoadSigningMaterialFromEnv_EndpointAndInlineX5Chain(t *testing.T) {
-	chainPEM := mustTestX5ChainPEM(t)
-	env := map[string]string{
-		envSigningEndpoint: "http://backend:8991/api/internal/c2pa/sign",
-		envX5ChainPEM:      chainPEM,
-	}
+func TestLoadSigningMaterialFromEnv_InlineX5Chain(t *testing.T) {
+	env := map[string]string{envX5ChainPEM: mustTestX5ChainPEM(t)}
 	material, err := loadSigningMaterialFromEnv(func(k string) string { return env[k] }, os.ReadFile)
 	if err != nil {
 		t.Fatalf("loadSigningMaterialFromEnv() error = %v", err)
@@ -55,97 +48,92 @@ func TestLoadSigningMaterialFromEnv_EndpointAndInlineX5Chain(t *testing.T) {
 	if len(material.certChainDER) != 1 {
 		t.Fatalf("cert chain length = %d, want 1", len(material.certChainDER))
 	}
-	if _, ok := material.signer.(*httpCallbackSigner); !ok {
-		t.Fatalf("signer type = %T, want *httpCallbackSigner", material.signer)
-	}
 }
 
-func TestLoadSigningMaterialFromEnv_EndpointAndFileX5Chain(t *testing.T) {
-	chainPEM := mustTestX5ChainPEM(t)
+func TestLoadSigningMaterialFromEnv_FileX5Chain(t *testing.T) {
 	dir := t.TempDir()
 	chainPath := filepath.Join(dir, "x5chain.pem")
-	if err := os.WriteFile(chainPath, []byte(chainPEM), 0o644); err != nil {
+	if err := os.WriteFile(chainPath, []byte(mustTestX5ChainPEM(t)), 0o644); err != nil {
 		t.Fatalf("write chain: %v", err)
 	}
-	env := map[string]string{
-		envSigningEndpoint: "http://backend:8991/api/internal/c2pa/sign",
-		envX5ChainPEMFile:  chainPath,
-	}
+	env := map[string]string{envX5ChainPEMFile: chainPath}
 	material, err := loadSigningMaterialFromEnv(func(k string) string { return env[k] }, os.ReadFile)
 	if err != nil {
 		t.Fatalf("loadSigningMaterialFromEnv() error = %v", err)
 	}
 	if len(material.certChainDER) != 1 {
 		t.Fatalf("cert chain length = %d, want 1", len(material.certChainDER))
-	}
-}
-
-func TestLoadSigningMaterialFromEnv_MissingEndpoint(t *testing.T) {
-	env := map[string]string{
-		envX5ChainPEM: mustTestX5ChainPEM(t),
-	}
-	if _, err := loadSigningMaterialFromEnv(func(k string) string { return env[k] }, os.ReadFile); err == nil {
-		t.Fatalf("expected error when %s is missing", envSigningEndpoint)
 	}
 }
 
 func TestLoadSigningMaterialFromEnv_MissingX5Chain(t *testing.T) {
-	env := map[string]string{
-		envSigningEndpoint: "http://backend:8991/api/internal/c2pa/sign",
-	}
-	if _, err := loadSigningMaterialFromEnv(func(k string) string { return env[k] }, os.ReadFile); err == nil {
+	if _, err := loadSigningMaterialFromEnv(func(string) string { return "" }, os.ReadFile); err == nil {
 		t.Fatalf("expected error when x5chain is missing")
 	}
 }
 
-// TestHTTPCallbackSigner_ForwardsTokenAndReturnsSignature proves the signer
-// presents the context bearer token as an Authorization header and returns the
-// 64-byte signature the endpoint produced.
-func TestHTTPCallbackSigner_ForwardsTokenAndReturnsSignature(t *testing.T) {
-	var gotAuth string
-	var gotSigStructure string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotAuth = r.Header.Get("Authorization")
-		var req struct {
-			SigStructure string `json:"sig_structure"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&req)
-		gotSigStructure = req.SigStructure
-		sig := make([]byte, 64)
-		for i := range sig {
-			sig[i] = byte(i)
-		}
-		_ = json.NewEncoder(w).Encode(map[string]string{"signature": base64.StdEncoding.EncodeToString(sig)})
-	}))
-	defer srv.Close()
-
-	signer := newHTTPCallbackSigner(srv.URL)
-	ctx := WithBearerToken(context.Background(), "test-jwt-token")
-	sig, err := signer.Sign(ctx, []byte("sig-structure-bytes"))
-	if err != nil {
-		t.Fatalf("Sign() error = %v", err)
-	}
-	if len(sig) != 64 {
-		t.Fatalf("signature length = %d, want 64", len(sig))
-	}
-	if gotAuth != "Bearer test-jwt-token" {
-		t.Fatalf("Authorization header = %q, want %q", gotAuth, "Bearer test-jwt-token")
-	}
-	if want := base64.StdEncoding.EncodeToString([]byte("sig-structure-bytes")); gotSigStructure != want {
-		t.Fatalf("sig_structure = %q, want %q", gotSigStructure, want)
+// TestSignClaimSigStructure_RequiresSignerInContext proves pdf-core holds no key:
+// a compile step that reaches a COSE signature without a Signer injected fails
+// loudly rather than falling back to any built-in key.
+func TestSignClaimSigStructure_RequiresSignerInContext(t *testing.T) {
+	if _, err := signClaimSigStructure(context.Background(), []byte("protected"), []byte("claim")); err == nil {
+		t.Fatalf("expected error when no signer is present in context")
 	}
 }
 
-// TestHTTPCallbackSigner_RejectsWrongLength ensures a non-64-byte response is
-// rejected: COSE ES256 requires exactly r||s (64 bytes).
-func TestHTTPCallbackSigner_RejectsWrongLength(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]string{"signature": base64.StdEncoding.EncodeToString([]byte("short"))})
-	}))
-	defer srv.Close()
+// TestCapturingSignerRecordsSigStructuresAndZeroes proves the prepare-step signer
+// returns a zeroed 64-byte placeholder and records the exact Sig_structure bytes
+// the DCS backend must sign.
+func TestCapturingSignerRecordsSigStructuresAndZeroes(t *testing.T) {
+	signer := NewCapturingSigner()
+	sig, err := signer.Sign(context.Background(), []byte("sig-structure-A"))
+	if err != nil {
+		t.Fatalf("Sign() error = %v", err)
+	}
+	if len(sig) != 64 || !isAllZero(sig) {
+		t.Fatalf("placeholder must be 64 zero bytes, got % x", sig)
+	}
+	if _, err := signer.Sign(context.Background(), []byte("sig-structure-B")); err != nil {
+		t.Fatalf("Sign() error = %v", err)
+	}
+	captured := signer.Captured()
+	if len(captured) != 2 || !bytes.Equal(captured[0], []byte("sig-structure-A")) || !bytes.Equal(captured[1], []byte("sig-structure-B")) {
+		t.Fatalf("captured Sig_structures not recorded in order: %q", captured)
+	}
+}
 
-	signer := newHTTPCallbackSigner(srv.URL)
-	if _, err := signer.Sign(context.Background(), []byte("x")); err == nil {
-		t.Fatalf("expected error for non-64-byte signature")
+// TestInjectCOSESignaturesFillsOnlyZeroedSlots proves the stateless embed step
+// fills a prepared PDF's zeroed 64-byte slot in place, leaving a pre-existing
+// (non-zero) signature untouched.
+func TestInjectCOSESignaturesFillsOnlyZeroedSlots(t *testing.T) {
+	existing := bytes.Repeat([]byte{0xAB}, 64)
+	zeroed := make([]byte, 64)
+	prepared := bytes.Join([][]byte{
+		[]byte("....manifestA...."), coseDetachedSig64Marker, existing,
+		[]byte("....manifestB...."), coseDetachedSig64Marker, zeroed,
+		[]byte("....tail...."),
+	}, nil)
+
+	newSig := bytes.Repeat([]byte{0x11}, 64)
+	out, err := InjectCOSESignatures(prepared, [][]byte{newSig})
+	if err != nil {
+		t.Fatalf("InjectCOSESignatures() error = %v", err)
+	}
+	if !bytes.Contains(out, append(append([]byte(nil), coseDetachedSig64Marker...), existing...)) {
+		t.Fatalf("pre-existing signature was modified")
+	}
+	if !bytes.Contains(out, append(append([]byte(nil), coseDetachedSig64Marker...), newSig...)) {
+		t.Fatalf("zeroed slot was not filled with the provided signature")
+	}
+}
+
+func TestInjectCOSESignaturesRejectsCountMismatch(t *testing.T) {
+	zeroed := make([]byte, 64)
+	prepared := bytes.Join([][]byte{coseDetachedSig64Marker, zeroed}, nil)
+	if _, err := InjectCOSESignatures(prepared, [][]byte{bytes.Repeat([]byte{1}, 64), bytes.Repeat([]byte{2}, 64)}); err == nil {
+		t.Fatalf("expected error when signature count exceeds zeroed slots")
+	}
+	if _, err := InjectCOSESignatures(prepared, nil); err == nil {
+		t.Fatalf("expected error when a zeroed slot is left unfilled")
 	}
 }

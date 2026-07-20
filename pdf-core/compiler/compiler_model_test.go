@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -39,7 +38,7 @@ func TestCompilePDF_NoOntologyHTTPFetch(t *testing.T) {
 		}
 	}`)
 
-	_, err := CompilePDF(context.Background(), payload, time.Now())
+	_, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -69,7 +68,7 @@ func TestCompilePDF_DcsCoreIRITitleExtracted(t *testing.T) {
 		}
 	}`)
 
-	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	pdf, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -102,7 +101,7 @@ func TestCompilePDF_PrefixedTermsExtracted(t *testing.T) {
 		}
 	}`)
 
-	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	pdf, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -134,7 +133,7 @@ func TestCompilePDF_TitleFieldRendered(t *testing.T) {
 		}
 	}`)
 
-	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	pdf, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -163,7 +162,7 @@ func TestCompilePDF_MissingTitleReturnsError(t *testing.T) {
 		}
 	}`)
 
-	_, err := CompilePDF(context.Background(), payload, time.Now())
+	_, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err == nil {
 		t.Error("CompilePDF must return an error when metadata/title is absent")
 	}
@@ -198,7 +197,7 @@ func TestCompilePDF_NonStablePrefixRenderedCompact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CanonicalizePayload: %v", err)
 	}
-	pdf, err := CompilePDF(context.Background(), canonical, time.Now())
+	pdf, err := CompilePDF(testSigningContext(), canonical, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -230,7 +229,7 @@ func TestCompilePDF_RendersTextBlocks(t *testing.T) {
 		}
 	}`)
 
-	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	pdf, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -261,7 +260,7 @@ func TestCompilePDF_RendersRootLevelClauseAndTextBlock(t *testing.T) {
 		}
 	}`)
 
-	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	pdf, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}

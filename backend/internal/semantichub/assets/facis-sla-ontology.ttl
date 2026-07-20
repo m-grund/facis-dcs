@@ -6,53 +6,50 @@
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-# The FACIS SLA domain-field catalog: the dcs:DomainField properties the
-# template builder offers for placeholder and ODRL-constraint binding, with
-# their value constraints and taxonomy value options. Served versioned by
-# the Semantic Hub as name="facis-sla" kind="ontology"; the field IRIs are
-# the identities documents reference via dcs:domainField.
+# A deliberately small default domain-field catalog: enough dcs:DomainField
+# properties to build and validate a basic SLA contract out of the box. It is
+# just the seeded starting point — the builder discovers whatever ontologies
+# and shapes are registered in the Semantic Hub, so real deployments register
+# their own vocabulary (Gaia-X, an industry profile) and this stays minimal.
 
 <https://w3id.org/facis/sla/ontology> a owl:Ontology ;
   rdfs:label "FACIS SLA Domain Fields"@en ;
-  rdfs:comment "Domain-field catalog for SLA contracting in FACIS DCS: field properties (rdfs:domain names the entity the field describes, rdfs:range its datatype), value constraints, and value-option taxonomies."@en ;
+  rdfs:comment "A minimal domain-field catalog for SLA contracting; register richer vocabularies in the Semantic Hub."@en ;
   rdfs:seeAlso <https://w3id.org/facis/dcs/ontology/v1> .
 
-dcs:SLO a rdfs:Class ;
-  rdfs:label "Service Level Objective"@en .
+# ---- Entity classes a field's rdfs:domain names ----
 
 dcs:CompanyParty a rdfs:Class ;
   rdfs:label "Company Party"@en ;
-  rdfs:comment "A company acting as a contract party. Its dcs:role identifies its function in the current contract."@en .
+  rdfs:comment "A company acting as a contract party; its dcs:role names its function in the contract."@en .
+
+dcs:PaymentTerm a rdfs:Class ; rdfs:label "Payment Term"@en .
+dcs:LegalTerms a rdfs:Class ; rdfs:label "Legal Terms"@en .
+dcs:SLO a rdfs:Class ; rdfs:label "Service Level Objective"@en .
+dcs:SignatureRequirement a rdfs:Class ; rdfs:label "Signature Requirement"@en .
 
 dcs:DomainField a owl:Class ;
   rdfs:subClassOf rdf:Property ;
   rdfs:label "Domain Field"@en ;
-  skos:definition "A contract-data field templates may bind placeholders and ODRL constraints to; its IRI is its identity."@en .
+  skos:definition "A contract-data field templates bind placeholders and ODRL constraints to; its IRI is its identity."@en .
 
 dcs:ContractPartyRoleCode a rdfs:Class ;
   rdfs:subClassOf dcs:VocabularyTerm ;
   rdfs:label "Contract Party Role Code"@en .
 
-dcs:PaymentTerm a rdfs:Class ;
-  rdfs:label "Payment Term"@en .
-
-dcs:LegalTerms a rdfs:Class ;
-  rdfs:label "Legal Terms"@en .
-
-dcs:SignatureRequirement a rdfs:Class ;
-  rdfs:label "Signature Requirement"@en .
+# ---- Document-level party + its contract role (drives entity roles) ----
 
 dcs:party a rdf:Property ;
   rdfs:label "Company Party"@en ;
-  rdfs:comment "A company acting as a party to the contract."@en ;
   dcs:documentProperty "parties" ;
   rdfs:range dcs:CompanyParty .
 
 dcs:role a rdf:Property ;
   rdfs:label "Role"@en ;
-  rdfs:comment "Contract-scoped function of a party, for example supplier or customer."@en ;
   rdfs:range dcs:ContractPartyRoleCode ;
   dcs:hasValueConstraint dcst:constraint-contract-party-role .
+
+# ---- Value constraints + taxonomies ----
 
 dcst:constraint-iso3166-alpha3-country a dcs:ValueConstraint ;
   dcs:valueType dcs:CountryReference ;
@@ -60,7 +57,7 @@ dcst:constraint-iso3166-alpha3-country a dcs:ValueConstraint ;
   dcs:pattern "^[A-Z]{3}$" ;
   dcs:allowedValuesRef "ISO 3166-1 alpha-3" ;
   dcs:valueCatalog dcst:catalog-iso3166-alpha3-country ;
-  dcs:allowedValue "DEU", "AUT", "CHE", "FRA", "NLD", "BEL", "LUX", "POL", "CZE", "ESP", "ITA", "GBR", "USA", "DNK", "SWE", "NOR", "FIN", "IRL", "PRT", "GRC", "CAN", "JPN", "AUS" ;
+  dcs:allowedValue "DEU", "AUT", "CHE", "USA" ;
   rdfs:label "ISO 3166-1 alpha-3 Country Constraint"@en .
 
 dcst:constraint-iso4217-currency a dcs:ValueConstraint ;
@@ -69,159 +66,13 @@ dcst:constraint-iso4217-currency a dcs:ValueConstraint ;
   dcs:pattern "^[A-Z]{3}$" ;
   dcs:allowedValuesRef "ISO 4217" ;
   dcs:valueCatalog dcst:catalog-iso4217-currency ;
-  dcs:allowedValue "EUR", "USD", "GBP", "CHF", "PLN", "CZK" ;
+  dcs:allowedValue "EUR", "USD" ;
   rdfs:label "ISO 4217 Currency Constraint"@en .
 
-dcst:country-DEU a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "DEU" ;
-  skos:prefLabel "Germany"@en .
-
-dcst:country-AUT a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "AUT" ;
-  skos:prefLabel "Austria"@en .
-
-dcst:country-CHE a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "CHE" ;
-  skos:prefLabel "Switzerland"@en .
-
-dcst:country-FRA a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "FRA" ;
-  skos:prefLabel "France"@en .
-
-dcst:country-NLD a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "NLD" ;
-  skos:prefLabel "Netherlands"@en .
-
-dcst:country-BEL a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "BEL" ;
-  skos:prefLabel "Belgium"@en .
-
-dcst:country-LUX a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "LUX" ;
-  skos:prefLabel "Luxembourg"@en .
-
-dcst:country-POL a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "POL" ;
-  skos:prefLabel "Poland"@en .
-
-dcst:country-CZE a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "CZE" ;
-  skos:prefLabel "Czechia"@en .
-
-dcst:country-ESP a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "ESP" ;
-  skos:prefLabel "Spain"@en .
-
-dcst:country-ITA a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "ITA" ;
-  skos:prefLabel "Italy"@en .
-
-dcst:country-GBR a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "GBR" ;
-  skos:prefLabel "United Kingdom"@en .
-
-dcst:country-USA a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "USA" ;
-  skos:prefLabel "United States"@en .
-
-dcst:country-DNK a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "DNK" ;
-  skos:prefLabel "Denmark"@en .
-
-dcst:country-SWE a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "SWE" ;
-  skos:prefLabel "Sweden"@en .
-
-dcst:country-NOR a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "NOR" ;
-  skos:prefLabel "Norway"@en .
-
-dcst:country-FIN a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "FIN" ;
-  skos:prefLabel "Finland"@en .
-
-dcst:country-IRL a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "IRL" ;
-  skos:prefLabel "Ireland"@en .
-
-dcst:country-PRT a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "PRT" ;
-  skos:prefLabel "Portugal"@en .
-
-dcst:country-GRC a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "GRC" ;
-  skos:prefLabel "Greece"@en .
-
-dcst:country-CAN a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "CAN" ;
-  skos:prefLabel "Canada"@en .
-
-dcst:country-JPN a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "JPN" ;
-  skos:prefLabel "Japan"@en .
-
-dcst:country-AUS a skos:Concept ;
-  skos:inScheme dcst:catalog-iso3166-alpha3-country ;
-  skos:notation "AUS" ;
-  skos:prefLabel "Australia"@en .
-
-dcst:currency-EUR a skos:Concept ;
-  skos:inScheme dcst:catalog-iso4217-currency ;
-  skos:notation "EUR" ;
-  skos:prefLabel "Euro"@en ;
-  dcs:valueSymbol "€" .
-
-dcst:currency-USD a skos:Concept ;
-  skos:inScheme dcst:catalog-iso4217-currency ;
-  skos:notation "USD" ;
-  skos:prefLabel "US Dollar"@en ;
-  dcs:valueSymbol "$" .
-
-dcst:currency-GBP a skos:Concept ;
-  skos:inScheme dcst:catalog-iso4217-currency ;
-  skos:notation "GBP" ;
-  skos:prefLabel "Pound Sterling"@en ;
-  dcs:valueSymbol "£" .
-
-dcst:currency-CHF a skos:Concept ;
-  skos:inScheme dcst:catalog-iso4217-currency ;
-  skos:notation "CHF" ;
-  skos:prefLabel "Swiss Franc"@en ;
-  dcs:valueSymbol "CHF" .
-
-dcst:currency-PLN a skos:Concept ;
-  skos:inScheme dcst:catalog-iso4217-currency ;
-  skos:notation "PLN" ;
-  skos:prefLabel "Polish Zloty"@en ;
-  dcs:valueSymbol "zł" .
-
-dcst:currency-CZK a skos:Concept ;
-  skos:inScheme dcst:catalog-iso4217-currency ;
-  skos:notation "CZK" ;
-  skos:prefLabel "Czech Koruna"@en ;
-  dcs:valueSymbol "Kč" .
+dcst:constraint-governing-law a dcs:ValueConstraint ;
+  dcs:format "controlled-vocabulary" ;
+  dcs:allowedValue "DE", "AT", "CH", "EU" ;
+  rdfs:label "Governing Law Vocabulary Constraint"@en .
 
 dcst:constraint-eidas-signature-level a dcs:ValueConstraint ;
   dcs:format "eidas-signature-level" ;
@@ -234,98 +85,29 @@ dcst:constraint-sla-availability-percent a dcs:ValueConstraint ;
   dcs:format "percentage" ;
   rdfs:label "SLA Availability Percentage Constraint"@en .
 
-dcst:constraint-duration-minutes-non-negative a dcs:ValueConstraint ;
-  dcs:minInclusive 0 ;
-  dcs:format "duration-minutes" ;
-  rdfs:label "Non-negative Duration in Minutes Constraint"@en .
-
-dcst:constraint-contract-type a dcs:ValueConstraint ;
-  dcs:format "controlled-vocabulary" ;
-  dcs:allowedValue "frameworkAgreement", "serviceAgreement", "dataProcessingAgreement", "nda", "leaseAgreement", "purchaseAgreement" ;
-  rdfs:label "Contract Type Vocabulary Constraint"@en .
-
 dcst:constraint-contract-party-role a dcs:ValueConstraint ;
   dcs:format "controlled-vocabulary" ;
   dcs:allowedValue "supplier", "customer", "provider", "client" ;
   rdfs:label "Contract Party Role Vocabulary Constraint"@en .
 
-dcst:constraint-gdpr-role a dcs:ValueConstraint ;
-  dcs:format "controlled-vocabulary" ;
-  dcs:allowedValue "controller", "processor", "jointController", "subProcessor" ;
-  rdfs:label "GDPR Role Vocabulary Constraint"@en .
+dcst:country-DEU a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ; skos:notation "DEU" ; skos:prefLabel "Germany"@en .
+dcst:country-AUT a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ; skos:notation "AUT" ; skos:prefLabel "Austria"@en .
+dcst:country-CHE a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ; skos:notation "CHE" ; skos:prefLabel "Switzerland"@en .
+dcst:country-USA a skos:Concept ;
+  skos:inScheme dcst:catalog-iso3166-alpha3-country ; skos:notation "USA" ; skos:prefLabel "United States"@en .
 
-dcst:constraint-dispute-method a dcs:ValueConstraint ;
-  dcs:format "controlled-vocabulary" ;
-  dcs:allowedValue "court", "arbitration", "mediation" ;
-  rdfs:label "Dispute Resolution Method Vocabulary Constraint"@en .
+dcst:currency-EUR a skos:Concept ;
+  skos:inScheme dcst:catalog-iso4217-currency ; skos:notation "EUR" ; skos:prefLabel "Euro"@en ; dcs:valueSymbol "€" .
+dcst:currency-USD a skos:Concept ;
+  skos:inScheme dcst:catalog-iso4217-currency ; skos:notation "USD" ; skos:prefLabel "US Dollar"@en ; dcs:valueSymbol "$" .
 
-dcst:constraint-audit-frequency a dcs:ValueConstraint ;
-  dcs:format "controlled-vocabulary" ;
-  dcs:allowedValue "onDemand", "annual", "semiAnnual", "quarterly" ;
-  rdfs:label "Audit Frequency Vocabulary Constraint"@en .
-
-dcst:constraint-governing-law a dcs:ValueConstraint ;
-  dcs:format "controlled-vocabulary" ;
-  dcs:allowedValue "DE", "AT", "CH", "FR", "NL", "BE", "EU" ;
-  rdfs:label "Governing Law Vocabulary Constraint"@en .
-
-dcst:constraint-ip-ownership a dcs:ValueConstraint ;
-  dcs:format "controlled-vocabulary" ;
-  dcs:allowedValue "customer", "supplier", "joint", "preExistingRetained" ;
-  rdfs:label "IP Ownership Vocabulary Constraint"@en .
+# ---- Domain fields ----
 
 dcst:field-company-legalName a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:label "Company Legal Name"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-registrationNumber a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Company Registration Number"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-vatId a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Company VAT ID"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-representative-name a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Representative Name"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-representative-role a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Representative Role"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-contact-email a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Company Contact Email"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-contact-phone a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Company Contact Phone"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-location-street a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Company Street"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-location-postalCode a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Company Postal Code"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-location-city a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Company City"@en ;
-  rdfs:domain dcs:CompanyParty ;
-  rdfs:range xsd:string .
-
-dcst:field-company-location-region a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Company Region"@en ;
   rdfs:domain dcs:CompanyParty ;
   rdfs:range xsd:string .
 
@@ -335,20 +117,10 @@ dcst:field-company-location-country a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:range xsd:string ;
   dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country .
 
-dcst:field-contract-type a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Contract Type"@en ;
-  rdfs:range xsd:string ;
-  dcs:hasValueConstraint dcst:constraint-contract-type .
-
-dcst:field-contract-title a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Contract Title"@en ;
+dcst:field-company-location-postalCode a dcs:DomainField, owl:DatatypeProperty ;
+  rdfs:label "Company Postal Code"@en ;
+  rdfs:domain dcs:CompanyParty ;
   rdfs:range xsd:string .
-
-dcst:field-contract-jurisdiction a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Contract Jurisdiction"@en ;
-  rdfs:domain dcs:LegalTerms ;
-  rdfs:range xsd:string ;
-  dcs:hasValueConstraint dcst:constraint-iso3166-alpha3-country .
 
 dcst:field-contract-governingLaw a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:label "Governing Law"@en ;
@@ -356,30 +128,9 @@ dcst:field-contract-governingLaw a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:range xsd:string ;
   dcs:hasValueConstraint dcst:constraint-governing-law .
 
-dcst:field-contract-disputeResolution-venue a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Dispute Venue"@en ;
-  rdfs:domain dcs:LegalTerms ;
-  rdfs:range xsd:string .
-
-dcst:field-contract-validity-startDate a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Validity Start Date"@en ;
-  rdfs:range xsd:date .
-
 dcst:field-contract-validity-endDate a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:label "Validity End Date"@en ;
   rdfs:range xsd:date .
-
-dcst:field-contract-effectiveDate a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Effective Date"@en ;
-  rdfs:range xsd:date .
-
-dcst:field-contract-renewal-noticePeriodDays a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Renewal Notice Period"@en ;
-  rdfs:range xsd:integer .
-
-dcst:field-contract-termination-noticePeriodDays a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Termination Notice Period"@en ;
-  rdfs:range xsd:integer .
 
 dcst:field-contract-payment-amount a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:label "Payment Amount"@en ;
@@ -392,71 +143,8 @@ dcst:field-contract-payment-currency a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:range xsd:string ;
   dcs:hasValueConstraint dcst:constraint-iso4217-currency .
 
-dcst:field-contract-payment-dueDate a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Payment Due Date"@en ;
-  rdfs:domain dcs:PaymentTerm ;
-  rdfs:range xsd:date .
-
-dcst:field-contract-payment-dueDays a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Payment Due Days"@en ;
-  rdfs:domain dcs:PaymentTerm ;
-  rdfs:range xsd:integer .
-
-dcst:field-contract-liability-capAmount a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Liability Cap Amount"@en ;
-  rdfs:range xsd:decimal .
-
-dcst:field-contract-liability-currency a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Liability Currency"@en ;
-  rdfs:range xsd:string .
-
-dcst:field-contract-insurance-minimumCoverage a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Minimum Insurance Coverage"@en ;
-  rdfs:range xsd:decimal .
-
-dcst:field-contract-confidentiality-durationMonths a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Confidentiality Duration"@en ;
-  rdfs:range xsd:integer .
-
-dcst:field-contract-dataProtection-role a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Data Protection Role"@en ;
-  rdfs:range xsd:string ;
-  dcs:hasValueConstraint dcst:constraint-gdpr-role .
-
-dcst:field-contract-disputeResolution-method a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Dispute Resolution Method"@en ;
-  rdfs:domain dcs:LegalTerms ;
-  rdfs:range xsd:string ;
-  dcs:hasValueConstraint dcst:constraint-dispute-method .
-
-dcst:field-contract-auditRights-frequency a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Audit Rights Frequency"@en ;
-  rdfs:range xsd:string ;
-  dcs:hasValueConstraint dcst:constraint-audit-frequency .
-
-dcst:field-contract-ipRights-ownership a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "IP Rights Ownership"@en ;
-  rdfs:range xsd:string ;
-  dcs:hasValueConstraint dcst:constraint-ip-ownership .
-
-dcst:field-contract-forceMajeure-noticeDays a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Force Majeure Notice Days"@en ;
-  rdfs:range xsd:integer .
-
 dcst:field-service-description a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:label "Service Description"@en ;
-  rdfs:range xsd:string .
-
-dcst:field-service-scope a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Service Scope"@en ;
-  rdfs:range xsd:string .
-
-dcst:field-service-deliverable-name a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Deliverable Name"@en ;
-  rdfs:range xsd:string .
-
-dcst:field-service-deliverable-acceptanceCriteria a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Acceptance Criteria"@en ;
   rdfs:range xsd:string .
 
 dcst:field-service-sla-availability a dcs:DomainField, owl:DatatypeProperty ;
@@ -465,35 +153,8 @@ dcst:field-service-sla-availability a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:range xsd:decimal ;
   dcs:hasValueConstraint dcst:constraint-sla-availability-percent .
 
-dcst:field-service-sla-responseTime a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "SLA Response Time"@en ;
-  rdfs:domain dcs:SLO ;
-  rdfs:range xsd:integer ;
-  dcs:hasValueConstraint dcst:constraint-duration-minutes-non-negative .
-
-dcst:field-service-sla-resolutionTime a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "SLA Resolution Time"@en ;
-  rdfs:domain dcs:SLO ;
-  rdfs:range xsd:integer ;
-  dcs:hasValueConstraint dcst:constraint-duration-minutes-non-negative .
-
-dcst:field-service-sla-supportHours a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Support Hours"@en ;
-  rdfs:domain dcs:SLO ;
-  rdfs:range xsd:string .
-
 dcst:field-signature-requiredLevel a dcs:DomainField, owl:DatatypeProperty ;
   rdfs:label "Required Signature Level"@en ;
   rdfs:domain dcs:SignatureRequirement ;
   rdfs:range xsd:string ;
   dcs:hasValueConstraint dcst:constraint-eidas-signature-level .
-
-dcst:field-signature-requiredSignerRole a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Required Signer Role"@en ;
-  rdfs:domain dcs:SignatureRequirement ;
-  rdfs:range xsd:string .
-
-dcst:field-signature-deadline a dcs:DomainField, owl:DatatypeProperty ;
-  rdfs:label "Signature Deadline"@en ;
-  rdfs:domain dcs:SignatureRequirement ;
-  rdfs:range xsd:date .

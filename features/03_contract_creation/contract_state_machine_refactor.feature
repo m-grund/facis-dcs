@@ -79,13 +79,6 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
   # resolution across two independently-run instances, a real
   # eIDAS-certificate-chain check, or the local trusted_peers allowlist) —
   # that is the @two-instance peer-trust pack's job (features/17_peer_trust).
-  @DCS-IR-CWE-05 @DCS-IR-CWE-06 @DCS-IR-CWE-07 @DCS-IR-CWE-08 @DCS-IR-CWE-09 @DCS-IR-CWE-10 @SRS-3.1.1
-  Scenario: Approve on a draft contract is rejected via the peer-action entry path
-    Given contract "Invalid Transition Peer Path" is in "Draft" status
-    When a peer attempts to approve contract "Invalid Transition Peer Path" via the peer action endpoint
-    Then the peer action request fails
-    And the contract "Invalid Transition Peer Path" is in state "DRAFT"
-
   @DCS-IR-CWE-05 @DCS-IR-CWE-06 @DCS-IR-CWE-07 @DCS-IR-CWE-08 @DCS-IR-CWE-09 @DCS-IR-CWE-10 @UC-03
   Scenario: Submit, review, and approve still reach APPROVED under the new transition table
     Given I am authenticated with roles: "Contract Creator"

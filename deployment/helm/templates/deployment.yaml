@@ -77,6 +77,16 @@ spec:
               containerPort: {{ .Values.service.port }}
               protocol: TCP
           env:
+            - name: DCS_SYSTEM_TOKEN
+              value: {{ .Values.systemToken | default "dcs-dev-system-token" | quote }}
+            {{- if .Values.dss }}{{- if .Values.dss.enabled }}
+            # EU DSS for signature VALIDATION (DCS-FR-SM-18) and the
+            # wallet-driven /signature/submit acceptance path (ADR-12). The DCS
+            # validates a signature the SIGNATORY produced with their wallet/QTSP
+            # or a desktop PAdES signer; it holds no contract-signing key.
+            - name: DSS_URL
+              value: {{ .Values.dss.url | default (printf "http://%s-dss:8080" .Release.Name) | quote }}
+            {{- end }}{{- end }}
             {{- if and .Values.hydra.enabled .Values.hydra.clients }}
             {{- $hydraClient := index .Values.hydra.clients 0 }}
             - name: HYDRA_PUBLIC_ISSUER_URL
@@ -317,7 +327,7 @@ spec:
             limits:
               memory: 64Mi
         {{- end }}
-      {{- if or .Values.customCA.enabled .Values.volumes .Values.pkcs11.provisioning.enabled .Values.statusListLocalhostProxy.enabled .Values.identity.enabled .Values.signing.tsaTrustCertSecret }}
+      {{- if or .Values.customCA.enabled .Values.volumes .Values.pkcs11.provisioning.enabled .Values.statusListLocalhostProxy.enabled .Values.identity.enabled .Values.signing.tsaTrustCertSecret (and .Values.dss .Values.dss.enabled) }}
       volumes:
       {{- if .Values.customCA.enabled }}
         - name: custom-ca-certs
