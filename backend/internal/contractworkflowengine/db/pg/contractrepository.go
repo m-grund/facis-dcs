@@ -136,6 +136,20 @@ func (r *PostgresContractRepo) ExistsByDID(ctx context.Context, tx *sqlx.Tx, did
 	return exists, nil
 }
 
+func (r *PostgresContractRepo) ReadChildrenDIDs(ctx context.Context, tx *sqlx.Tx, did string) ([]string, error) {
+	query := `
+        SELECT did
+        FROM contracts_effective
+        WHERE regexp_replace(contract_data->'dcs:parentContract'->>'@id', '^.*/', '') = $1
+        ORDER BY did
+    `
+	children := []string{}
+	if err := tx.SelectContext(ctx, &children, query, did); err != nil {
+		return nil, err
+	}
+	return children, nil
+}
+
 func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx, pagination datatype.Pagination) ([]db.ContractMetadata, error) {
 	query := `
 		SELECT
@@ -146,7 +160,7 @@ func (r *PostgresContractRepo) ReadAllMetaData(ctx context.Context, tx *sqlx.Tx,
 			AND COALESCE(latest.version > cem.template_version, FALSE) AS outdated,
 			latest.did AS latest_template_did,
 			COALESCE(tpl.state = 'DEPRECATED', FALSE) AS template_is_deprecated,
-			ce.contract_data->'dcs:parentContract'->>'@id' AS parent_contract_did,
+			regexp_replace(ce.contract_data->'dcs:parentContract'->>'@id', '^.*/', '') AS parent_contract_did,
 			COALESCE(cem.name, ce.contract_data->'dcs:metadata'->>'dcs:title') AS name
 		FROM contracts_effective_metadata cem
 		LEFT JOIN contracts_effective ce ON ce.did = cem.did
@@ -483,7 +497,7 @@ func createSearchConditions(values db.SearchValues) (*string, []interface{}, err
 		// Reverse-index over locally held children: match the child's stored
 		// dcs:parentContract @id in contracts_effective. Kept as a DID-scoped
 		// subquery so it composes with any outer metadata/archive table.
-		conditions += ` did IN (SELECT did FROM contracts_effective WHERE contract_data->'dcs:parentContract'->>'@id' = $` + strconv.Itoa(paramIndex) + `) AND`
+		conditions += ` did IN (SELECT did FROM contracts_effective WHERE regexp_replace(contract_data->'dcs:parentContract'->>'@id', '^.*/', '') = $` + strconv.Itoa(paramIndex) + `) AND`
 		params = append(params, values.ParentDID)
 	}
 	l := len(" AND")

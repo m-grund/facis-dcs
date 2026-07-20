@@ -4,8 +4,13 @@
 // extraction, signature load) rather than re-implementing any of them
 // (FR-TR-24, FR-CWE-30).
 //
-// Contract bundle layout (per contract, recursively for the parent chain
-// UPWARD — never downward, so siblings are structurally absent):
+// Contract bundle layout: the requested contract's files at the root, its
+// parent chain packaged recursively UPWARD under parents/, and every other
+// LOCALLY-KNOWN member of its hierarchy family — descendants of the topmost
+// locally-known ancestor, i.e. siblings/cousins and the requested contract's
+// own children — flat under related/ (FR-CWE-30 family completeness). Family
+// members held only by other instances are simply absent; nothing is fetched
+// remotely and nothing fails because a member is not local.
 //
 //	contract.jsonld        the machine-readable source (incl. dcs:parentContract)
 //	contract.pdf           the current signed PDF/A-3 (from the IPFS export path)
@@ -13,6 +18,7 @@
 //	credentials/…          lifecycle credentials extracted from the C2PA chain
 //	signatures.json        contract_signatures rows incl. states
 //	parents/<parent-did>/… the same structure for each parent, recursively
+//	related/<member-did>/… the same structure for each other locally-known family member
 //	bundle-manifest.json   index of every entry with its SHA-256 (root only)
 //
 // A FR-PACM-06 structural-integrity pre-flight runs BEFORE zipping: if a
@@ -40,6 +46,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
@@ -47,6 +54,7 @@ import (
 	"digital-contracting-service/internal/base/ipfs"
 	cwedb "digital-contracting-service/internal/contractworkflowengine/db"
 	cweevent "digital-contracting-service/internal/contractworkflowengine/event"
+	contractquery "digital-contracting-service/internal/contractworkflowengine/query/contract"
 	"digital-contracting-service/internal/pdfgeneration/manifest"
 	"digital-contracting-service/internal/pdfgeneration/pdfcore"
 	"digital-contracting-service/internal/pdfgeneration/provenance"
@@ -81,7 +89,9 @@ type SignatureLoader interface {
 }
 
 // Bundler builds contract/template ZIP bundles. All dependencies mirror the
-// existing PDF export / C2PA / signing wiring.
+// existing PDF export / C2PA / signing wiring. LocalPeer is this instance's
+// own peer DID, feeding the same party read-scoping rule direct retrieval
+// uses when filtering related/ family members.
 type Bundler struct {
 	DB         *sqlx.DB
 	CRepo      cwedb.ContractRepo
@@ -91,9 +101,11 @@ type Bundler struct {
 	PDFCore    *pdfcore.Client
 	VCIssuer   provenance.VCIssuer
 	IssuerDID  string
+	LocalPeer  string
 }
 
-// ExportContext carries the caller identity used for the FR-CSA-18 audit event.
+// ExportContext carries the caller identity used for the FR-CSA-18 audit
+// event and for the party read-scoping of related/ family members.
 type ExportContext struct {
 	ExportedBy string
 	HolderDID  string
@@ -140,14 +152,27 @@ type componentInfo struct {
 	ParentDID       string `json:"parent_did,omitempty"`
 }
 
-// ExportContract builds the contract bundle ZIP for did. On a structural
-// integrity failure it returns an *ErrRefused. On success it also records an
-// EXPORT audit event (FR-CSA-18).
+// ExportContract builds the contract bundle ZIP for did: the contract itself
+// with its parent chain, plus every other locally-known member of its
+// hierarchy family under related/. On a structural integrity failure —
+// including one on a related member — it returns an *ErrRefused. On success
+// it also records an EXPORT audit event (FR-CSA-18).
 func (b *Bundler) ExportContract(ctx context.Context, did string, ec ExportContext) (io.ReadCloser, error) {
 	files := bundleFiles{}
 	var components []componentInfo
-	if err := b.collectContract(ctx, did, "", map[string]bool{}, files, &components); err != nil {
+	packaged := map[string]bool{}
+	if err := b.collectContract(ctx, did, "", packaged, files, &components); err != nil {
 		return nil, err
+	}
+
+	related, err := b.relatedFamilyTx(ctx, did, packaged, ec)
+	if err != nil {
+		return nil, err
+	}
+	for _, member := range related {
+		if err := b.collectContract(ctx, member, "related/"+member+"/", packaged, files, &components); err != nil {
+			return nil, err
+		}
 	}
 
 	zipBytes, err := zipWithManifest(files, "contract", did, components)
@@ -202,7 +227,11 @@ func (b *Bundler) collectContract(ctx context.Context, did, pathPrefix string, v
 	}
 
 	role := "root"
-	if pathPrefix != "" {
+	switch {
+	case pathPrefix == "":
+	case strings.HasPrefix(pathPrefix, "related/"):
+		role = "related"
+	default:
 		role = "parent"
 	}
 	parentDID := extractParentContractDID(contract.ContractData)
@@ -268,7 +297,11 @@ func (b *Bundler) collectContract(ctx context.Context, did, pathPrefix string, v
 	files[pathPrefix+"signatures.json"] = sigJSON
 
 	// parents/<parent-did>/… recursively upward (no downward traversal).
-	if parentDID != "" {
+	// Related family members are packaged flat: their local parents are
+	// either already packaged (BFS order puts parents before children) or
+	// were filtered out by the requester's read authorization and must not
+	// leak back in as a nested parent chain.
+	if parentDID != "" && role != "related" {
 		parentPrefix := pathPrefix + "parents/" + parentDID + "/"
 		if err := b.collectContract(ctx, parentDID, parentPrefix, visited, files, components); err != nil {
 			// A non-local parent surfaces as a "not found" refusal — a benign
@@ -282,6 +315,103 @@ func (b *Bundler) collectContract(ctx context.Context, did, pathPrefix string, v
 	}
 
 	return nil
+}
+
+// resolveFamily returns every locally-known member of did's hierarchy family
+// in deterministic order: the topmost locally-known ancestor first — a
+// cycle-guarded walk up via dcs:parentContract that stops at the first parent
+// this instance cannot read locally — followed by that ancestor's
+// locally-known descendants breadth-first, ties by DID.
+func resolveFamily(ctx context.Context, tx *sqlx.Tx, repo cwedb.ContractRepo, did string) ([]string, error) {
+	root := did
+	ascended := map[string]bool{did: true}
+	for {
+		contract, err := repo.ReadDataByDID(ctx, tx, root)
+		if err != nil {
+			return nil, &ErrRefused{Findings: []string{fmt.Sprintf("contract %s: not found or unreadable", root)}}
+		}
+		parent := extractParentContractDID(contract.ContractData)
+		if parent == "" || ascended[parent] {
+			break
+		}
+		if _, err := repo.ReadDataByDID(ctx, tx, parent); err != nil {
+			// A cross-instance parent is not locally readable: the walk ends
+			// here and root stays the topmost LOCALLY-known ancestor.
+			break
+		}
+		ascended[parent] = true
+		root = parent
+	}
+
+	family := []string{root}
+	visited := map[string]bool{root: true}
+	for i := 0; i < len(family); i++ {
+		children, err := repo.ReadChildrenDIDs(ctx, tx, family[i])
+		if err != nil {
+			return nil, fmt.Errorf("read children of %s: %w", family[i], err)
+		}
+		sort.Strings(children)
+		for _, child := range children {
+			if visited[child] {
+				continue
+			}
+			visited[child] = true
+			family = append(family, child)
+		}
+	}
+	return family, nil
+}
+
+// readableRelated filters family down to the members to package under
+// related/: not already packaged, and readable by the requester under the
+// same party read-scoping as a direct retrieve. Unreadable members are
+// silently omitted, exactly like non-local ones — the bundle only packages
+// what the requester could already read individually (ADR-7 isolation).
+func readableRelated(ctx context.Context, tx *sqlx.Tx, repo cwedb.ContractRepo, family []string, packaged map[string]bool, mayRead func(*cwedb.Contract) bool) ([]string, error) {
+	related := make([]string, 0, len(family))
+	for _, member := range family {
+		if packaged[member] {
+			continue
+		}
+		data, err := repo.ReadDataByDID(ctx, tx, member)
+		if err != nil {
+			return nil, fmt.Errorf("read family member %s: %w", member, err)
+		}
+		if !mayRead(data) {
+			continue
+		}
+		related = append(related, member)
+	}
+	return related, nil
+}
+
+// relatedFamilyTx resolves the hierarchy family and filters it down to the
+// requester-readable related/ members in one read transaction.
+func (b *Bundler) relatedFamilyTx(ctx context.Context, did string, packaged map[string]bool, ec ExportContext) ([]string, error) {
+	tx, err := b.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer func(tx *sqlx.Tx) {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("bundleexport: rollback family tx: %v", err)
+		}
+	}(tx)
+
+	family, err := resolveFamily(ctx, tx, b.CRepo, did)
+	if err != nil {
+		return nil, err
+	}
+	related, err := readableRelated(ctx, tx, b.CRepo, family, packaged, func(data *cwedb.Contract) bool {
+		return contractquery.CallerMayReadContract(ec.ExportedBy, ec.UserRoles, b.LocalPeer, data)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit family tx: %w", err)
+	}
+	return related, nil
 }
 
 func isNotFoundRefusal(err error, did string) bool {
@@ -480,21 +610,17 @@ func extractParentContractDID(data *datatype.JSON) string {
 	if err := json.Unmarshal(*data, &doc); err != nil {
 		return ""
 	}
-	value, ok := doc["dcs:parentContract"]
-	if !ok {
-		value = doc["parentContract"]
-	}
-	switch typed := value.(type) {
+	switch typed := doc["dcs:parentContract"].(type) {
 	case map[string]any:
 		id, _ := typed["@id"].(string)
-		return id
+		return base.ResourceKey(id)
 	case []any:
 		if len(typed) == 0 {
 			return ""
 		}
 		if first, ok := typed[0].(map[string]any); ok {
 			id, _ := first["@id"].(string)
-			return id
+			return base.ResourceKey(id)
 		}
 	}
 	return ""

@@ -17,18 +17,4 @@ const (
 	PolicyTemplateSemanticConditionsV1 = "facis.dcs.template.semantic-conditions"
 	PolicyContractStructureV1          = "facis.dcs.contract.structure"
 	PolicyContractSemanticValuesV1     = "facis.dcs.contract.semantic-values"
-
-	semanticRuleOperatorProperty        = "operator"
-	semanticRuleRightOperandProperty    = "rightOperand"
-	semanticRuleAppliesToClauseProperty = "appliesToClause"
-
-	semanticRuleSourceContract  = "contractSemantics"
-	semanticRuleSourceCondition = "semanticCondition"
-)
-
-var (
-	contractPolicyRefs = []map[string]any{
-		{"policyId": PolicyContractStructureV1, "version": "v1", "enforcementPoint": "contract:create"},
-		{"policyId": PolicyContractSemanticValuesV1, "version": "v1", "enforcementPoint": "contract:update"},
-	}
 )

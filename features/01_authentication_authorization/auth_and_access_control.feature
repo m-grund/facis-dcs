@@ -51,7 +51,9 @@ Feature: Authentication Endpoints
       # them Goa's request decoder answers 400 before the JWT check can 401,
       # so the row supplies placeholders to reach the auth layer at all.
       | DELETE | /archive/delete?did=placeholder&justification=placeholder | {} |
-      | GET    | /archive/audit     | {}      |
+      # /archive/audit and the /pac endpoints below likewise decode their
+      # required justification before the JWT check; placeholders reach 401.
+      | GET    | /archive/audit?justification=placeholder | {} |
 
   Scenario Outline: Access restricted endpoint responds with access denied (Template Repository)
     When the system sends "<method>" request to endpoint "<endpoint>" with "<payload>"
@@ -105,8 +107,8 @@ Feature: Authentication Endpoints
 
     Examples:
       | method | endpoint     | payload                         |
-      | POST   | /pac/audit   | {'scope':'TEMPLATE_REPOSITORY'} |
-      | GET    | /pac/report  | {}                              |
+      | POST   | /pac/audit   | {'scope':'TEMPLATE_REPOSITORY','justification':'placeholder'} |
+      | GET    | /pac/report?justification=placeholder | {} |
       | GET    | /pac/monitor | {}                              |
 
   Scenario Outline: Access restricted endpoint responds with access denied (Peer)

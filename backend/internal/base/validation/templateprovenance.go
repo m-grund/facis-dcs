@@ -307,7 +307,6 @@ func templateProvenanceFinding(ruleID, title, severity, message, path string) Po
 		Severity:     severity,
 		Message:      message,
 		Path:         path,
-		SemanticPath: path,
 		OntologyTerm: "dcs:TemplateApprovalProvenance",
 		Requirement:  "DCS-FR-PACM-03",
 	}

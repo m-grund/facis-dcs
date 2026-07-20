@@ -29,6 +29,7 @@ type pdfGenerationSrvc struct {
 	PDFCore    *pdfcore.Client
 	IssuerDID  string
 	VCIssuer   provenance.VCIssuer
+	LocalPeer  string
 	auth.JWTAuthenticator
 }
 
@@ -42,6 +43,7 @@ func NewPDFGeneration(
 	pdfCore *pdfcore.Client,
 	issuerDID string,
 	vcIssuer provenance.VCIssuer,
+	localPeer string,
 ) pdfgen.Service {
 	if vcIssuer == nil {
 		panic("VCIssuer is required for DCS-OR-C2PA-004 compliance")
@@ -58,6 +60,7 @@ func NewPDFGeneration(
 		PDFCore:          pdfCore,
 		IssuerDID:        issuerDID,
 		VCIssuer:         vcIssuer,
+		LocalPeer:        localPeer,
 		JWTAuthenticator: jwtAuth,
 	}
 }
@@ -72,6 +75,7 @@ func (s *pdfGenerationSrvc) newBundler() *bundleexport.Bundler {
 		PDFCore:    s.PDFCore,
 		VCIssuer:   s.VCIssuer,
 		IssuerDID:  s.IssuerDID,
+		LocalPeer:  s.LocalPeer,
 	}
 }
 

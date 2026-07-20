@@ -1,7 +1,7 @@
 import http from '@/api/http'
 import { contractAuditEventDisplayText } from '@/utils/contract-audit-event-display'
 import type { AuditReportRequest, AuditRequest, AuditScope } from '@/models/requests/auditing-request'
-import type { AuditFinding, AuditReportResponse, AuditResponse } from '@/models/responses/auditing-response'
+import type { AuditFinding, AuditResponse } from '@/models/responses/auditing-response'
 import type { AuditingService } from '@/models/services/auditing-service'
 
 interface RawAuditTrailEntry {
@@ -14,6 +14,10 @@ interface RawAuditTrailEntry {
   did?: string
   created_at?: string
   createdAt?: string
+  kind?: string
+  result?: string
+  rule_id?: string
+  reason?: string
 }
 
 interface RawPACAuditResource {
@@ -80,7 +84,7 @@ function normalizeFinding(
   const eventType = item.event_type ?? item.eventType
   const eventData = item.event_data ?? item.eventData
   const policyData = isObjectRecord(eventData) ? eventData : null
-  const severity = stringValue(policyData?.severity)
+  const severity = stringValue(item.result) ?? stringValue(policyData?.result) ?? stringValue(policyData?.severity)
   const status = item.status ?? severity
   const category = item.category ?? categoryFromEvent(eventType, status)
   const objectDid = stringValue(policyData?.objectDid)
@@ -142,7 +146,7 @@ function descriptionFromEventData(eventData: unknown): string {
   if (!isObjectRecord(eventData)) return ''
   const message = stringValue(eventData.message)
   const ruleId = stringValue(eventData.ruleId)
-  const semanticPath = stringValue(eventData.semanticPath)
+  const fieldIri = stringValue(eventData.fieldIri)
   const requirement = stringValue(eventData.requirement)
   const actualValue = detailValue(eventData.actualValue)
   const expectedValue = detailValue(eventData.expectedValue)
@@ -171,7 +175,7 @@ function descriptionFromEventData(eventData: unknown): string {
     expectedValues ? `Expected values: ${expectedValues}` : '',
     operator ? `Operator: ${operator}` : '',
     ruleId ? `Rule: ${ruleId}` : '',
-    semanticPath ? `Semantic path: ${semanticPath}` : '',
+    fieldIri ? `Field: ${fieldIri}` : '',
   ].filter(Boolean)
   if (parts.length) return parts.join('\n')
   return JSON.stringify(eventData, null, 2)
@@ -217,6 +221,10 @@ export const auditingService: AuditingService = {
   },
 
   async report(request: AuditReportRequest) {
-    return http.get<AuditReportResponse>('/pac/report', { params: request }).then((res) => res.data)
+    return http.get<ArrayBuffer>('/pac/report', { params: request, responseType: 'arraybuffer' }).then((res) => ({
+      bytes: res.data,
+      contentType: res.headers['content-type'] ?? 'application/octet-stream',
+      filename: `audit-report-${request.scope}.${request.format ?? 'json'}`,
+    }))
   },
 }

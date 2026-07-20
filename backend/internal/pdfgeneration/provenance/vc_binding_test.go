@@ -50,7 +50,7 @@ func TestIssueLifecycleVC_IncludesInlineJSONLDContextAndSubjectID(t *testing.T) 
 
 	inlineCtx, ok := ctxList[2].(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, "https://w3id.org/facis/dcs#", inlineCtx["dcs"])
+	assert.Equal(t, "https://w3id.org/facis/dcs/ontology/v1#", inlineCtx["dcs"])
 	assert.Equal(t, "dcs:contractId", inlineCtx["contract_id"])
 	assert.Equal(t, "dcs:fileHash", inlineCtx["file_hash"])
 	assert.Equal(t, "dcs:status", inlineCtx["status"])

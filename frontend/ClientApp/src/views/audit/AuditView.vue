@@ -1,16 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { auditingService } from '@/services/auditing-service'
+import { useAuthStore } from '@/stores/auth-store'
 import type { AuditReportFormat, AuditScope } from '@/models/requests/auditing-request'
-import type {
-  AuditFinding,
-  AuditReport,
-  AuditReportDownload,
-  AuditReportResponse,
-} from '@/models/responses/auditing-response'
+import type { AuditFinding } from '@/models/responses/auditing-response'
 
 const auditFindingsByScope = ref<Partial<Record<AuditScope, AuditFinding[]>>>({})
-const auditReportsByScope = ref<Partial<Record<AuditScope, AuditReportResponse>>>({})
 const auditErrorsByScope = ref<Partial<Record<AuditScope, string>>>({})
 const executedAuditScopes = ref<Partial<Record<AuditScope, boolean>>>({})
 const selectedFindingId = ref<number | string | null>(null)
@@ -18,6 +13,12 @@ const auditLoadingScope = ref<AuditScope | null>(null)
 const reportLoadingScope = ref<AuditScope | null>(null)
 const reportLoadingFormat = ref<AuditReportFormat | null>(null)
 const selectedScope = ref<AuditScope>('contracts')
+const didFilter = ref('')
+const justification = ref('')
+const authStore = useAuthStore()
+const isArchiveManagerOnly = computed(
+  () => authStore.user?.roles.includes('ARCHIVE_MANAGER') && !authStore.user?.roles.includes('AUDITOR'),
+)
 type AuditResult = 'passed' | 'failed' | 'review'
 type AuditTab = 'checks' | 'timeline'
 type TableFilterKey = 'result' | 'category' | 'component' | 'did'
@@ -31,15 +32,24 @@ const tableFilters = ref<Record<TableFilterKey, Record<string, boolean>>>({
   did: {},
 })
 
-const scopeOptions: { value: AuditScope; label: string }[] = [
+const allScopeOptions: { value: AuditScope; label: string }[] = [
   { value: 'templates', label: 'Templates' },
   { value: 'contracts', label: 'Contracts' },
   { value: 'signatures', label: 'Signatures' },
   { value: 'archive', label: 'Archive' },
 ]
+const scopeOptions = computed(() =>
+  isArchiveManagerOnly.value ? allScopeOptions.filter((scope) => scope.value === 'archive') : allScopeOptions,
+)
+watch(
+  isArchiveManagerOnly,
+  (restricted) => {
+    if (restricted) selectedScope.value = 'archive'
+  },
+  { immediate: true },
+)
 
 const findings = computed(() => auditFindingsByScope.value[selectedScope.value] ?? [])
-const report = computed(() => auditReportsByScope.value[selectedScope.value] ?? null)
 const error = computed(() => auditErrorsByScope.value[selectedScope.value] ?? null)
 const hasExecutedAudit = computed(() => executedAuditScopes.value[selectedScope.value] === true)
 const auditLoading = computed(() => auditLoadingScope.value !== null)
@@ -96,7 +106,7 @@ const selectedFindingDetailRows = computed(() => {
     { label: 'Expected value', value: detailValue(eventData?.expectedValue) },
     { label: 'Expected values', value: detailValue(eventData?.expectedValues) },
     { label: 'Operator', value: detailValue(eventData?.operator) },
-    { label: 'Semantic Path', value: stringDetail(eventData?.semanticPath) },
+    { label: 'Field IRI', value: stringDetail(eventData?.fieldIri) },
     { label: 'Path', value: stringDetail(eventData?.path) },
     { label: 'Ontology Term', value: stringDetail(eventData?.ontologyTerm) },
     { label: 'Object Type', value: stringDetail(eventData?.objectType ?? finding.object_type) },
@@ -122,8 +132,14 @@ const passedCheckCount = computed(
 const reviewCheckCount = computed(
   () => checkFindings.value.filter((finding) => auditResult(finding) === 'review').length,
 )
+const auditIsEmpty = computed(() => hasExecutedAudit.value && findings.value.length === 0 && !error.value)
 const auditHasPassed = computed(
-  () => hasExecutedAudit.value && !selectedAuditLoading.value && !error.value && checkFindings.value.length === 0,
+  () =>
+    hasExecutedAudit.value &&
+    checkFindings.value.length > 0 &&
+    failedCheckCount.value === 0 &&
+    reviewCheckCount.value === 0 &&
+    !error.value,
 )
 const tableFilterGroups: { key: TableFilterKey; label: string }[] = [
   { key: 'result', label: 'Status' },
@@ -162,10 +178,13 @@ const executeAudit = async () => {
   const scope = selectedScope.value
   auditLoadingScope.value = scope
   auditErrorsByScope.value = { ...auditErrorsByScope.value, [scope]: undefined }
-  auditReportsByScope.value = { ...auditReportsByScope.value, [scope]: undefined }
   executedAuditScopes.value = { ...executedAuditScopes.value, [scope]: true }
   try {
-    const scopeFindings = await auditingService.audit({ scope })
+    const scopeFindings = await auditingService.audit({
+      scope,
+      did: didFilter.value.trim() || undefined,
+      justification: justification.value.trim(),
+    })
     auditFindingsByScope.value = { ...auditFindingsByScope.value, [scope]: scopeFindings }
     selectedFindingId.value = null
     activeAuditTab.value = scopeFindings.some((finding) => auditItemKind(finding) === 'check') ? 'checks' : 'timeline'
@@ -186,13 +205,13 @@ const generateReport = async (format: AuditReportFormat) => {
   reportLoadingFormat.value = format
   auditErrorsByScope.value = { ...auditErrorsByScope.value, [scope]: undefined }
   try {
-    const scopeReport = await auditingService.report({ scope, format })
-    if (isReportDownload(scopeReport)) {
-      downloadReport(scopeReport)
-    } else {
-      downloadJsonReport(scopeReport)
-    }
-    auditReportsByScope.value = { ...auditReportsByScope.value, [scope]: scopeReport }
+    const artifact = await auditingService.report({
+      scope,
+      format,
+      did: didFilter.value.trim() || undefined,
+      justification: justification.value.trim(),
+    })
+    downloadBlob(artifact.bytes, artifact.contentType, artifact.filename)
   } catch (err) {
     console.error('Audit Report Error:', err)
     auditErrorsByScope.value = { ...auditErrorsByScope.value, [scope]: 'Audit report could not be generated.' }
@@ -204,13 +223,6 @@ const generateReport = async (format: AuditReportFormat) => {
 
 const formatLabel = (value: string) => value.split('_').join(' ')
 
-const reportSummary = computed(() => {
-  if (!report.value || !isObjectRecord(report.value)) {
-    return null
-  }
-  const summary = report.value.summary
-  return isObjectRecord(summary) ? summary : null
-})
 const selectedFindingRawDetails = computed(() => {
   if (!selectedFinding.value?.details) {
     return ''
@@ -240,25 +252,6 @@ function setAllTableFilters(key: TableFilterKey, enabled: boolean): void {
   for (const option of tableFilterOptions.value[key]) {
     tableFilters.value[key][option] = enabled
   }
-}
-
-function isReportDownload(value: AuditReportResponse): value is AuditReportDownload {
-  return (
-    isObjectRecord(value) && (value.format === 'csv' || value.format === 'pdf') && typeof value.content === 'string'
-  )
-}
-
-function downloadJsonReport(reportData: AuditReport): void {
-  const filename = `${reportData.reportId || `audit-report-${reportData.scope}`}.json`
-  downloadBlob(JSON.stringify(reportData, null, 2), 'application/json', filename)
-}
-
-function downloadReport(reportDownload: AuditReportDownload): void {
-  const bytes =
-    reportDownload.encoding === 'base64'
-      ? Uint8Array.from(atob(reportDownload.content), (char) => char.charCodeAt(0))
-      : new TextEncoder().encode(reportDownload.content)
-  downloadBlob(bytes, reportDownload.contentType, reportDownload.filename)
 }
 
 function downloadBlob(content: BlobPart, contentType: string, filename: string): void {
@@ -327,10 +320,14 @@ function findingBadgeClass(finding: AuditFinding): 'badge-success' | 'badge-erro
 function auditItemKind(finding: AuditFinding): 'check' | 'event' {
   const eventType = rawEventType(finding)?.toUpperCase()
   const eventData = eventDataFromFinding(finding)
-  if (eventType?.includes('POLICY_AUDIT_FINDING') || eventType?.includes('COMPLIANCE_FINDING')) {
+  if (
+    eventType?.includes('POLICY_AUDIT_FINDING') ||
+    eventType?.includes('COMPLIANCE_FINDING') ||
+    eventType?.includes('AUDIT_CHECK')
+  ) {
     return 'check'
   }
-  if (eventData?.ruleId || eventData?.policySetId || eventData?.semanticPath || eventData?.severity) {
+  if (eventData?.ruleId || eventData?.policySetId || eventData?.fieldIri || eventData?.severity) {
     return 'check'
   }
   return 'event'
@@ -553,9 +550,28 @@ function formatDateTime(value?: string): string {
           </select>
         </label>
 
+        <label class="form-control w-full sm:w-64">
+          <span class="label-text mb-1">DID (optional)</span>
+          <input
+            v-model="didFilter"
+            class="input-bordered input rounded-box"
+            :disabled="auditLoading || reportLoading"
+          />
+        </label>
+
+        <label class="form-control w-full sm:w-72">
+          <span class="label-text mb-1">Audit justification</span>
+          <input
+            v-model="justification"
+            required
+            class="input-bordered input rounded-box"
+            :disabled="auditLoading || reportLoading"
+          />
+        </label>
+
         <button
           class="btn rounded-box btn-primary sm:self-end"
-          :disabled="auditLoading || reportLoading"
+          :disabled="auditLoading || reportLoading || !justification.trim()"
           @click="executeAudit"
         >
           <span v-if="selectedAuditLoading" class="loading loading-sm loading-spinner"></span>
@@ -565,7 +581,7 @@ function formatDateTime(value?: string): string {
         <div class="flex flex-wrap gap-2 sm:self-end">
           <button
             class="btn rounded-box btn-outline"
-            :disabled="reportLoading || auditLoading || !hasExecutedAudit"
+            :disabled="reportLoading || auditLoading || !hasExecutedAudit || !justification.trim()"
             @click="generateReport('json')"
           >
             <span
@@ -576,7 +592,7 @@ function formatDateTime(value?: string): string {
           </button>
           <button
             class="btn rounded-box btn-outline"
-            :disabled="reportLoading || auditLoading || !hasExecutedAudit"
+            :disabled="reportLoading || auditLoading || !hasExecutedAudit || !justification.trim()"
             @click="generateReport('csv')"
           >
             <span
@@ -587,7 +603,7 @@ function formatDateTime(value?: string): string {
           </button>
           <button
             class="btn rounded-box btn-outline"
-            :disabled="reportLoading || auditLoading || !hasExecutedAudit"
+            :disabled="reportLoading || auditLoading || !hasExecutedAudit || !justification.trim()"
             @click="generateReport('pdf')"
           >
             <span
@@ -604,6 +620,9 @@ function formatDateTime(value?: string): string {
     <div v-else-if="error" class="alert rounded-box alert-error">{{ error }}</div>
     <div v-if="auditHasPassed" class="alert rounded-box alert-success">
       Audit passed. No failed checks or review findings were returned.
+    </div>
+    <div v-if="auditIsEmpty" class="alert rounded-box alert-info">
+      Audit completed successfully. No matching entries were found.
     </div>
 
     <div v-if="!selectedAuditLoading && !error" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
@@ -811,33 +830,6 @@ function formatDateTime(value?: string): string {
           </details>
         </div>
       </aside>
-    </div>
-
-    <div v-if="report" class="rounded-box border border-base-content/10 bg-base-200 p-4">
-      <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h3 class="font-bold">Structured Audit Report</h3>
-        <div v-if="isObjectRecord(report)" class="text-xs opacity-70">
-          {{ stringDetail(report.reportId) }} · {{ stringDetail(report.contentHash) }}
-        </div>
-      </div>
-      <div v-if="reportSummary" class="stats mb-4 w-full stats-vertical bg-base-100 shadow sm:stats-horizontal">
-        <div class="stat">
-          <div class="stat-title">Events</div>
-          <div class="stat-value text-xl">{{ detailValue(reportSummary.totalEvents) }}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">Checks</div>
-          <div class="stat-value text-xl">{{ detailValue(reportSummary.totalChecks) }}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">Failed</div>
-          <div class="stat-value text-xl text-error">{{ detailValue(reportSummary.failed) }}</div>
-        </div>
-        <div class="stat">
-          <div class="stat-title">Needs Review</div>
-          <div class="stat-value text-xl text-warning">{{ detailValue(reportSummary.needsReview) }}</div>
-        </div>
-      </div>
     </div>
   </section>
 </template>

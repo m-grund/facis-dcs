@@ -25,6 +25,7 @@ DCS_SERVICE ?= $(HELM_RELEASE)-digital-contracting-service
 DCS_DEPLOYMENT ?= $(DCS_SERVICE)
 LOCAL_FORWARD_PORT ?= 18991
 SERVICE_PORT ?= 8991
+ORCE_LOCAL_FORWARD_PORT ?= 18880
 DCS_DID ?= localhost
 DCS_API_BASE_PATH ?= /digital-contracting-service/api
 BDD_INGRESS_PORT ?= 18080
@@ -59,6 +60,7 @@ HELM_BIN ?= helm
 BDD_RUNNER_SCRIPT ?= scripts/run_bdd_helm.sh
 CERT_CHAIN_SECRET ?= $(DCS_SERVICE)-hsm-c2pa-x5chain
 COREDNS_REWRITE_SCRIPT ?= scripts/kind_coredns_rewrite.sh
+ORCE_PERSISTENCE_SCRIPT ?= scripts/ensure_orce_persistence.sh
 
 # Second DCS release ("dcs2", instance B) for the @two-instance peer-trust
 # scenarios (features/17_peer_trust) — see deployment/helm/values.bdd2.yml.
@@ -81,7 +83,7 @@ BDD_HELM_SET_B := \
 	--set-string hydra.clients[0].redirect_uris[0]="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/callback" \
 	--set-string hydra.clients[0].post_logout_redirect_uris[0]="$(BDD_PUBLIC_ORIGIN_B)/digital-contracting-service/api/auth/logout-complete"
 
-.PHONY: setup_environment ensure_venv run_bdd_test run_bdd_fast run_bdd_helm  ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci build_dcs_image clean help kind_up run_bdd_kind_once kind_down
+.PHONY: kind_export_kubeconfig setup_environment ensure_venv run_bdd_test run_bdd_fast run_bdd_helm ensure_kind ensure_k8s_tools kind_create kind_delete kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci run_bdd_audit_kind_ci build_dcs_image clean help kind_up kind_up_audit run_bdd_kind_once run_bdd_audit_kind_once kind_down
 
 help:
 	@echo "make setup_environment   # Create venv and install bdd-executor"
@@ -89,6 +91,8 @@ help:
 	@echo "make run_bdd_fast T=@tag	# Fast dev loop: tag-scoped, --stop, no coverage/junit"
 	@echo "make run_bdd_helm		# Run BDD via Traefik on http://localhost:18080"
 	@echo "make run_bdd_kind		# Build ephemeral kind+Helm stack and run all scenarios"
+	@echo "make kind_up_audit		# Build a single-instance audit BDD stack"
+	@echo "make run_bdd_audit_kind_once # Run only the audit/archive/ORCE feature"
 	@echo "make ensure_kind			# Validate kind is available in PATH"
 	@echo "make ensure_k8s_tools	# Validate kubectl and helm are available in PATH"
 	@echo "make kind_delete			# Delete kind cluster used for BDD"
@@ -112,13 +116,13 @@ setup_environment:
 	fi; \
 	"$(VENV_PATH)/bin/pip" install -q --upgrade pip wheel; \
 	"$(VENV_PATH)/bin/pip" install -q -e "$$SRC_PATH[dev]"; \
-	"$(VENV_PATH)/bin/pip" install -q psycopg2-binary
+	"$(VENV_PATH)/bin/pip" install -q psycopg2-binary jcs pypdf==5.7.0
 	"$(VENV_PATH)/bin/pip" install -q -r "$(PROJECT_ROOT)/testWallet/requirements.txt"
 
 # Bootstrappt das venv nur, wenn es fehlt/kaputt ist — der pip-Refresh bei
 # jedem Lauf kostete sonst 10-60s pro Testzyklus.
 ensure_venv:
-	@"$(VENV_ABS)/bin/python" -c 'import eu.xfsc.bdd.core' 2>/dev/null || \
+	@"$(VENV_ABS)/bin/python" -c 'import eu.xfsc.bdd.core, pypdf' 2>/dev/null || \
 		$(MAKE) setup_environment
 
 run_bdd_test: ensure_venv
@@ -149,6 +153,7 @@ run_bdd_helm: setup_environment ensure_k8s_tools
 		DCS_SERVICE="$(DCS_SERVICE)" \
 		LOCAL_FORWARD_PORT="$(LOCAL_FORWARD_PORT)" \
 		SERVICE_PORT="$(SERVICE_PORT)" \
+		ORCE_LOCAL_FORWARD_PORT="$(ORCE_LOCAL_FORWARD_PORT)" \
 		DCS_DID="$(DCS_DID)" \
 		DCS_API_BASE_PATH="$(DCS_API_BASE_PATH)" \
 		DCS_DEPLOYMENT_B="$(DCS_DEPLOYMENT_B)" \
@@ -171,6 +176,20 @@ ensure_k8s_tools:
 	@command -v "$(KUBECTL_BIN)" >/dev/null 2>&1 || (echo "kubectl not found in PATH" && exit 1)
 	@command -v "$(HELM_BIN)" >/dev/null 2>&1 || (echo "helm not found in PATH" && exit 1)
 
+# Every kind-targeted goal pins kubectl/helm to the kind cluster through a
+# dedicated kubeconfig, independent of the developer's current context —
+# otherwise deploys land wherever the context points while the suite's
+# host-port datapath (18080) always reaches the kind cluster.
+KIND_KUBECONFIG := $(CURDIR)/.tmp/kind-kubeconfig
+KIND_GOALS := kind_create kind_load_image kind_load_pdf_core_image kind_deploy kind_deploy_b \
+	kind_coredns_rewrite kind_uninstall run_bdd_kind run_bdd_kind_all run_bdd_kind_ci \
+	run_bdd_audit_kind_ci kind_up kind_up_audit run_bdd_kind_once run_bdd_audit_kind_once kind_down
+$(KIND_GOALS): export KUBECONFIG := $(KIND_KUBECONFIG)
+
+kind_export_kubeconfig:
+	@mkdir -p "$(CURDIR)/.tmp"
+	@"$(KIND_BIN)" export kubeconfig --name "$(KIND_CLUSTER_NAME)" --kubeconfig "$(KIND_KUBECONFIG)"
+
 kind_create: ensure_kind ensure_k8s_tools
 	@cluster_healthy=false; \
 	if "$(KIND_BIN)" get clusters | grep -qx "$(KIND_CLUSTER_NAME)"; then \
@@ -185,6 +204,7 @@ kind_create: ensure_kind ensure_k8s_tools
 	if [[ "$$cluster_healthy" == "false" ]]; then \
 		"$(KIND_BIN)" create cluster --name "$(KIND_CLUSTER_NAME)" --config "$(KIND_CONFIG)" --wait "$(KIND_WAIT)"; \
 	fi
+	@$(MAKE) kind_export_kubeconfig
 
 kind_delete: ensure_kind
 	@if "$(KIND_BIN)" get clusters | grep -qx "$(KIND_CLUSTER_NAME)"; then \
@@ -223,6 +243,8 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 	@# per-run token key and crash-loop the backend (identity.NewDIDDocument
 	@# is fatal on mismatch), so it is deliberately NOT pre-created here.
 	@"$(KUBECTL_BIN)" create namespace "$(KIND_NAMESPACE)" --dry-run=client -o yaml | "$(KUBECTL_BIN)" apply -f -
+	@KUBECTL_BIN="$(KUBECTL_BIN)" K8S_NAMESPACE="$(KIND_NAMESPACE)" HELM_RELEASE="$(HELM_RELEASE)" \
+		bash "$(ORCE_PERSISTENCE_SCRIPT)"
 	@# Deploy without --wait: Helm defers post-install hooks until all deployments are
 	@# ready, but DCS can't become ready until the devCertChain post-install hook has
 	@# created its Secret — a deadlock. We break the cycle by letting helm return as
@@ -244,6 +266,11 @@ kind_deploy: kind_load_image kind_load_pdf_core_image
 	@# time: a prior version wired only to cluster creation was observed to
 	@# not reliably stick.
 	@$(MAKE) kind_coredns_rewrite
+	@# The image tag is static, so an unchanged manifest never rolls the pods
+	@# even though kind load just replaced the node image — restart both
+	@# freshly-built workloads so the run tests the image that was built.
+	@"$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" rollout restart \
+		deployment/"$(DCS_DEPLOYMENT)" deployment/"$(DCS_DEPLOYMENT)"-pdf-core 2>/dev/null || true
 	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET) (created by post-install hook)..."
 	@deadline=$$(( $$(date +%s) + 1200 )); \
 	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
@@ -306,6 +333,8 @@ kind_deploy_b: kind_deploy
 		$(BDD_HELM_SET_B) \
 		$(KIND_HELM_VALUES) \
 		$(KIND_HELM_SET)
+	@"$(KUBECTL_BIN)" -n "$(KIND_NAMESPACE)" rollout restart \
+		deployment/"$(DCS_DEPLOYMENT_B)" 2>/dev/null || true
 	@echo "Waiting for cert chain secret $(CERT_CHAIN_SECRET_B) (created by post-install hook)..."
 	@deadline=$$(( $$(date +%s) + 1200 )); \
 	until "$(KUBECTL_BIN)" get secret "$(CERT_CHAIN_SECRET_B)" -n "$(KIND_NAMESPACE)" >/dev/null 2>&1; do \
@@ -359,6 +388,9 @@ run_bdd_kind_all: kind_deploy_b
 
 run_bdd_kind_ci: build_dcs_image build_pdf_core_image run_bdd_kind
 
+run_bdd_audit_kind_ci: build_dcs_image build_pdf_core_image kind_deploy
+	@$(MAKE) run_bdd_audit_kind_once
+
 clean:
 	rm -rf "$(VENV_PATH)" .tmp .reports
 
@@ -368,6 +400,12 @@ kind_up: build_dcs_image build_pdf_core_image kind_deploy_b setup_environment en
 	@echo "kind cluster $(KIND_CLUSTER_NAME) is up with DCS deployed in namespace $(KIND_NAMESPACE)"
 	@echo "You can now run 'make run_bdd_kind_once' to execute the BDD suite against this cluster without redeploying between runs."
 
+# Audit/archive/ORCE needs only instance A. ORCE still uses persistent storage
+# so the receipt chain survives the restart scenario.
+kind_up_audit: build_dcs_image build_pdf_core_image kind_deploy setup_environment ensure_k8s_tools
+	@echo "kind cluster $(KIND_CLUSTER_NAME) is up with the single-instance audit BDD stack"
+	@echo "Run 'make run_bdd_audit_kind_once' to execute the focused feature."
+
 # run BDD suite once against kind deployment (without redeploying cluster between runs)
 # Optionally pass F=<path> to run a single feature file, e.g. make run_bdd_kind_once F=features/login.feature
 run_bdd_kind_once:
@@ -375,6 +413,13 @@ run_bdd_kind_once:
 		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
 		HELM_RELEASE="$(HELM_RELEASE)" \
 		FEATURES_PATH="$(if $(F),$(F),$(FEATURES_PATH))"
+
+run_bdd_audit_kind_once:
+	@$(MAKE) run_bdd_helm \
+		K8S_NAMESPACE="$(KIND_NAMESPACE)" \
+		HELM_RELEASE="$(HELM_RELEASE)" \
+		DCS_DEPLOYMENT_B="" \
+		FEATURES_PATH="features/08_audit_compliance/audit_ui_archive_orce.feature"
 
 # Shutdown deployment, cluster and clean test artifacts
 kind_down: kind_uninstall kind_delete clean

@@ -36,15 +36,21 @@ func TestEnforceCanonicalOntologyIRIsRejectsConflict(t *testing.T) {
 func TestSchemaAnchorRefsArePointedAtTheHub(t *testing.T) {
 	SetSchemaAnchorRefs(
 		"http://dcs.local/semantic/context/facis-dcs?version=1",
-		"https://w3id.org/facis/dcs/ontology/v1#",
 		"http://dcs.local/semantic/shapes/facis-dcs?version=1",
+		"http://dcs.local/semantic/profile/facis.sla.basic?version=1",
 	)
-	defer SetSchemaAnchorRefs(SchemaJSONLDContextV1, SchemaOntologyV1, SchemaSHACLShapesV1)
+	defer func() {
+		SetSchemaAnchorRefs(SchemaJSONLDContextV1, SchemaSHACLShapesV1, "")
+		schemaRefProfile = ""
+	}()
 
 	if schemaRefJSONLDContext != "http://dcs.local/semantic/context/facis-dcs?version=1" {
-		t.Fatalf("expected the context schemaRef to be re-pointed, got %q", schemaRefJSONLDContext)
+		t.Fatalf("expected the context anchor to be re-pointed, got %q", schemaRefJSONLDContext)
 	}
 	if schemaRefSHACLShapes != "http://dcs.local/semantic/shapes/facis-dcs?version=1" {
-		t.Fatalf("expected the shapes schemaRef to be re-pointed, got %q", schemaRefSHACLShapes)
+		t.Fatalf("expected the shapes anchor to be re-pointed, got %q", schemaRefSHACLShapes)
+	}
+	if schemaRefProfile != "http://dcs.local/semantic/profile/facis.sla.basic?version=1" {
+		t.Fatalf("expected the profile anchor to be re-pointed, got %q", schemaRefProfile)
 	}
 }

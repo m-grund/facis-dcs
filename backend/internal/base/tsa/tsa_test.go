@@ -14,6 +14,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"math/big"
 	"net/http"
@@ -115,6 +116,25 @@ func TestVerify_CertRejectedForNonFreeTSAKey(t *testing.T) {
 	assert.Contains(t, err.Error(), "TSA certificate verification")
 }
 
+func TestAPIClient_VerifyLoadsTrustCertificateAfterPackageInitialization(t *testing.T) {
+	cert, key := mustTSACert(t)
+	certPath := t.TempDir() + "/tsa-cert.pem"
+	require.NoError(t, os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: cert.Raw,
+	}), 0o600))
+	t.Setenv("TSA_TRUST_CERT_FILE", certPath)
+
+	client, err := NewClient("")
+	require.NoError(t, err)
+	data := map[string]string{"field": "loaded-after-package-init"}
+	tsr := makeTSR(t, cert, key, jsonHash(t, data))
+
+	ok, err := client.Verify(tsr, data)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
 func TestVerify_HashMismatch(t *testing.T) {
 	cert, key := mustTSACert(t)
 	original := map[string]string{"field": "original"}
@@ -145,11 +165,12 @@ func jsonHash(t *testing.T, v any) []byte {
 func makeTSR(t *testing.T, cert *x509.Certificate, key *ecdsa.PrivateKey, dataHash []byte) string {
 	t.Helper()
 	ts := &timestamp.Timestamp{
-		HashAlgorithm: crypto.SHA256,
-		HashedMessage: dataHash,
-		Time:          time.Now().UTC(),
-		SerialNumber:  big.NewInt(1),
-		Policy:        asn1.ObjectIdentifier{1, 2, 3, 4, 5},
+		HashAlgorithm:     crypto.SHA256,
+		HashedMessage:     dataHash,
+		Time:              time.Now().UTC(),
+		SerialNumber:      big.NewInt(1),
+		Policy:            asn1.ObjectIdentifier{1, 2, 3, 4, 5},
+		AddTSACertificate: true,
 	}
 	resp, err := ts.CreateResponseWithOpts(cert, key, crypto.SHA256)
 	require.NoError(t, err)

@@ -70,7 +70,7 @@ type auditReportFinding struct {
 	ExpectedValues []any  `json:"expectedValues,omitempty"`
 	Operator       string `json:"operator,omitempty"`
 	Path           string `json:"path,omitempty"`
-	SemanticPath   string `json:"semanticPath,omitempty"`
+	FieldIri       string `json:"fieldIri,omitempty"`
 	OntologyTerm   string `json:"ontologyTerm,omitempty"`
 	Actor          string `json:"actor,omitempty"`
 }
@@ -144,7 +144,7 @@ func buildAuditReport(scope, did, generatedBy string, generatedAt time.Time, res
 					ExpectedValues: anySlice(eventData["expectedValues"]),
 					Operator:       stringFromMap(eventData, "operator"),
 					Path:           stringFromMap(eventData, "path"),
-					SemanticPath:   stringFromMap(eventData, "semanticPath", "semantic_path"),
+					FieldIri:       stringFromMap(eventData, "fieldIri"),
 					OntologyTerm:   stringFromMap(eventData, "ontologyTerm", "ontology_term"),
 					Actor:          actorFromEventData(eventData),
 				}
@@ -318,7 +318,7 @@ func renderAuditReportCSV(report auditReport) ([]byte, error) {
 			formatReportValue(finding.ActualValue),
 			formatReportValue(finding.ExpectedValue),
 			formatReportValue(finding.ExpectedValues),
-			firstNonEmpty(finding.SemanticPath, finding.Path),
+			firstNonEmpty(finding.FieldIri, finding.Path),
 		})
 	}
 	for _, row := range rows {
@@ -352,6 +352,13 @@ func renderAuditReportPDF(report auditReport) []byte {
 	}
 	if len(report.Findings) == 0 {
 		lines = append(lines, "No compliance findings.")
+	}
+	lines = append(lines, "", "Lifecycle Events")
+	for _, event := range report.Events {
+		lines = append(lines, wrapPDFLine(fmt.Sprintf("%s actor=%s %s %s", event.Timestamp, event.Actor, event.EventType, event.DID))...)
+	}
+	if len(report.Events) == 0 {
+		lines = append(lines, "No lifecycle events.")
 	}
 	return simplePDF(lines)
 }

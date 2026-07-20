@@ -1,9 +1,3 @@
-export const DCS_JSONLD_CONTEXT = {
-  dcs: 'https://w3id.org/facis/dcs/ontology/v1#',
-  odrl: 'http://www.w3.org/ns/odrl/2/',
-  xsd: 'http://www.w3.org/2001/XMLSchema#',
-} as const
-
 export interface JsonLdReference {
   '@id': string
 }
@@ -63,6 +57,20 @@ export interface DcsClause {
   'dcs:content': { '@list': DcsContentSegment[] } | string
   'dcs:title'?: string
   'dcs:signatureFields'?: DcsSignatureField[]
+  /**
+   * An optional typed clause instance nested inside a free-text dcs:Clause
+   * block. The nested object carries its own @type (e.g. "dcs:PaymentClause",
+   * from the Semantic Hub clause catalog, GET /semantic/clauses) and becomes
+   * its own JSON-LD/RDF node — server-side SHACL validation targets it by
+   * that @type regardless of nesting, so the palette-generated form and
+   * enforcement share one source of truth.
+   */
+  'dcs:typedClause'?: DcsTypedClauseInstance
+}
+
+export interface DcsTypedClauseInstance {
+  '@type': string
+  [property: string]: unknown
 }
 
 export interface DcsApprovedTemplate {
@@ -93,8 +101,18 @@ export interface DcsRequirementField {
   '@id': string
   '@type': 'dcs:RequirementField'
   'dcs:parameterName': string
-  'dcs:domainField': JsonLdReference
+  /** Optional: the served RequirementField shape requires only dcs:parameterName. */
+  'dcs:domainField'?: JsonLdReference
+  'dcs:valueType'?: string
   'dcs:required': boolean
+  /**
+   * The submitted runtime value, carried inline on the field an ODRL
+   * constraint names as its odrl:leftOperand. Absent on a template (the
+   * declaration), filled at contract time.
+   */
+  'dcs:parameterValue'?: string | number | boolean
+  /** The document block a placeholder bound to this field renders into. */
+  'dcs:blockId'?: string
 }
 
 export interface DcsDataRequirement {
@@ -134,17 +152,18 @@ export interface OdrlRule {
   'odrl:assignee': JsonLdReference
   /** The contract/data-asset IRI this rule applies to. */
   'odrl:target': JsonLdReference
+  /** The human-readable clause node this rule is backed by (required — machine rules operationalize audited prose). */
+  'dcs:prose': JsonLdReference
   'odrl:constraint'?: OdrlConstraint
 }
 
-/** The single enclosing ODRL 2.2 policy container for a template/contract's `dcs:policies`. */
+/** The single enclosing ODRL 2.2 policy for a template (Offer) or contract (Agreement). */
 export interface OdrlSet {
   '@id': string
-  '@type': 'odrl:Set'
-  /** Equals the template/contract DID. */
-  uid: string
+  '@type': 'odrl:Offer' | 'odrl:Agreement'
   'odrl:profile': JsonLdReference
-  'odrl:duty'?: OdrlRule[]
+  /** Policy-level Duty rules (ODRL 2.2: a Policy carries obligation, never duty — duty nests under a Permission). */
+  'odrl:obligation'?: OdrlRule[]
   'odrl:permission'?: OdrlRule[]
   'odrl:prohibition'?: OdrlRule[]
 }
@@ -159,7 +178,8 @@ export interface DcsSubTemplateSnapshot {
 }
 
 export interface DcsDocumentData {
-  '@context': typeof DCS_JSONLD_CONTEXT
+  /** Anchored server-side to the Semantic Hub's versioned context URL; the client never emits it. */
+  '@context'?: unknown
   '@type': 'dcs:ContractTemplate' | 'dcs:Contract'
   '@id'?: string
   'dcs:metadata': DcsTemplateMetadata | DcsContractMetadata
@@ -178,18 +198,13 @@ export interface DcsContractData extends DcsDocumentData {
   'dcs:metadata': DcsContractMetadata | DcsTemplateMetadata
   'dcs:contractFields'?: DcsContractField[]
   'dcs:parentContract'?: JsonLdReference
-  semanticConditionValues?: {
-    blockId: string
-    conditionId: string
-    parameterName: string
-    parameterValue?: string | number | boolean
-  }[]
-  sourceTemplate?: {
-    did: string
-    version?: number
-    document_number?: string
-  }
-  derivedFromTemplate?: string
+  derivedFromTemplate?: DcsTemplateProvenance
+}
+
+/** The source-template node: a prov:wasDerivedFrom edge plus version assertion. */
+export interface DcsTemplateProvenance {
+  '@id': string
+  version?: number
 }
 
 export function isDcsSection(block: DcsBlock): block is DcsSection {
@@ -222,13 +237,15 @@ export function isDcsDocumentData(raw: unknown): raw is DcsDocumentData {
     Array.isArray(value['dcs:contractData']) &&
     // Canonical shape: a single enclosing odrl:Set object.
     // An empty array is still accepted as "no policies yet" (brand-new
-    // documents) — the legacy non-empty bare-rule array shape is not.
+    // documents); a non-empty bare-rule array is not.
     (isOdrlSet(policies) || (Array.isArray(policies) && policies.length === 0))
   )
 }
 
 function isOdrlSet(value: unknown): value is OdrlSet {
-  return typeof value === 'object' && value !== null && (value as Record<string, unknown>)['@type'] === 'odrl:Set'
+  if (typeof value !== 'object' || value === null) return false
+  const type = (value as Record<string, unknown>)['@type']
+  return type === 'odrl:Offer' || type === 'odrl:Agreement'
 }
 
 export function isDcsTemplateData(raw: unknown): raw is DcsTemplateData {

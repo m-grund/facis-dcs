@@ -1,7 +1,7 @@
 """BDD steps for the Semantic Hub (DCS-FR-TR-03, UC-02-08,
 backend/design/semantic_hub.go): versioned schema storage
 (/semantic/schema/...), public context resolution (/semantic/context/...),
-document anchoring (dcs:schemaRefs injected by the normalization layer), and
+document anchoring (@context hub URL + sh:shapesGraph injected by the normalization layer), and
 ontology-prefix enforcement at template creation."""
 
 import json
@@ -47,6 +47,14 @@ def step_then_schema_declares_iri(context, prefix, iri):
     content = json.loads(context.requests_response.json().get("content"))
     declared = (content.get("@context") or {}).get(prefix)
     assert declared == iri, f"Expected @context.{prefix} == {iri!r}, got: {declared!r}"
+
+
+@when('the ontology "{name}" is resolved from the Semantic Hub without authentication')
+def step_when_resolve_ontology(context, name):
+    context.requests_response = _requests.get(
+        _hub_url(context, f"/semantic/ontology/{name}"),
+        timeout=context.http_timeout_seconds,
+    )
 
 
 @when('the JSON-LD context "{name}" is resolved from the Semantic Hub without authentication')
@@ -195,10 +203,23 @@ def step_then_contract_anchored(context, name):
     headers = context.contract_seed_headers[name]
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
     assert retrieve.status_code == 200, retrieve.text
-    refs = (retrieve.json().get("contract_data") or {}).get("dcs:schemaRefs") or {}
-    anchor = refs.get("dcs:jsonLdContext")
-    assert anchor and "/semantic/context/" in anchor, (
-        f"Expected a hub-served dcs:schemaRefs.dcs:jsonLdContext anchor, got: {refs}"
+    contract_data = retrieve.json().get("contract_data") or {}
+    # The context anchor IS the document's @context (or the string entry of
+    # its array form) — standard JSON-LD, resolvable by external tooling.
+    raw_context = contract_data.get("@context")
+    candidates = raw_context if isinstance(raw_context, list) else [raw_context]
+    anchor = next(
+        (c for c in candidates if isinstance(c, str) and "/semantic/context/" in c),
+        None,
+    )
+    assert anchor, (
+        f"Expected @context to carry a hub-served versioned context URL, got: {raw_context}"
+    )
+    # The shapes pin rides on sh:shapesGraph (ADR-8).
+    shapes_ref = contract_data.get("sh:shapesGraph") or {}
+    shapes_anchor = shapes_ref.get("@id") if isinstance(shapes_ref, dict) else shapes_ref
+    assert shapes_anchor and "/semantic/shapes/" in shapes_anchor, (
+        f"Expected a hub-served sh:shapesGraph anchor, got: {shapes_ref}"
     )
     context.hub_anchor_url = anchor
 
@@ -238,9 +259,211 @@ def step_when_create_conflicting_template(context, prefix, iri):
     )
 
 
+def _external_context_template_payload(iri: str) -> dict:
+    doc = TemplateService.canonical_document_data("BDD External Context Template")
+    doc["@context"] = [doc["@context"], iri]
+    return {
+        "template_type": TemplateService.template_type_for_category("legal"),
+        "name": "BDD External Context Template",
+        "description": "references an externally anchored context",
+        "template_data": doc,
+    }
+
+
+@when('a template is created whose "@context" references the external context "{iri}"')
+def step_when_create_external_context_template(context, iri):
+    headers = AuthService.get_headers_for_roles(["Template Creator"])
+    context.requests_response = post_json(
+        context,
+        template_create_url(context),
+        _external_context_template_payload(iri),
+        headers=headers,
+    )
+
+
+@when('the Template Manager registers the external JSON-LD context "{iri}" in the Semantic Hub')
+def step_when_register_external_context(context, iri):
+    headers = AuthService.get_headers_for_roles(["Template Manager"])
+    context.requests_response = post_json(
+        context,
+        _hub_url(context, "/semantic/schema/register"),
+        {
+            "name": iri,
+            "kind": "context",
+            "media_type": "application/ld+json",
+            "content": json.dumps({"@context": {"ex": "https://example.org/ns#"}}),
+            "activate": True,
+        },
+        headers=headers,
+    )
+
+
 @then("the rejection names the Semantic Hub's active context")
 def step_then_rejection_names_hub(context):
     assert "Semantic Hub" in context.requests_response.text, (
         f"Expected the rejection to name the Semantic Hub's active context, got: "
         f"{context.requests_response.text}"
+    )
+
+
+# Phase 1 / ADR-8: enforcement (AuditContractContent) now reads its SHACL
+# shapes from the hub's ACTIVE (or, for revalidation, PINNED) version rather
+# than a fixed disk file — proving activate/rollback actually changes what
+# gets enforced (steps/semantic_hub/semantic_hub.feature "Activating a
+# stricter SHACL shapes version..."). Validation itself runs on goRDFlib, a
+# conformant SHACL-core processor (ADR-9) — it reports only non-conformance,
+# so a passing contract has no finding for a rule at all, not an "info" one.
+
+_BDD_STRICT_TITLE_IN_VALUE = "IMPOSSIBLE-BDD-TITLE-VALUE-NO-CONTRACT-HAS-THIS"
+
+
+@when('the Template Manager registers a stricter version of the "shapes" schema "facis-dcs" that narrows the canonical contract title')
+def step_when_register_stricter_shapes(context):
+    name, kind = "facis-dcs", "shapes"
+
+    before = _requests.get(
+        _hub_url(context, "/semantic/schema/versions"),
+        params={"name": name, "kind": kind},
+        timeout=context.http_timeout_seconds,
+    )
+    assert before.status_code == 200, f"versions listing failed: {before.status_code} {before.text}"
+    context.hub_versions_before = [v["version"] for v in before.json()]
+
+    def _restore_genesis_active():
+        _requests.post(
+            _hub_url(context, "/semantic/schema/rollback"),
+            json={"name": name, "kind": kind, "version": 1},
+            headers=AuthService.get_headers_for_roles(["Template Manager"]),
+            timeout=context.http_timeout_seconds,
+        )
+
+    context.add_cleanup(_restore_genesis_active)
+
+    genesis = _requests.get(
+        _hub_url(context, "/semantic/schema/retrieve"),
+        params={"name": name, "kind": kind, "version": 1},
+        timeout=context.http_timeout_seconds,
+    )
+    assert genesis.status_code == 200, f"could not fetch genesis shapes: {genesis.text}"
+    ttl = genesis.json()["content"]
+
+    # dcs:ContractMetadataShape's dcs:title property (see
+    # docs/semantic-ontology/shapes/facis-dcs-contract-canonical-shapes.ttl)
+    # requires xsd:string + minCount 1 today. Adding an sh:in restriction no
+    # real contract title satisfies turns "no finding" into a real SHACL
+    # sh:in violation (rule ID "title-InConstraintComponent" — goRDFlib rule
+    # IDs are <path local name>-<constraint component local name>).
+    anchor = "sh:path dcs:title ;"
+    assert anchor in ttl, f"Expected the genesis shapes to declare {anchor!r}, got:\n{ttl}"
+    stricter_ttl = ttl.replace(
+        anchor,
+        f'{anchor}\n    sh:in ( "{_BDD_STRICT_TITLE_IN_VALUE}" ) ;',
+        1,
+    )
+    assert stricter_ttl != ttl, "Expected the sh:in injection to change the shapes content"
+
+    headers = AuthService.get_headers_for_roles(["Template Manager"])
+    context.requests_response = post_json(
+        context,
+        _hub_url(context, "/semantic/schema/register"),
+        {
+            "name": name,
+            "kind": kind,
+            "media_type": "text/turtle",
+            "content": stricter_ttl,
+            "activate": True,
+        },
+        headers=headers,
+    )
+
+
+def _content_audit_trail_rule_severities(context, name, rule_id):
+    assert context.requests_response.status_code == 200, (
+        f"Expected 200 from /pac/audit, got {context.requests_response.status_code}: "
+        f"{context.requests_response.text}"
+    )
+    did, _ = ContractService._contract_data(context, name)
+    body = context.requests_response.json()
+    resource = next((r for r in body if r.get("did") == did), None)
+    assert resource is not None, (
+        f"Expected a contract-content audit trail entry for '{name}' (did={did}), "
+        f"got DIDs: {[r.get('did') for r in body]}"
+    )
+    severities = []
+    for entry in resource.get("audit_trail") or []:
+        if entry.get("event_type") != "CONTRACT_CONTENT_POLICY_AUDIT_FINDING":
+            continue
+        event_data = entry.get("event_data")
+        if isinstance(event_data, str):
+            event_data = json.loads(event_data)
+        if event_data.get("ruleId") == rule_id:
+            severities.append(event_data.get("severity"))
+    return did, severities
+
+
+@then('the contract content audit trail for "{name}" reports rule "{rule_id}" with severity "{severity}"')
+def step_then_content_audit_trail_reports_rule(context, name, rule_id, severity):
+    did, severities = _content_audit_trail_rule_severities(context, name, rule_id)
+    assert severity in severities, (
+        f"Expected contract '{name}' (did={did}) to report rule {rule_id!r} with severity "
+        f"{severity!r}, got severities: {severities}"
+    )
+
+
+@then('the contract content audit trail for "{name}" does not report an error for rule "{rule_id}"')
+def step_then_content_audit_trail_no_error_for_rule(context, name, rule_id):
+    # goRDFlib (ADR-9) only reports non-conformance — a fully compliant
+    # contract has NO finding for a conformant rule at all (not an "info"
+    # one), so this asserts absence-of-violation rather than a specific
+    # passing severity.
+    did, severities = _content_audit_trail_rule_severities(context, name, rule_id)
+    assert "error" not in severities, (
+        f"Expected contract '{name}' (did={did}) to report no error for rule {rule_id!r}, "
+        f"got severities: {severities}"
+    )
+
+
+# Phase 3 / ADR-10: the clause catalog endpoint (backend/design/
+# semantic_hub.go "clauses") serves a pre-digested form-schema derived
+# server-side from the hub's clause-catalog SHACL shapes
+# (backend/internal/semantichub/clausecatalog.go) — the same shapes
+# validateAgainstHubShapes concatenates into contract validation.
+
+
+@when("the Semantic Hub clause catalog is requested without authentication")
+def step_when_request_clause_catalog(context):
+    context.requests_response = _requests.get(
+        _hub_url(context, "/semantic/clauses"),
+        timeout=context.http_timeout_seconds,
+    )
+
+
+@then('the clause catalog lists a "{clause_type}" clause type whose shape declares "{properties}"')
+def step_then_clause_catalog_lists_type(context, clause_type, properties):
+    body = context.requests_response.json()
+    clauses = body.get("clauses") or []
+    matching = next((c for c in clauses if c.get("type") == clause_type), None)
+    assert matching is not None, (
+        f"Expected the clause catalog to list clause type {clause_type!r}, got types: "
+        f"{[c.get('type') for c in clauses]}"
+    )
+    assert matching.get("shape"), f"Expected a NodeShape IRI on the listing, got: {matching}"
+    # The form is generated client-side (shacl-form) from the response's raw
+    # shapes Turtle — assert the declared property paths are present there.
+    # behave's {properties} capture keeps the INNER quotes of a
+    # '"a", "b", "c"' list (only the outermost pair belongs to the step
+    # pattern) — strip them per item.
+    shapes = body.get("shapes") or ""
+    for path in (p.strip().strip('"') for p in properties.split(",")):
+        assert f"sh:path {path}" in shapes, (
+            f"Expected the raw shapes to declare 'sh:path {path}', got:\n{shapes[:800]}"
+        )
+
+
+@then("the clause catalog response carries the raw SHACL shapes it was derived from")
+def step_then_clause_catalog_carries_shapes(context):
+    body = context.requests_response.json()
+    shapes = body.get("shapes") or ""
+    assert "sh:NodeShape" in shapes and "PaymentClause" in shapes, (
+        f"Expected the clause catalog response to carry the raw SHACL shapes, got: {shapes[:200]!r}"
     )

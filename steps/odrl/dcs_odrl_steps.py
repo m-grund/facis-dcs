@@ -2,18 +2,18 @@
 DCS-FR-PACM-03).
 
 The structure and enforcement scenarios build their fixtures against the
-canonical odrl:Set-enclosed shape the backend emits and validates
+canonical Offer/Agreement-enclosed ODRL shape the backend emits and validates
 (`extractContractODRLPolicies`,
 backend/internal/base/validation/contractcontentaudit.go). Testing
 enforcement against the enclosed shape is what catches the regression where
 the emitted shape and the extraction drift apart — approve/apply would then
 silently see zero policies and let everything through.
 
-The operator Scenario Outline and the legacy-shape rejection scenario use
+The operator Scenario Outline and the bare-shape rejection scenario use
 the bare flat-array fixture instead: operator evaluation is independent of
 the enclosing Set (and additionally covered by the Go unit tests in
 backend/internal/base/validation/contractcontentaudit_test.go), and the
-bare-Duty legacy shape must be REJECTED by structural validation.
+bare-Duty shape (no action, no enclosing policy node) must be REJECTED by structural validation.
 
 The peer-action entry path is not separately re-tested: it dispatches
 through the same command.Approver handler as the UI/API path (see the
@@ -127,14 +127,14 @@ def step_when_policies_updated_to_odrl_set(context, name, rule_type, field, oper
 
 
 @when(
-    'the policies of contract "{name}" are updated to the legacy bare-Duty '
+    'the policies of contract "{name}" are updated to the bare-Duty '
     'form (field "{field}", operator "{operator}") requiring "{right_operand}" '
     'while the actual value is "{actual_value}"'
 )
-def step_when_policies_updated_to_legacy_form(context, name, field, operator, right_operand, actual_value):
+def step_when_policies_updated_to_bare_duty_form(context, name, field, operator, right_operand, actual_value):
     right = _parse_operand(right_operand)
     actual = _parse_operand(actual_value)
-    policies = odrl.legacy_bare_duty_policies(field, operator, right)
+    policies = odrl.bare_duty_policies(field, operator, right)
     context.requests_response = _update_contract_policies(context, name, field, policies, actual)
 
 
@@ -144,8 +144,8 @@ def step_when_policies_updated_to_legacy_form(context, name, field, operator, ri
     'while the actual value is "{actual_value}"'
 )
 def step_given_operator_fixture(context, name, field, operator, right_operand, actual_value):
-    # Deliberately the canonical odrl:Set shape (not the legacy flat form):
-    # a fixture identical in shape to the rejected legacy form cannot also
+    # Deliberately the canonical enclosing-policy shape (not the bare flat form):
+    # a fixture identical in shape to the rejected bare form cannot also
     # be the accepted fixture the operator scenarios approve against; the
     # two would be mutually unsatisfiable otherwise. Operator-evaluation
     # correctness is exercised identically regardless of the enclosing
@@ -219,14 +219,14 @@ def step_then_policy_update_accepted(context, name):
 
 
 @then(
-    'the policy update for contract "{name}" is rejected because the legacy '
+    'the policy update for contract "{name}" is rejected because the '
     "bare-Duty form lacks an action and enclosing policy"
 )
-def step_then_policy_update_rejected_legacy(context, name):
+def step_then_policy_update_rejected_bare_duty(context, name):
     resp = context.requests_response
     assert resp.status_code != 200, (
-        f"expected the legacy bare-Duty policy shape (no odrl:action, no "
-        f"enclosing odrl:Set, no parties/target) to be explicitly rejected "
+        f"expected the bare-Duty policy shape (no odrl:action, no "
+        f"enclosing policy node, no parties/target) to be explicitly rejected "
         f"by structural validation for '{name}', but the update succeeded: "
         f"{resp.status_code} {resp.text}"
     )
@@ -239,26 +239,33 @@ def step_then_policy_update_rejected_legacy(context, name):
 
 @then(
     'the stored policies of contract "{name}" form a single enclosing '
-    "odrl:Set whose uid equals the contract DID and which declares an "
-    "odrl:profile"
+    '{policy_type} whose @id is anchored to the contract DID and which '
+    "declares an odrl:profile"
 )
-def step_then_policies_form_enclosing_set(context, name):
+def step_then_policies_form_enclosing_set(context, name, policy_type):
+    """policy_type reflects the ODRL policy lifecycle: an unsigned contract
+    instance carries an odrl:Offer (parties still open); the first signature
+    seals it into the odrl:Agreement the signatures bind."""
     did, _ = ContractService._contract_data(context, name)
     policies = _stored_policies(context, name)
     assert isinstance(policies, dict), (
-        f"expected dcs:policies to be ONE enclosing object (odrl:Set), got a "
+        f"expected dcs:policies to be ONE enclosing policy object, got a "
         f"{type(policies).__name__}: {policies!r}"
     )
-    assert policies.get("@type") == "odrl:Set", (
-        f"expected the enclosing policy node's @type to be 'odrl:Set', got "
-        f"{policies.get('@type')!r}"
+    assert policies.get("@type") == policy_type, (
+        f"expected the enclosing policy node's @type to be {policy_type!r}, "
+        f"got {policies.get('@type')!r}"
     )
-    assert policies.get("uid") == did, (
-        f"expected the odrl:Set's uid to equal the contract DID {did!r}, got "
-        f"{policies.get('uid')!r}"
+    policy_id = policies.get("@id") or ""
+    assert did in policy_id, (
+        f"expected the {policy_type}'s @id (its odrl:uid) to be anchored to the "
+        f"contract DID {did!r}, got {policy_id!r}"
+    )
+    assert "uid" not in policies, (
+        f"a separate uid key duplicates the policy identity (@id): {policies.get('uid')!r}"
     )
     profile = policies.get("odrl:profile")
-    assert profile, f"expected odrl:profile to be declared on the enclosing odrl:Set, got: {profile!r}"
+    assert profile, f"expected odrl:profile to be declared on the enclosing {policy_type}, got: {profile!r}"
 
 
 @then('every stored policy rule of contract "{name}" declares exactly one odrl:action')

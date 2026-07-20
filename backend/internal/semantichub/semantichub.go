@@ -1,11 +1,11 @@
 // Package semantichub is the Semantic Hub (DCS-FR-TR-03, UC-02-08): a
 // versioned repository for the machine-readable schemas the DCS produces
-// documents against — JSON-LD contexts, SHACL shapes, and validation
-// profiles. It is seeded at startup with the FACIS DCS v1 profile (the
-// assets/ copies of docs/semantic-ontology, the authoring source), serves
-// every version over /semantic/..., and exposes the ACTIVE context's
-// ontology IRIs so the normalization layer can anchor and enforce them on
-// every produced JSON-LD artifact.
+// documents against — JSON-LD contexts, SHACL shapes, ontologies, and
+// validation profiles. The embedded assets/ documents are the single
+// authoring source; Seed installs them (registering drifted content as new
+// versions), every version is served over /semantic/..., and the ACTIVE
+// context's ontology IRIs are exposed so the normalization layer can anchor
+// and enforce them on every produced JSON-LD artifact.
 package semantichub
 
 import (
@@ -30,12 +30,31 @@ var genesisShapes []byte
 //go:embed assets/facis.sla.basic.v1.yaml
 var genesisProfile []byte
 
+//go:embed assets/facis-dcs-clause-catalog.ttl
+var genesisClauseCatalog []byte
+
+//go:embed assets/facis-dcs-ontology.ttl
+var genesisOntology []byte
+
+//go:embed assets/facis-sla-ontology.ttl
+var genesisSLAOntology []byte
+
+//go:embed assets/dcs-odrl-profile.ttl
+var genesisODRLProfile []byte
+
 // Canonical hub schema names. ContextName is the JSON-LD context every DCS
-// document resolves its prefixes against.
+// document resolves its prefixes against. ClauseCatalogName is a second,
+// independently-versioned kind="shapes" entry (Phase 3, ADR-10): typed
+// clause NodeShapes the template builder's palette (GET /semantic/clauses)
+// and contract validation (validateAgainstHubShapes) both read.
 const (
-	ContextName = "facis-dcs"
-	ShapesName  = "facis-dcs"
-	ProfileName = "facis.sla.basic"
+	ContextName       = "facis-dcs"
+	ShapesName        = "facis-dcs"
+	ProfileName       = "facis.sla.basic"
+	OntologyName      = "facis-dcs"
+	SLAOntologyName   = "facis-sla"
+	ODRLProfileName   = "dcs-odrl-profile"
+	ClauseCatalogName = "clause-catalog"
 )
 
 // Schema is one stored, versioned hub entry.
@@ -126,6 +145,35 @@ func (Repo) Get(ctx context.Context, tx *sqlx.Tx, name, kind string, version int
 	return &s, nil
 }
 
+// ListEntry summarizes one (name, kind) hub entry for the management UI.
+type ListEntry struct {
+	Name          string `db:"name"`
+	Kind          string `db:"kind"`
+	MediaType     string `db:"media_type"`
+	ActiveVersion int    `db:"active_version"`
+	LatestVersion int    `db:"latest_version"`
+	UpdatedAt     string `db:"updated_at"`
+}
+
+// List returns every distinct (name, kind) entry with its active/latest
+// version summary, ordered by kind then name.
+func (Repo) List(ctx context.Context, tx *sqlx.Tx) ([]ListEntry, error) {
+	var out []ListEntry
+	err := tx.SelectContext(ctx, &out, `
+        SELECT s.name, s.kind,
+               MAX(s.version) AS latest_version,
+               COALESCE(MAX(s.version) FILTER (WHERE s.active), 0) AS active_version,
+               MAX(s.created_at)::text AS updated_at,
+               (ARRAY_AGG(s.media_type ORDER BY s.version DESC))[1] AS media_type
+        FROM semantic_schemas s
+        GROUP BY s.name, s.kind
+        ORDER BY s.kind, s.name`)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // Versions lists all stored versions of (name, kind), oldest first.
 func (Repo) Versions(ctx context.Context, tx *sqlx.Tx, name, kind string) ([]Schema, error) {
 	var out []Schema
@@ -138,10 +186,14 @@ func (Repo) Versions(ctx context.Context, tx *sqlx.Tx, name, kind string) ([]Sch
 	return out, nil
 }
 
-// Seed idempotently installs the genesis FACIS DCS v1 profile: the embedded
-// context, shapes, and validation profile become version 1 (active) unless
-// the hub already holds them. Fatal on failure — the hub is a required
-// dependency of document normalization.
+// Seed installs the embedded FACIS DCS profile documents. A schema absent
+// from the hub becomes version 1 (active). A schema whose LATEST stored
+// version's content differs from the embedded document gets the embedded
+// content registered and activated as the next version — hub versions are
+// immutable, so shipped-asset updates propagate to running deployments as
+// ordinary version bumps while documents pinned to older versions keep
+// resolving them. Fatal on failure — the hub is a required dependency of
+// document normalization.
 func Seed(ctx context.Context, db *sqlx.DB) error {
 	tx, err := db.BeginTxx(ctx, nil)
 	if err != nil {
@@ -156,14 +208,25 @@ func Seed(ctx context.Context, db *sqlx.DB) error {
 		{ContextName, "context", "application/ld+json", genesisContext},
 		{ShapesName, "shapes", "text/turtle", genesisShapes},
 		{ProfileName, "profile", "application/yaml", genesisProfile},
+		{ClauseCatalogName, "shapes", "text/turtle", genesisClauseCatalog},
+		{OntologyName, "ontology", "text/turtle", genesisOntology},
+		{SLAOntologyName, "ontology", "text/turtle", genesisSLAOntology},
+		{ODRLProfileName, "ontology", "text/turtle", genesisODRLProfile},
 	}
 	for _, g := range genesis {
-		var exists bool
-		if err := tx.GetContext(ctx, &exists,
-			`SELECT EXISTS(SELECT 1 FROM semantic_schemas WHERE name = $1 AND kind = $2)`, g.name, g.kind); err != nil {
-			return err
+		var latest struct {
+			Content string `db:"content"`
+			Version int    `db:"version"`
 		}
-		if exists {
+		err := tx.GetContext(ctx, &latest, `
+			SELECT content, version FROM semantic_schemas
+			WHERE name = $1 AND kind = $2 ORDER BY version DESC LIMIT 1`, g.name, g.kind)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			// fall through to register version 1
+		case err != nil:
+			return err
+		case latest.Content == string(g.content):
 			continue
 		}
 		if _, err := (Repo{}).Register(ctx, tx, g.name, g.kind, g.mediaType, string(g.content), "system:genesis", true); err != nil {
@@ -205,7 +268,7 @@ func ActiveOntologyIRIs(ctx context.Context, db *sqlx.DB) (map[string]string, in
 }
 
 // AnchorURL builds the hub-served, versioned URL a produced document's
-// schemaRefs anchor to. Mirrors provenance.RemoteManifestURL's DCS_PUBLIC_URL
+// schema anchors to. Mirrors provenance.RemoteManifestURL's DCS_PUBLIC_URL
 // convention: without a configured public URL the reference stays
 // host-relative (still resolvable against the serving instance).
 func AnchorURL(kind, name string, version int) string {

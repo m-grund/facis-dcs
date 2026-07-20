@@ -47,8 +47,8 @@ export interface SemanticConditionParameter {
   /** The DCS field IRI (e.g. urn:uuid:field-... or did:...#field-...) — populated by contractDataToSemanticConditions. */
   fieldId?: string
   type: SemanticParameterType
-  schemaRef: string
-  semanticPath: DomainSemanticPath
+  /** The ontology domain-field IRI this parameter binds (its identity); the requirement field's own @id when unbound. */
+  fieldIri: string
   valueConstraint?: SemanticValueConstraint
   defaultValue?: unknown
   semanticMeaning?: string
@@ -79,78 +79,17 @@ export interface SemanticValueOption {
 
 // ---- Validation Metadata ----
 
-export const FACIS_SCHEMA_REFS = {
-  documentStructure: 'facis.dcs.document-structure.v1',
-  templateData: 'facis.dcs.template-data.v1',
-  contractData: 'facis.dcs.contract-data.v1',
-  semanticCondition: 'facis.dcs.semantic-condition.v1',
-  party: 'facis.dcs.party.v1',
-  contract: 'facis.dcs.contract.v1',
-  service: 'facis.dcs.service.v1',
-  signature: 'facis.dcs.signature.v1',
-} as const
-
-export type DomainSemanticPath = string
-
 export interface DomainFieldDefinition {
+  /** The field's IRI — its identity in documents (dcs:domainField @id). */
   ontologyId: string
-  semanticPath: DomainSemanticPath
-  schemaRef: string
+  /** The dcs:parameterName new requirement fields declare, derived from the field IRI's local name. */
+  parameterName: string
   type: SemanticParameterType
   label: string
-  statementType?: string
-  statementTypeLabel?: string
+  /** The rdfs:domain class IRI grouping the field, when declared. */
+  domain?: string
+  domainLabel?: string
   valueConstraint?: SemanticValueConstraint
-}
-
-export interface SchemaReferenceSet {
-  documentStructure: string
-  semanticCondition: string
-  templateData?: string
-  contractData?: string
-  jsonLdContext?: string
-  ontology?: string
-  shaclShapes?: string
-}
-
-export interface PolicyReference {
-  policyId: string
-  version: string
-  enforcementPoint:
-    | 'template:create'
-    | 'template:update'
-    | 'template:verify'
-    | 'contract:create'
-    | 'contract:update'
-    | 'contract:submit'
-}
-
-export interface ValidationProfile {
-  schemaVersion: 'v1'
-  profile: 'FACIS_DCS_TEMPLATE_V1' | 'FACIS_DCS_CONTRACT_V1'
-  requiredPolicies: string[]
-}
-
-export const FACIS_TEMPLATE_POLICY_REFS: PolicyReference[] = [
-  { policyId: 'facis.dcs.template.structure', version: 'v1', enforcementPoint: 'template:create' },
-  { policyId: 'facis.dcs.template.semantic-conditions', version: 'v1', enforcementPoint: 'template:verify' },
-]
-
-export const FACIS_CONTRACT_POLICY_REFS: PolicyReference[] = [
-  { policyId: 'facis.dcs.contract.structure', version: 'v1', enforcementPoint: 'contract:create' },
-  { policyId: 'facis.dcs.contract.semantic-values', version: 'v1', enforcementPoint: 'contract:update' },
-]
-
-export const FACIS_TEMPLATE_VALIDATION_PROFILE: ValidationProfile = {
-  schemaVersion: 'v1',
-  profile: 'FACIS_DCS_TEMPLATE_V1',
-  requiredPolicies: FACIS_TEMPLATE_POLICY_REFS.map((policy) => policy.policyId),
-}
-
-export const FACIS_CONTRACT_VALIDATION_PROFILE: ValidationProfile = {
-  schemaVersion: 'v1',
-  profile: 'FACIS_DCS_CONTRACT_V1',
-  requiredPolicies: FACIS_CONTRACT_POLICY_REFS.map((policy) => policy.policyId),
 }
 
 // ---- MetaData ----

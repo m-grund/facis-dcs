@@ -1,20 +1,7 @@
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
 import type { DcsBlock, DcsDataRequirement, DcsLayoutNode, OdrlRule } from '@/models/dcs-jsonld'
-import type {
-  PlaceholderBinding,
-  PolicyBundle,
-  SemanticRule,
-  SLAAgreement,
-  TemplateVariable,
-} from '@/models/semantic/facis-dcs-semantic'
-import type {
-  MetaData,
-  PolicyReference,
-  SchemaReferenceSet,
-  TemplateTypeValue,
-  ValidationProfile,
-} from '@/modules/template-repository/models/contract-template'
+import type { MetaData, TemplateTypeValue } from '@/modules/template-repository/models/contract-template'
 import type { ContractTemplateState } from '@/types/contract-template-state'
 import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
@@ -23,6 +10,8 @@ export type TemplateDataVersion = (typeof TEMPLATE_DATA_VERSIONS)[number]
 
 interface TemplateDraftState {
   did: string | null
+  /** The document's @id — its dereferenceable resource IRI; authored fragments anchor to it. */
+  documentIri: string | null
   name: string
   description: string
   templateDataVersion: TemplateDataVersion
@@ -35,14 +24,6 @@ interface TemplateDraftState {
   /** JSON-LD ODRL policies (operator constraints). */
   policies: OdrlRule[]
   customMetaData: MetaData[]
-  schemaRefs: SchemaReferenceSet
-  policyRefs: PolicyReference[]
-  validation: ValidationProfile
-  templateVariables: TemplateVariable[]
-  placeholderBindings: PlaceholderBinding[]
-  semanticRules: SemanticRule[]
-  policyBundle: PolicyBundle | null
-  sla: SLAAgreement | null
   subTemplateSnapshots: SubTemplateSnapshot[]
   templateType: TemplateTypeValue
   state: ContractTemplateState | undefined
@@ -65,9 +46,8 @@ export interface AddBlockPayload {
   // #### For Clause ####
   clauseBlockId?: string
   content?: import('@/models/dcs-jsonld').DcsContentSegment[]
-  blockCatalogueId?: string
-  schemaRef?: string
-  semanticPath?: string
+  /** Typed clause instance (ADR-10) nested into the new dcs:Clause block. */
+  typedClause?: import('@/models/dcs-jsonld').DcsTypedClauseInstance
   // #### For ApprovedTemplate ####
   templateId?: string
   version?: number

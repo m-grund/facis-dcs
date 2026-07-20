@@ -1,15 +1,11 @@
-import {
-  FACIS_SCHEMA_REFS,
-  FACIS_TEMPLATE_POLICY_REFS,
-  FACIS_TEMPLATE_VALIDATION_PROFILE,
-  TemplateType,
-} from '@template-repository/models/contract-template'
+import { TemplateType } from '@template-repository/models/contract-template'
 import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-domain-fields'
 import { DCS_ODRL_PROFILE_IRI, DEFAULT_FIELD_CONSTRAINT_ACTION } from '@template-repository/utils/sla-ontology-catalog'
 import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
+import { typedClauseValuesSummary } from '@template-repository/utils/typed-clause'
+import jsonld from 'jsonld'
 import { defineStore } from 'pinia'
 import {
-  DCS_JSONLD_CONTEXT,
   type DcsApprovedTemplate,
   type DcsBlock,
   type DcsClause,
@@ -32,6 +28,11 @@ import {
   type OdrlRule,
   type OdrlSet,
 } from '@/models/dcs-jsonld'
+import {
+  applyInlineSemanticValues,
+  applyInlineSemanticValuesToSnapshots,
+} from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
+import { getHubContext } from '@/services/semantic-hub-service'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
@@ -104,7 +105,7 @@ export const useDcsDraftStore = defineStore(storeId, {
     templateDocument(): DcsTemplateData {
       return assembleCanonicalDocument({
         documentType: 'dcs:ContractTemplate',
-        documentId: this.did ?? undefined,
+        documentId: this.documentIri ?? this.did ?? undefined,
         name: this.name,
         description: this.description,
         templateType: this.templateType,
@@ -162,6 +163,7 @@ export const useDcsDraftStore = defineStore(storeId, {
 
         this.reset({
           did: meta.did,
+          documentIri: rawDoc['@id'] ?? null,
           name: meta.name ? meta.name : (metadata['dcs:title'] ?? ''),
           description: meta.description ? meta.description : (metadata['dcs:description'] ?? ''),
           templateType: templateType !== TemplateType.component ? templateType : derivedTemplateType,
@@ -209,13 +211,22 @@ export const useDcsDraftStore = defineStore(storeId, {
     deleteBlock(blockId: string): void {
       deleteBlock(this.layout, this.blocks, blockId)
     },
-    updateBlock(blockId: string, payload: { title?: string; text?: string; content?: DcsContentSegment[] }): void {
+    updateBlock(
+      blockId: string,
+      payload: {
+        title?: string
+        text?: string
+        content?: DcsContentSegment[]
+        typedClause?: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+      },
+    ): void {
       const block = this.blocks.find((b) => b['@id'] === blockId)
       if (!block) return
       if (isDcsClause(block as DcsBlock)) {
         const clause = block as DcsClause
         if (payload.title !== undefined) clause['dcs:title'] = payload.title || undefined
         if (payload.content !== undefined) clause['dcs:content'] = { '@list': payload.content }
+        if (payload.typedClause !== undefined) clause['dcs:typedClause'] = payload.typedClause
       } else if ((block as DcsBlock)['@type'] === 'dcs:TextBlock') {
         const tb = block as DcsTextBlock
         if (payload.text !== undefined) tb['dcs:text'] = payload.text
@@ -234,7 +245,7 @@ export const useDcsDraftStore = defineStore(storeId, {
       parameterType: SemanticConditionParameter['type'],
       operators: SemanticParameterOperator[],
     ): void {
-      const documentId = this.did ?? undefined
+      const documentId = this.documentIri ?? this.did ?? undefined
       const requirement = requirementForField(this.contractData, fieldId)
       const role = requirement?.['dcs:entityRole']
       this.policies = this.policies.filter((p) => p['odrl:constraint']?.['odrl:leftOperand']['@id'] !== fieldId)
@@ -248,6 +259,7 @@ export const useDcsDraftStore = defineStore(storeId, {
           'odrl:assigner': partyReference(role, documentId),
           'odrl:assignee': partyReference(counterpartRole(role), documentId),
           'odrl:target': targetReference(documentId),
+          'dcs:prose': proseBlockForField(this.blocks, fieldId),
           'odrl:constraint': {
             '@type': 'odrl:Constraint',
             'odrl:leftOperand': { '@id': fieldId },
@@ -259,7 +271,7 @@ export const useDcsDraftStore = defineStore(storeId, {
     },
     addSemanticCondition(payload: Omit<SemanticCondition, 'conditionId'>): void {
       const conditionId = crypto.randomUUID()
-      const documentId = this.did ?? undefined
+      const documentId = this.documentIri ?? this.did ?? undefined
       this.contractData.push({
         '@id': conditionIri(conditionId, documentId),
         '@type': 'dcs:DataRequirement',
@@ -270,7 +282,9 @@ export const useDcsDraftStore = defineStore(storeId, {
         ...(payload.entityRole ? { 'dcs:entityRole': payload.entityRole } : {}),
         'dcs:fields': payload.parameters.map((p) => semanticParamToField(conditionId, p, documentId)),
       })
-      this.policies.push(...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, documentId))
+      this.policies.push(
+        ...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId),
+      )
     },
     updateSemanticCondition(
       conditionId: string,
@@ -278,7 +292,7 @@ export const useDcsDraftStore = defineStore(storeId, {
       subTemplateRef?: SubTemplateReference,
     ): void {
       if (subTemplateRef) return // sub-template snapshots are immutable
-      const documentId = this.did ?? undefined
+      const documentId = this.documentIri ?? this.did ?? undefined
       const idx = this.contractData.findIndex((r) => r['dcs:conditionId'] === conditionId)
       const existing = this.contractData[idx]
       if (idx < 0 || !existing) return
@@ -297,7 +311,9 @@ export const useDcsDraftStore = defineStore(storeId, {
         const leftOp = p['odrl:constraint']?.['odrl:leftOperand']['@id']
         return !leftOp || !oldFieldIds.has(leftOp)
       })
-      this.policies.push(...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, documentId))
+      this.policies.push(
+        ...semanticConditionToPolicies({ ...payload, conditionId }, this.contractData, this.blocks, documentId),
+      )
     },
     deleteSemanticCondition(conditionId: string, subTemplateRef?: SubTemplateReference): void {
       if (subTemplateRef) return // sub-template snapshots are immutable
@@ -324,12 +340,7 @@ export const useDcsDraftStore = defineStore(storeId, {
         return !leftOp || !fieldIds.has(leftOp)
       })
     },
-    addClause(payload: {
-      title?: string
-      content: DcsContentSegment[]
-      schemaRef?: string
-      semanticPath?: string
-    }): string {
+    addClause(payload: { title?: string; content: DcsContentSegment[] }): string {
       const blockId = crypto.randomUUID()
       const id = blockIri(blockId, this.did ?? undefined)
       const block: import('@/models/dcs-jsonld').DcsClause = {
@@ -341,9 +352,93 @@ export const useDcsDraftStore = defineStore(storeId, {
       this.blocks.push(block)
       return id
     },
+    /**
+     * Phase 3 (DCS-FR-TR-03/TR-04, ADR-10): adds a typed clause instance
+     * generated from the Semantic Hub's clause catalog (TypedClausePalette
+     * .vue). Nested inside a plain dcs:Clause block (dcs:typedClause) so it
+     * renders/places/persists through the existing free-text clause
+     * machinery, while still becoming its own JSON-LD node server-side
+     * validation (validateAgainstHubShapes) targets by its @type.
+     */
+    async addTypedClause(payload: {
+      clauseType: string
+      title?: string
+      instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance
+    }): Promise<string> {
+      const blockId = crypto.randomUUID()
+      const id = blockIri(blockId, this.did ?? undefined)
+      const trimmedTitle = payload.title?.trim()
+      const typeTail = payload.clauseType.split(/[#/:]/).pop()
+      const title = trimmedTitle?.length ? trimmedTitle : typeTail?.length ? typeTail : payload.clauseType
+      const instance = payload.instance
+
+      const compacted = await compactAgainstHubContext(instance)
+      if (isOdrlRuleInstance(compacted['@type'])) {
+        // A hub-templated ODRL rule: the clause block is its human-readable
+        // prose, the compacted rule joins dcs:policies backed by it.
+        const block: import('@/models/dcs-jsonld').DcsClause = {
+          '@type': 'dcs:Clause',
+          '@id': id,
+          'dcs:title': title,
+          'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
+        }
+        this.blocks.push(block)
+        const root = this.layout.find((node) => node['dcs:isRoot'])
+        if (root) {
+          const children = root['dcs:children']['@list'].map((ref) => ref['@id'])
+          children.push(id)
+          root['dcs:children'] = { '@list': children.map((childId) => ({ '@id': childId })) }
+        }
+        const documentId = this.documentIri ?? this.did ?? undefined
+        this.policies.push({
+          'odrl:assigner': partyReference(undefined, documentId),
+          'odrl:assignee': partyReference(undefined, documentId),
+          'odrl:target': targetReference(documentId),
+          'odrl:action': { '@id': DEFAULT_FIELD_CONSTRAINT_ACTION },
+          ...compacted,
+          '@id': `urn:uuid:${crypto.randomUUID()}`,
+          '@type': compacted['@type'],
+          'dcs:prose': { '@id': id },
+        } as OdrlRule)
+        return id
+      }
+
+      const block: import('@/models/dcs-jsonld').DcsClause = {
+        '@type': 'dcs:Clause',
+        '@id': id,
+        'dcs:title': title,
+        'dcs:content': { '@list': [typedClauseValuesSummary(instance)] },
+        'dcs:typedClause': instance,
+      }
+      this.blocks.push(block)
+      return id
+    },
+    /**
+     * Re-fills a typed clause with new shape-conformant values: the nested
+     * machine-readable instance and the clause's human-readable summary text
+     * change together, so the two representations cannot drift apart
+     * (DCS-FR-CWE-04). Available in both workflows — the template freezes
+     * the clause's shape, the contract creator fills its values.
+     */
+    updateTypedClause(
+      blockId: string,
+      payload: { title?: string; instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance },
+    ): void {
+      const block = this.blocks.find((b) => b['@id'] === blockId)
+      if (!block || !isDcsClause(block as DcsBlock)) return
+      const clause = block as DcsClause
+      if (!clause['dcs:typedClause']) return
+      clause['dcs:typedClause'] = payload.instance
+      clause['dcs:content'] = { '@list': [typedClauseValuesSummary(payload.instance)] }
+      const trimmedTitle = payload.title?.trim()
+      if (trimmedTitle?.length) clause['dcs:title'] = trimmedTitle
+    },
     deleteClause(blockId: string): void {
       removeClauseFromLayout(this.layout, blockId)
       this.blocks = this.blocks.filter((b) => b['@id'] !== blockId)
+      // A machine-readable rule must never outlive the prose it is backed
+      // by — drop policies whose dcs:prose referenced the deleted clause.
+      this.policies = this.policies.filter((p) => p['dcs:prose']?.['@id'] !== blockId)
     },
     updateClause(blockId: string, payload: { title?: string; content?: DcsContentSegment[] }): void {
       this.updateBlock(blockId, payload)
@@ -476,29 +571,28 @@ function requirementForField(
   return contractData.find((r) => r['dcs:fields'].some((f) => f['@id'] === fieldId))
 }
 
-/** Assembles the single enclosing odrl:Set (DCS ODRL profile) from the flat internal rule array. */
+/** Assembles the single enclosing odrl:Offer from the flat internal rule array; the first signature seals it into an odrl:Agreement server-side. */
 function assemblePolicySet(policies: readonly OdrlRule[], documentId?: string): OdrlSet {
   const set: OdrlSet = {
     '@id': policySetIri(documentId),
-    '@type': 'odrl:Set',
-    uid: documentId ?? policySetIri(documentId),
+    '@type': 'odrl:Offer',
     'odrl:profile': { '@id': DCS_ODRL_PROFILE_IRI },
   }
   const duties = policies.filter((p) => p['@type'] === 'odrl:Duty')
   const permissions = policies.filter((p) => p['@type'] === 'odrl:Permission')
   const prohibitions = policies.filter((p) => p['@type'] === 'odrl:Prohibition')
-  if (duties.length) set['odrl:duty'] = duties
+  if (duties.length) set['odrl:obligation'] = duties
   if (permissions.length) set['odrl:permission'] = permissions
   if (prohibitions.length) set['odrl:prohibition'] = prohibitions
   return set
 }
 
-/** Flattens the enclosing odrl:Set (or the empty "no policies yet" array) into the flat internal rule array. */
+/** Flattens the enclosing ODRL policy (or the empty "no policies yet" array) into the flat internal rule array. */
 export function flattenPolicySet(policies: OdrlSet | OdrlRule[] | undefined): OdrlRule[] {
   if (!policies) return []
   if (Array.isArray(policies)) return policies
   return [
-    ...(policies['odrl:duty'] ?? []),
+    ...(policies['odrl:obligation'] ?? []),
     ...(policies['odrl:permission'] ?? []),
     ...(policies['odrl:prohibition'] ?? []),
   ]
@@ -525,11 +619,19 @@ interface CanonicalDocumentInput {
   subTemplateSnapshots?: SubTemplateSnapshot[]
   semanticConditionValues?: SemanticConditionValue[]
   parentContractDid?: string
-  sourceTemplate?: DcsContractData['sourceTemplate']
-  derivedFromTemplate?: string
+  derivedFromTemplate?: DcsContractData['derivedFromTemplate']
 }
 
 function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentData {
+  const isContract = input.documentType === 'dcs:Contract'
+  const submittedValues = input.semanticConditionValues ?? []
+  // A contract carries its submitted values inline on the requirement field
+  // each one targets (dcs:parameterValue) — own fields and composed
+  // sub-template fields alike; a template declares fields with no values.
+  const contractData = isContract ? applyInlineSemanticValues(input.contractData, submittedValues) : input.contractData
+  const subTemplateSnapshots = isContract
+    ? applyInlineSemanticValuesToSnapshots(input.subTemplateSnapshots ?? [], submittedValues)
+    : (input.subTemplateSnapshots ?? [])
   const canonicalBlocks = canonicalizeBlocks(input.blocks)
   const canonicalLayout = canonicalizeLayout(input.layout)
   const commonMetadata = {
@@ -537,9 +639,7 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
     ...(input.name ? { 'dcs:title': input.name } : {}),
     ...(input.description ? { 'dcs:description': input.description } : {}),
     ...(input.customMetaData?.length ? { 'dcs:customMetaData': input.customMetaData } : {}),
-    ...(input.subTemplateSnapshots?.length
-      ? { 'dcs:subTemplates': serializeSubTemplateSnapshots(input.subTemplateSnapshots) }
-      : {}),
+    ...(subTemplateSnapshots.length ? { 'dcs:subTemplates': serializeSubTemplateSnapshots(subTemplateSnapshots) } : {}),
   }
   const metadata =
     input.documentType === 'dcs:ContractTemplate'
@@ -552,7 +652,6 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
       : { '@type': 'dcs:ContractMetadata' as const, ...commonMetadata }
 
   return {
-    '@context': DCS_JSONLD_CONTEXT,
     '@type': input.documentType,
     ...(input.documentId ? { '@id': input.documentId } : {}),
     'dcs:metadata': metadata,
@@ -562,13 +661,11 @@ function assembleCanonicalDocument(input: CanonicalDocumentInput): DcsDocumentDa
       'dcs:blocks': { '@list': canonicalBlocks },
       'dcs:layout': canonicalLayout,
     },
-    'dcs:contractData': input.contractData,
+    'dcs:contractData': contractData,
     'dcs:policies': assemblePolicySet(input.policies, input.documentId),
-    ...(input.documentType === 'dcs:Contract'
+    ...(isContract
       ? {
-          semanticConditionValues: input.semanticConditionValues ?? [],
           ...(input.parentContractDid ? { 'dcs:parentContract': { '@id': input.parentContractDid } } : {}),
-          ...(input.sourceTemplate ? { sourceTemplate: input.sourceTemplate } : {}),
           ...(input.derivedFromTemplate ? { derivedFromTemplate: input.derivedFromTemplate } : {}),
         }
       : {}),
@@ -602,6 +699,7 @@ function canonicalizeLayout(layout: DcsLayoutNode[]): DcsLayoutNode[] {
     return [
       {
         ...node,
+        '@type': 'dcs:LayoutNode',
         'dcs:children': {
           '@list': node['dcs:children']['@list'].filter((ref) => !isMergedBlockId(ref['@id'])),
         },
@@ -623,8 +721,7 @@ export interface ContractDocumentInput {
   subTemplateSnapshots: SubTemplateSnapshot[]
   semanticConditionValues: SemanticConditionValue[]
   parentContractDid?: string
-  sourceTemplate?: DcsContractData['sourceTemplate']
-  derivedFromTemplate?: string
+  derivedFromTemplate?: DcsContractData['derivedFromTemplate']
 }
 
 export function buildContractDocument(input: ContractDocumentInput): DcsContractData {
@@ -753,6 +850,7 @@ function createBlock(id: string, payload: AddBlockPayload): DcsBlock | MergedApp
         '@id': id,
         'dcs:content': { '@list': payload.content ?? [] },
         ...(payload.title ? { 'dcs:title': payload.title } : {}),
+        ...(payload.typedClause ? { 'dcs:typedClause': payload.typedClause } : {}),
       }
     case 'dcs:ApprovedTemplate':
       return {
@@ -837,24 +935,13 @@ function collectDescendantIds(blockId: string, nodeById: Map<string, DcsLayoutNo
 
 const defaultState: Readonly<Omit<TemplateDraftState, 'blocks' | 'layout'>> = {
   did: null,
+  documentIri: null,
   name: '',
   description: '',
   templateDataVersion: 1,
   contractData: [],
   policies: [],
   customMetaData: [],
-  schemaRefs: {
-    documentStructure: FACIS_SCHEMA_REFS.documentStructure,
-    semanticCondition: FACIS_SCHEMA_REFS.semanticCondition,
-    templateData: FACIS_SCHEMA_REFS.templateData,
-  },
-  policyRefs: FACIS_TEMPLATE_POLICY_REFS,
-  validation: FACIS_TEMPLATE_VALIDATION_PROFILE,
-  templateVariables: [],
-  placeholderBindings: [],
-  semanticRules: [],
-  policyBundle: null,
-  sla: null,
   subTemplateSnapshots: [],
   templateType: TemplateType.component,
   state: undefined,
@@ -874,12 +961,6 @@ function getInitialState(): TemplateDraftState {
     contractData: [],
     policies: [],
     customMetaData: [],
-    schemaRefs: { ...defaultState.schemaRefs },
-    policyRefs: defaultState.policyRefs.map((p) => ({ ...p })),
-    validation: { ...defaultState.validation, requiredPolicies: [...defaultState.validation.requiredPolicies] },
-    templateVariables: [],
-    placeholderBindings: [],
-    semanticRules: [],
     subTemplateSnapshots: [],
   }
 }
@@ -928,19 +1009,63 @@ function semanticParamToField(
   parameter: SemanticConditionParameter,
   documentId?: string,
 ): DcsRequirementField {
-  const domainField = ONTOLOGY_DOMAIN_FIELDS.find((f) => f.semanticPath === parameter.semanticPath)
+  const domainField = ONTOLOGY_DOMAIN_FIELDS.find((f) => f.ontologyId === parameter.fieldIri)
+  const value = parameter.value
+  const hasValue = value !== undefined && value !== null && value !== ''
   return {
     '@id': fieldIri(conditionId, parameter.parameterName, documentId),
     '@type': 'dcs:RequirementField',
     'dcs:parameterName': parameter.parameterName,
-    'dcs:domainField': { '@id': domainField?.ontologyId ?? parameter.semanticPath },
+    'dcs:domainField': { '@id': domainField?.ontologyId ?? parameter.fieldIri },
     'dcs:required': parameter.isRequired,
+    ...(hasValue ? { 'dcs:parameterValue': value as string | number | boolean } : {}),
   }
+}
+
+/** The clause block whose text carries a placeholder bound to fieldId — the prose an ODRL rule over that field is backed by. */
+
+const ODRL_RULE_TYPES = new Set(['odrl:Duty', 'odrl:Permission', 'odrl:Prohibition'])
+
+/** Compacts a shacl-form instance (absolute IRIs) against the hub context. */
+async function compactAgainstHubContext(
+  instance: import('@/models/dcs-jsonld').DcsTypedClauseInstance,
+): Promise<Record<string, unknown>> {
+  const compacted = (await jsonld.compact(instance as object, (await getHubContext()) as never)) as Record<
+    string,
+    unknown
+  >
+  delete compacted['@context']
+  return compacted
+}
+
+/** Whether a compacted instance is an ODRL rule the policy buckets accept. */
+export function isOdrlRuleInstance(compactedType: unknown): boolean {
+  return typeof compactedType === 'string' && ODRL_RULE_TYPES.has(compactedType)
+}
+
+function proseBlockForField(
+  blocks: readonly (DcsBlock | MergedApprovedTemplateBlock)[],
+  fieldId: string,
+): JsonLdReference {
+  for (const block of blocks) {
+    if (isDcsMergedApprovedTemplate(block) || !isDcsClause(block)) continue
+    const content = block['dcs:content']
+    const segments = typeof content === 'string' ? [] : content['@list']
+    for (const segment of segments) {
+      if (typeof segment !== 'string' && segment['dcs:bindsTo']['@id'] === fieldId) {
+        return { '@id': block['@id'] }
+      }
+    }
+  }
+  throw new Error(
+    `No clause text binds field ${fieldId}: every machine-readable rule must be backed by human-readable prose (place the field's placeholder in a clause first).`,
+  )
 }
 
 function semanticConditionToPolicies(
   condition: SemanticCondition,
   contractData: DcsDataRequirement[],
+  blocks: readonly (DcsBlock | MergedApprovedTemplateBlock)[],
   documentId?: string,
 ): OdrlRule[] {
   const req = contractData.find((r) => r['dcs:conditionId'] === condition.conditionId)
@@ -960,6 +1085,7 @@ function semanticConditionToPolicies(
           'odrl:assigner': partyReference(role, documentId),
           'odrl:assignee': partyReference(counterpartRole(role), documentId),
           'odrl:target': targetReference(documentId),
+          'dcs:prose': proseBlockForField(blocks, field['@id']),
           'odrl:constraint': {
             '@type': 'odrl:Constraint',
             'odrl:leftOperand': { '@id': field['@id'] },
@@ -1001,16 +1127,32 @@ function contractDataToSemanticConditions(
     entityRole: requirement['dcs:entityRole'],
     parameters: requirement['dcs:fields'].flatMap((field) => {
       const ontologyField = ONTOLOGY_DOMAIN_FIELDS.find(
-        (candidate) => candidate.ontologyId === field['dcs:domainField']['@id'],
+        (candidate) => candidate.ontologyId === field['dcs:domainField']?.['@id'],
       )
-      if (!ontologyField) return []
+      if (!ontologyField) {
+        // A requirement field is valid without a domain-field binding (the
+        // served RequirementField shape requires only dcs:parameterName) —
+        // its fill input derives from the field's own declaration.
+        return [
+          {
+            parameterName: field['dcs:parameterName'],
+            fieldId: field['@id'],
+            type: field['dcs:valueType'] === 'number' ? ('decimal' as const) : ('string' as const),
+            fieldIri: field['@id'],
+            valueConstraint: undefined,
+            uiMetadata: { label: field['dcs:parameterName'] },
+            isRequired: field['dcs:required'],
+            operators: operatorsByField.get(field['@id']) ?? [],
+            value: undefined,
+          },
+        ]
+      }
       return [
         {
           parameterName: field['dcs:parameterName'],
           fieldId: field['@id'],
           type: ontologyField.type,
-          schemaRef: ontologyField.schemaRef,
-          semanticPath: ontologyField.semanticPath,
+          fieldIri: ontologyField.ontologyId,
           valueConstraint: cloneValueConstraint(ontologyField.valueConstraint),
           uiMetadata: { label: ontologyField.label },
           isRequired: field['dcs:required'],

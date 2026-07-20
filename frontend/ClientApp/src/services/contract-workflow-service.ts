@@ -154,6 +154,12 @@ export const contractWorkflowService: ContractWorkflowService = {
       .then((res) => res.data)
   },
 
+  async exportBundle(did: string): Promise<Blob> {
+    return http
+      .get<Blob>(`/contract/export/${encodeURIComponent(did)}`, { responseType: 'blob' })
+      .then((res) => res.data)
+  },
+
   async verifyPdf(did: string): Promise<{
     match: boolean
     jsonld_hash: string

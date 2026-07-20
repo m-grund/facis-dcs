@@ -1,15 +1,16 @@
 # Machine-readable ODRL soundness and server-side policy enforcement
 # (SRS: DCS-FR-PACM-03).
 #
-# Scope: a contract's rules live inside ONE enclosing odrl:Set (uid = the
-# contract DID, odrl:profile declared); every rule carries exactly one
-# odrl:action plus odrl:assigner/odrl:assignee/odrl:target; and constraint
-# violations are enforced server-side at both the approval and the signing
-# entry points. The Scenario Outline proves operator evaluation for all 8
+# Scope: a contract's rules live inside ONE enclosing policy node (an
+# odrl:Offer while unsigned, sealed into the odrl:Agreement the signatures
+# bind by the first signature; @id anchored to the contract DID,
+# odrl:profile declared); every rule carries exactly one odrl:action plus
+# odrl:assigner/odrl:assignee/odrl:target; and constraint violations are
+# enforced server-side at both the approval and the signing entry points. The Scenario Outline proves operator evaluation for all 8
 # ODRL operators (eq, neq, isAnyOf, isNoneOf, gteq, lteq, gt, lt); operator
 # evaluation is additionally covered by the Go unit tests in
 # backend/internal/base/validation/contractcontentaudit_test.go. The bare-
-# Duty legacy shape (no action, no enclosing Set) is rejected by structural
+# Duty shape (no action, no enclosing policy node) is rejected by structural
 # validation.
 #
 # The "direct raw API call" scenario attempts the sign call BEFORE the
@@ -28,13 +29,22 @@
 Feature: Machine-readable ODRL soundness and server-side policy enforcement
 
   @DCS-FR-PACM-03
-  Scenario: A contract's ODRL policies form one enclosing Set with profile, action, parties, and target
+  Scenario: A contract's ODRL policies form one enclosing Offer with profile, action, parties, and target
     Given a fresh draft contract "ODRL Structure Contract"
     When the policies of contract "ODRL Structure Contract" are updated to a real ODRL 2.2 policy set (rule "Duty", field "country", operator "isAnyOf") requiring "DEU,AUT,CHE" while the actual value is "DEU"
     Then the policy update for contract "ODRL Structure Contract" is accepted
-    And the stored policies of contract "ODRL Structure Contract" form a single enclosing odrl:Set whose uid equals the contract DID and which declares an odrl:profile
+    And the stored policies of contract "ODRL Structure Contract" form a single enclosing odrl:Offer whose @id is anchored to the contract DID and which declares an odrl:profile
     And every stored policy rule of contract "ODRL Structure Contract" declares exactly one odrl:action
     And every stored policy rule of contract "ODRL Structure Contract" declares an odrl:assigner, odrl:assignee, and odrl:target
+
+  @DCS-FR-PACM-03
+  Scenario: The first signature seals the offered policy set into the Agreement the signatures bind
+    Given a fresh draft contract "ODRL Seal Contract"
+    When the policies of contract "ODRL Seal Contract" are updated to a real ODRL 2.2 policy set (rule "Duty", field "country", operator "isAnyOf") requiring "DEU,AUT,CHE" while the actual value is "DEU"
+    Then the policy update for contract "ODRL Seal Contract" is accepted
+    And the stored policies of contract "ODRL Seal Contract" form a single enclosing odrl:Offer whose @id is anchored to the contract DID and which declares an odrl:profile
+    When contract "ODRL Seal Contract" is submitted, reviewed, approved, and signed via the standard workflow
+    Then the stored policies of contract "ODRL Seal Contract" form a single enclosing odrl:Agreement whose @id is anchored to the contract DID and which declares an odrl:profile
 
   @DCS-FR-PACM-03
   Scenario: A contract with a violated ODRL constraint cannot be approved
@@ -61,10 +71,10 @@ Feature: Machine-readable ODRL soundness and server-side policy enforcement
     Then the contract "ODRL Satisfied Contract" reaches SIGNED state
 
   @DCS-FR-PACM-03
-  Scenario: The legacy bare-Duty policy shape is rejected by structural validation
-    Given a fresh draft contract "ODRL Legacy Shape Contract"
-    When the policies of contract "ODRL Legacy Shape Contract" are updated to the legacy bare-Duty form (field "country", operator "isAnyOf") requiring "DEU,AUT,CHE" while the actual value is "DEU"
-    Then the policy update for contract "ODRL Legacy Shape Contract" is rejected because the legacy bare-Duty form lacks an action and enclosing policy
+  Scenario: A bare-Duty policy shape is rejected by structural validation
+    Given a fresh draft contract "ODRL Bare Shape Contract"
+    When the policies of contract "ODRL Bare Shape Contract" are updated to the bare-Duty form (field "country", operator "isAnyOf") requiring "DEU,AUT,CHE" while the actual value is "DEU"
+    Then the policy update for contract "ODRL Bare Shape Contract" is rejected because the bare-Duty form lacks an action and enclosing policy
 
   @DCS-FR-PACM-03
   Scenario Outline: Server-side operator evaluation covers all 8 ODRL operators correctly

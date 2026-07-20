@@ -23,6 +23,9 @@ directly, which makes it a security gap, not a UX nicety.
   at acceptance and signing time — a client cannot submit a
   constraint-violating value and have it silently accepted, because the
   frontend is not the enforcement point.
+  **(Superseded by ADR-11 on the evaluator *mechanism* only: the hand-rolled
+  `evaluateODRLConstraint` is replaced by ODRL→Rego on embedded OPA. The
+  server-side, not-trimmable enforcement decision here stands unchanged.)**
 - The `odrl:Offer` → `odrl:Agreement` two-party upgrade and compound
   (AND/OR-nested) constraint expressions are not implemented — every
   shipped policy is a single-party `odrl:Set` with a flat constraint

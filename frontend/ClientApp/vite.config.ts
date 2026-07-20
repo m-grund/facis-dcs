@@ -46,7 +46,12 @@ export default defineConfig(({ mode, command }) => {
   return {
     // during build, use relative paths such that we respect <base href>
     base: command === 'build' ? './' : basePath,
-    plugins: [uiRedirectPlugin, baseHrefPlugin, vue(), tailwindcss()],
+    plugins: [
+      uiRedirectPlugin,
+      baseHrefPlugin,
+      vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === 'shacl-form' } } }),
+      tailwindcss(),
+    ],
     envPrefix: 'DCS_',
     resolve: {
       alias: {
@@ -62,12 +67,23 @@ export default defineConfig(({ mode, command }) => {
         '/api': {
           target: env.DCS_API_TARGET || 'http://localhost:8991',
           changeOrigin: true,
+          // Deployed instances mount the API under a base path (e.g. the BDD
+          // cluster's /digital-contracting-service/api); the dev backend
+          // serves /api directly.
+          rewrite: (path) => path.replace(/^\/api/, env.DCS_API_TARGET_PATH || '/api'),
         },
         // Proxy Hydra's public OIDC paths so the browser never needs a direct
         // Hydra address. Set DCS_HYDRA_TARGET to the Hydra public port
         // (e.g. http://localhost:4444 or the NodePort URL in a local cluster).
         '/oauth2': {
           target: env.DCS_HYDRA_TARGET || 'http://localhost:4444',
+          changeOrigin: true,
+        },
+        // The instance's did:web document is served by the DCS backend at the
+        // origin root, not by Hydra — route it there before the general
+        // /.well-known → Hydra (OIDC discovery) rule below.
+        '/.well-known/did.json': {
+          target: env.DCS_API_TARGET || 'http://localhost:8991',
           changeOrigin: true,
         },
         '/.well-known': {

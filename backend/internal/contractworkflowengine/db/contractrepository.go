@@ -256,6 +256,9 @@ type ContractRepo interface {
 	ReadHistoryByDID(ctx context.Context, tx *sqlx.Tx, did string) ([]ContractHistory, error)
 	ReadDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*Contract, error)
 	ExistsByDID(ctx context.Context, tx *sqlx.Tx, did string) (bool, error)
+	// ReadChildrenDIDs returns the DIDs of all locally-known contracts whose
+	// dcs:parentContract references did, ordered by did.
+	ReadChildrenDIDs(ctx context.Context, tx *sqlx.Tx, did string) ([]string, error)
 	ReadExpiredContracts(ctx context.Context, tx *sqlx.Tx) ([]ContractMetadata, error)
 	StoreArchiveEntry(ctx context.Context, tx *sqlx.Tx, data ContractArchiveEntry) error
 	ReadArchiveEntries(ctx context.Context, tx *sqlx.Tx) ([]ContractArchiveEntry, error)

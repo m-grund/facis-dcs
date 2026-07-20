@@ -40,8 +40,8 @@ func TestValidateContractHierarchyInvariants(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:    "hasPart is rejected",
-			data:    documentData{"hasPart": []any{map[string]any{"@id": "did:example:child"}}},
+			name:    "dcs:hasPart is rejected",
+			data:    documentData{"dcs:hasPart": []any{map[string]any{"@id": "did:example:child"}}},
 			wantErr: true,
 		},
 		{

@@ -5,7 +5,6 @@ import {
   conditionIdsInContent,
   usedPlaceholderKeysInContent,
 } from '@template-repository/composables/useClauseTextChips'
-import { stringToContent } from '@template-repository/composables/useClauseTextChips'
 import { computed, ref, useId, watch } from 'vue'
 import type { DcsContentSegment } from '@/models/dcs-jsonld'
 import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
@@ -13,10 +12,7 @@ import type { SemanticCondition } from '@/modules/template-repository/models/con
 const props = defineProps<{
   mode: 'create' | 'edit'
   initialTitle: string
-  /** Initial content as DcsContentSegment[] or a plain string (converted on mount). */
   initialContent?: DcsContentSegment[]
-  /** Legacy plain-text init — converted to DcsContentSegment[] via stringToContent. */
-  initialText?: string
   semanticConditions: SemanticCondition[]
   sourceRequirementName?: string
   showCancel?: boolean
@@ -28,9 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const localTitle = ref(props.initialTitle)
-const localContent = ref<DcsContentSegment[]>(
-  props.initialContent ?? stringToContent(props.initialText ?? '', props.semanticConditions),
-)
+const localContent = ref<DcsContentSegment[]>(props.initialContent ?? [])
 
 const localTitleId = useId()
 const localContentId = useId()
@@ -41,10 +35,10 @@ const heading = computed(() => {
 })
 
 watch(
-  () => [props.initialTitle, props.initialContent, props.initialText] as const,
-  ([title, content, text]) => {
+  () => [props.initialTitle, props.initialContent] as const,
+  ([title, content]) => {
     localTitle.value = title
-    localContent.value = content ?? stringToContent(text ?? '', props.semanticConditions)
+    localContent.value = content ?? []
   },
 )
 

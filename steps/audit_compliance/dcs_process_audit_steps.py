@@ -20,13 +20,13 @@ from steps.support.services.contract_service import ContractService
 @when('the Auditor triggers a process audit with scope "{scope}"')
 def step_when_auditor_triggers_audit(context, scope):
     headers = AuthService.get_headers_for_roles(["Auditor"])
-    context.requests_response = post_json(context, pac_audit_url(context), {"scope": scope}, headers=headers)
+    context.requests_response = post_json(context, pac_audit_url(context), {"scope": scope, "justification": "BDD process audit"}, headers=headers)
 
 
 @when('I attempt to trigger a process audit with scope "{scope}"')
 def step_when_attempt_trigger_audit(context, scope):
     headers = getattr(context, "headers", {})
-    context.requests_response = post_json(context, pac_audit_url(context), {"scope": scope}, headers=headers)
+    context.requests_response = post_json(context, pac_audit_url(context), {"scope": scope, "justification": "BDD process audit"}, headers=headers)
 
 
 @when('the Auditor requests an audit report for scope "{scope}" in format "{fmt}"')
@@ -36,7 +36,7 @@ def step_when_auditor_requests_report(context, scope, fmt):
     headers = AuthService.get_headers_for_roles(["Auditor"])
     context.requests_response = _requests.get(
         pac_report_url(context),
-        params={"scope": scope, "format": fmt},
+        params={"scope": scope, "format": fmt, "justification": "BDD audit report"},
         headers=headers,
         timeout=context.http_timeout_seconds,
     )
@@ -115,7 +115,7 @@ def step_then_flagged_risk_audited(context, name):
     deadline = time.monotonic() + 90
     while time.monotonic() < deadline:
         resp = post_json(
-            context, pac_audit_url(context), {"scope": "PROCESS_AUDIT_AND_COMPLIANCE"}, headers=headers
+            context, pac_audit_url(context), {"scope": "PROCESS_AUDIT_AND_COMPLIANCE", "justification": "BDD audit re-trigger"}, headers=headers
         )
         assert resp.status_code == 200, f"PAC-scope audit failed: {resp.status_code} {resp.text}"
         body = resp.json()
@@ -175,7 +175,7 @@ def step_then_audit_response_includes_contract(context, name):
             break
         time.sleep(2)
         context.requests_response = post_json(
-            context, pac_audit_url(context), {"scope": "CONTRACT_WORKFLOW_ENGINE"}, headers=headers
+            context, pac_audit_url(context), {"scope": "CONTRACT_WORKFLOW_ENGINE", "justification": "BDD audit re-trigger"}, headers=headers
         )
         assert context.requests_response.status_code == 200, (
             f"process audit re-trigger failed: {context.requests_response.status_code} "

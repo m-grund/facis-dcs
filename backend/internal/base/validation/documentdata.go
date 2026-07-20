@@ -1,48 +1,42 @@
 package validation
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
+	"slices"
 	"strings"
+	"time"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 )
 
-var jsonLDContextIRI string
-
-func SetJSONLDContextIRI(iri string) {
-	jsonLDContextIRI = iri
-}
-
-// Semantic Hub anchoring (DCS-FR-TR-03): the schemaRefs every produced
-// document carries default to the historical w3id identifiers and are
-// re-pointed at startup to the hub's ACTIVE, versioned, hub-served URLs
-// (semantichub.AnchorURL) — so each artifact resolvably anchors the exact
-// schema version it was produced against.
+// Anchors stamped into newly produced documents: the hub-served versioned
+// URLs for the JSON-LD context ("@context"), the SHACL shapes
+// ("sh:shapesGraph"), and the validation profile ("dcterms:conformsTo").
+// Re-pointed at startup and on every hub activation (SetSchemaAnchorRefs).
 var (
 	schemaRefJSONLDContext = SchemaJSONLDContextV1
-	schemaRefOntology      = SchemaOntologyV1
 	schemaRefSHACLShapes   = SchemaSHACLShapesV1
-	// canonicalOntologyIRIs holds the ACTIVE hub context's prefix -> IRI
-	// map; when set, a document supplying a CONFLICTING IRI for one of
-	// these prefixes is rejected (the hub is authoritative for what the
-	// ontology prefixes mean).
+	schemaRefProfile       = ""
+	// canonicalOntologyIRIs is the active hub context's prefix -> IRI map;
+	// documents redefining one of these prefixes are rejected.
 	canonicalOntologyIRIs map[string]string
 )
 
-// SetSchemaAnchorRefs re-points the schemaRefs of newly produced documents
-// at the Semantic Hub's served URLs.
-func SetSchemaAnchorRefs(contextRef, ontologyRef, shapesRef string) {
+// SetSchemaAnchorRefs re-points the anchors of newly produced documents at
+// the Semantic Hub's served URLs.
+func SetSchemaAnchorRefs(contextRef, shapesRef, profileRef string) {
 	if contextRef != "" {
 		schemaRefJSONLDContext = contextRef
 	}
-	if ontologyRef != "" {
-		schemaRefOntology = ontologyRef
-	}
 	if shapesRef != "" {
 		schemaRefSHACLShapes = shapesRef
+	}
+	if profileRef != "" {
+		schemaRefProfile = profileRef
 	}
 }
 
@@ -59,10 +53,22 @@ func enforceCanonicalOntologyIRIs(data documentData) error {
 	if len(canonicalOntologyIRIs) == 0 {
 		return nil
 	}
-	context, ok := data["@context"].(map[string]any)
-	if !ok {
-		return nil
+	switch context := data["@context"].(type) {
+	case map[string]any:
+		return enforceCanonicalOntologyIRIMap(context)
+	case []any:
+		for _, entry := range context {
+			if inline, ok := entry.(map[string]any); ok {
+				if err := enforceCanonicalOntologyIRIMap(inline); err != nil {
+					return err
+				}
+			}
+		}
 	}
+	return nil
+}
+
+func enforceCanonicalOntologyIRIMap(context map[string]any) error {
 	for prefix, iri := range context {
 		supplied, ok := iri.(string)
 		if !ok {
@@ -78,16 +84,11 @@ func enforceCanonicalOntologyIRIs(data documentData) error {
 	return nil
 }
 
+// domainField is one dcs:DomainField from the hub's SLA ontology; its IRI
+// is its identity — documents reference it via dcs:domainField {"@id": …}.
 type domainField struct {
-	SchemaRef      string
-	Type           string
-	DomainPath     string
-	OntologyTerm   string
-	StatementField string
-	StatementType  string
-	StatementID    string
-	ValuePrefix    string
-	Constraint     *valueConstraint
+	IRI        string
+	Constraint *valueConstraint
 }
 
 type valueConstraint struct {
@@ -109,6 +110,15 @@ type valueOption struct {
 	IRI    string
 }
 
+// clone returns a deep copy so per-field constraint metadata can be
+// mutated without touching the shared parsed ontology.
+func (constraint *valueConstraint) clone() *valueConstraint {
+	copied := *constraint
+	copied.AllowedValues = append([]string(nil), constraint.AllowedValues...)
+	copied.ValueOptions = append([]valueOption(nil), constraint.ValueOptions...)
+	return &copied
+}
+
 func (constraint *valueConstraint) asMap() map[string]any {
 	result := map[string]any{}
 	if constraint.Format != "" {
@@ -120,14 +130,14 @@ func (constraint *valueConstraint) asMap() map[string]any {
 	if constraint.ValueType != "" {
 		result["valueType"] = constraint.ValueType
 	}
-	if allowedValues := allowedValuesForConstraint(constraint); len(allowedValues) > 0 {
-		values := make([]any, len(allowedValues))
-		for i, value := range allowedValues {
+	if len(constraint.AllowedValues) > 0 {
+		values := make([]any, len(constraint.AllowedValues))
+		for i, value := range constraint.AllowedValues {
 			values[i] = value
 		}
 		result["allowedValues"] = values
 	}
-	if valueOptions := valueOptionsForConstraint(constraint); len(valueOptions) > 0 {
+	if valueOptions := constraint.ValueOptions; len(valueOptions) > 0 {
 		options := make([]any, 0, len(valueOptions))
 		for _, option := range valueOptions {
 			if option.Value == "" {
@@ -184,9 +194,9 @@ var ErrDocumentSchemaConflict = errors.New("document schema conflict")
 // every new child). Note dcs:children is deliberately NOT listed here — it is
 // a legitimate documentStructure layout term, checked only at the top level.
 var childEnumeratingProperties = []string{
-	"dcs:childContracts", "childContracts",
-	"dcs:subContracts", "subContracts",
-	"dcs:hasPart", "hasPart",
+	"dcs:childContracts",
+	"dcs:subContracts",
+	"dcs:hasPart",
 }
 
 // validateContractHierarchyInvariants enforces the structural hierarchy rules
@@ -196,15 +206,9 @@ var childEnumeratingProperties = []string{
 //   - at most one dcs:parentContract reference;
 //   - no child-enumerating top-level property.
 func validateContractHierarchyInvariants(data documentData) error {
-	for _, key := range []string{"dcs:parentContract", "parentContract"} {
-		value, ok := data[key]
-		if !ok {
-			continue
-		}
-		if list, isList := value.([]any); isList && len(list) > 1 {
-			return fmt.Errorf("%w: a contract may reference at most one dcs:parentContract, got %d",
-				ErrContractHierarchyInvalid, len(list))
-		}
+	if list, isList := data["dcs:parentContract"].([]any); isList && len(list) > 1 {
+		return fmt.Errorf("%w: a contract may reference at most one dcs:parentContract, got %d",
+			ErrContractHierarchyInvalid, len(list))
 	}
 	for _, key := range childEnumeratingProperties {
 		if _, ok := data[key]; ok {
@@ -228,25 +232,31 @@ func NormalizeTemplateData(raw *datatype.JSON) (*datatype.JSON, error) {
 		return nil, err
 	}
 	normalizeCanonicalEnvelope(data, "dcs:ContractTemplate")
-	if err := validateCanonicalEnvelope(data); err != nil {
+	if err := validateExternalContextsResolvable(data); err != nil {
+		return nil, err
+	}
+	if err := validateCanonicalEnvelope(data, expectedPolicyTypes("dcs:ContractTemplate")); err != nil {
 		return nil, err
 	}
 	return encodeDocumentData(data)
 }
 
 // NormalizeTemplateDataForPersistence keeps stored template JSON-LD
-// self-identifying when it is read outside the relational row envelope.
+// self-identifying when it is read outside the relational row envelope:
+// the document @id is the template's dereferenceable resource IRI, minted
+// from the system key.
 func NormalizeTemplateDataForPersistence(raw *datatype.JSON, did string) (*datatype.JSON, error) {
 	normalized, err := NormalizeTemplateData(raw)
 	if err != nil {
 		return nil, err
 	}
-	return addDocumentIdentity(normalized, did)
+	return addDocumentIdentity(normalized, base.ResourceIRI("template", did), did)
 }
 
-// NormalizeContractData adds FACIS contract schema and policy references and
-// validates the contract JSON-LD structure.
-func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*datatype.JSON, error) {
+// NormalizeContractData anchors and validates a canonical contract JSON-LD
+// envelope. Semantic values are enforced separately, by
+// ValidateContractPolicySatisfaction at the approve/apply gates.
+func NormalizeContractData(raw *datatype.JSON, _ bool) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
 		return nil, err
@@ -254,81 +264,79 @@ func NormalizeContractData(raw *datatype.JSON, requireSemanticValues bool) (*dat
 	if err := validateContractHierarchyInvariants(data); err != nil {
 		return nil, err
 	}
-	if isCanonicalEnvelope(data) {
-		if err := enforceCanonicalOntologyIRIs(data); err != nil {
-			return nil, err
-		}
-		normalizeCanonicalEnvelope(data, "dcs:Contract")
-		if err := validateCanonicalEnvelope(data); err != nil {
-			return nil, err
-		}
-		return encodeDocumentData(data)
+	if !isCanonicalEnvelope(data) {
+		return nil, errors.New("contract data must use the canonical dcs:documentStructure envelope")
 	}
-	normalizeContractMetadata(data)
-	if err := normalizeSemanticConditions(data); err != nil {
+	if err := enforceCanonicalOntologyIRIs(data); err != nil {
 		return nil, err
 	}
-	if err := validateSchemaRefs(data, false); err != nil {
+	normalizeCanonicalEnvelope(data, "dcs:Contract")
+	if err := validateExternalContextsResolvable(data); err != nil {
 		return nil, err
 	}
-	if err := validatePolicyRefs(data, false); err != nil {
-		return nil, err
-	}
-	normalizeContractSemanticRuntime(data)
-	if err := validateSemanticRules(data); err != nil {
-		return nil, err
-	}
-	if err := validateContractSemanticsData(data, requireSemanticValues); err != nil {
-		return nil, err
-	}
-	if err := validateRoleEntities(data); err != nil {
+	if err := validateCanonicalEnvelope(data, expectedPolicyTypes("dcs:Contract")); err != nil {
 		return nil, err
 	}
 	return encodeDocumentData(data)
 }
 
 // NormalizeContractDataForPersistence keeps stored contract JSON-LD
-// self-identifying when it is read outside the relational row envelope.
+// self-identifying when it is read outside the relational row envelope:
+// the document @id is the contract's dereferenceable resource IRI, minted
+// from the system key, and cross-contract references
+// (dcs:parentContract, dcs:renewsContract) are canonicalized to the same
+// IRI scheme.
 func NormalizeContractDataForPersistence(raw *datatype.JSON, did string, requireSemanticValues bool) (*datatype.JSON, error) {
 	normalized, err := NormalizeContractData(raw, requireSemanticValues)
 	if err != nil {
 		return nil, err
 	}
-	return addDocumentIdentity(normalized, did)
+	anchored, err := addDocumentIdentity(normalized, base.ResourceIRI("contract", did), did)
+	if err != nil {
+		return nil, err
+	}
+	return canonicalizeContractReferences(anchored)
 }
 
-// BuildContractStatements returns machine-readable contract statements from the
-// canonical contract content graph.
-func BuildContractStatements(raw *datatype.JSON) ([]map[string]any, error) {
+// canonicalizeContractReferences rewrites references to other contracts to
+// their resource IRIs, so a document never points at a bare system key.
+func canonicalizeContractReferences(raw *datatype.JSON) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
 		return nil, err
 	}
-	return buildContractStatements(data)
+	for _, key := range []string{"dcs:parentContract", "dcs:renewsContract"} {
+		node, ok := data[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		if id, _ := node["@id"].(string); id != "" {
+			node["@id"] = base.ResourceIRI("contract", base.ResourceKey(id))
+		}
+	}
+	return encodeDocumentData(data)
 }
 
-// ValidateContractSemantics validates placeholders, bindings, derived
-// contractStatements, and generated contract semantic rules.
+// ValidateContractSemantics validates the canonical contract envelope.
 func ValidateContractSemantics(raw *datatype.JSON) error {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
 		return err
 	}
-	if isCanonicalEnvelope(data) {
-		return validateCanonicalEnvelope(data)
+	if !isCanonicalEnvelope(data) {
+		return errors.New("contract data must use the canonical dcs:documentStructure envelope")
 	}
-	normalizeContractSemanticRuntime(data)
-	return validateContractSemanticsData(data, true)
+	return validateCanonicalEnvelope(data, expectedPolicyTypes("dcs:Contract"))
 }
 
-func addDocumentIdentity(raw *datatype.JSON, did string) (*datatype.JSON, error) {
+func addDocumentIdentity(raw *datatype.JSON, did string, aliases ...string) (*datatype.JSON, error) {
 	data, err := decodeDocumentData(raw)
 	if err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(did) != "" {
 		previousID, _ := data["@id"].(string)
-		rebaseDocumentIDs(map[string]any(data), previousID, did)
+		rebaseDocumentIDs(map[string]any(data), previousID, did, aliases)
 		data["@id"] = did
 		if metadata, ok := topLevelValue(data, "metadata").(map[string]any); ok {
 			metadata["@id"] = did + "#metadata"
@@ -340,27 +348,46 @@ func addDocumentIdentity(raw *datatype.JSON, did string) (*datatype.JSON, error)
 	return encodeDocumentData(data)
 }
 
-func rebaseDocumentIDs(value any, previousID string, did string) {
+func rebaseDocumentIDs(value any, previousID string, did string, aliases []string) {
 	switch typed := value.(type) {
 	case map[string]any:
 		for key, nested := range typed {
 			if text, ok := nested.(string); ok {
-				switch {
-				case strings.HasPrefix(text, "urn:uuid:"):
-					typed[key] = did + "#" + strings.TrimPrefix(text, "urn:uuid:")
-					continue
-				case previousID != "" && previousID != did && strings.HasPrefix(text, previousID+"#"):
-					typed[key] = did + strings.TrimPrefix(text, previousID)
+				if rebased, ok := rebaseIDText(text, previousID, did, aliases); ok {
+					typed[key] = rebased
 					continue
 				}
 			}
-			rebaseDocumentIDs(nested, previousID, did)
+			rebaseDocumentIDs(nested, previousID, did, aliases)
 		}
 	case []any:
 		for _, nested := range typed {
-			rebaseDocumentIDs(nested, previousID, did)
+			rebaseDocumentIDs(nested, previousID, did, aliases)
 		}
 	}
+}
+
+func rebaseIDText(text, previousID, did string, aliases []string) (string, bool) {
+	switch {
+	case strings.HasPrefix(text, "urn:uuid:"):
+		return did + "#" + strings.TrimPrefix(text, "urn:uuid:"), true
+	case previousID != "" && previousID != did && strings.HasPrefix(text, previousID+"#"):
+		return did + strings.TrimPrefix(text, previousID), true
+	case previousID != "" && previousID != did && text == previousID:
+		return did, true
+	}
+	for _, alias := range aliases {
+		if alias == "" || alias == did {
+			continue
+		}
+		if text == alias {
+			return did, true
+		}
+		if strings.HasPrefix(text, alias+"#") {
+			return did + strings.TrimPrefix(text, alias), true
+		}
+	}
+	return "", false
 }
 
 func decodeDocumentData(raw *datatype.JSON) (documentData, error) {
@@ -396,17 +423,13 @@ func normalizeCanonicalEnvelope(data documentData, documentType string) {
 	if rawType, _ := data["@type"].(string); strings.TrimSpace(rawType) == "" {
 		data["@type"] = documentType
 	}
-	// Semantic Hub anchoring (DCS-FR-TR-03): every produced canonical
-	// document records the hub-served, versioned schema URLs it was
-	// produced against. Set once at production time — a document keeps the
-	// anchor of the version it was authored under (synced copies arrive
-	// verbatim and are never re-normalized).
-	if _, exists := data["dcs:schemaRefs"]; !exists {
-		data["dcs:schemaRefs"] = map[string]any{
-			"dcs:jsonLdContext": schemaRefJSONLDContext,
-			"dcs:ontology":      schemaRefOntology,
-			"dcs:shaclShapes":   schemaRefSHACLShapes,
-		}
+	// Anchors are set once, at production time: a document keeps the hub
+	// versions it was authored under.
+	if _, exists := data["sh:shapesGraph"]; !exists {
+		data["sh:shapesGraph"] = map[string]any{"@id": schemaRefSHACLShapes}
+	}
+	if _, exists := data["dcterms:conformsTo"]; !exists && schemaRefProfile != "" {
+		data["dcterms:conformsTo"] = map[string]any{"@id": schemaRefProfile}
 	}
 	if _, ok := topLevelValue(data, "contractData").([]any); !ok {
 		if _, exists := topLevelValueExists(data, "contractData"); !exists {
@@ -418,30 +441,87 @@ func normalizeCanonicalEnvelope(data documentData, documentType string) {
 			setTopLevelValue(data, "dcs:policies", []any{})
 		}
 	}
+	typeLayoutNodes(data)
 }
 
-func normalizeCanonicalContext(data documentData) {
-	context, ok := data["@context"].(map[string]any)
+// typeLayoutNodes asserts rdf:type on the document's layout nodes — the
+// hub shapes constrain dcs:layout values with sh:class dcs:LayoutNode, and
+// SHACL class targeting needs the explicit type assertion.
+func typeLayoutNodes(data documentData) {
+	structure, ok := topLevelValue(data, "documentStructure").(map[string]any)
 	if !ok {
-		data["@context"] = map[string]any{
-			"dcs":  "https://w3id.org/facis/dcs/ontology/v1#",
-			"odrl": "http://www.w3.org/ns/odrl/2/",
-			"xsd":  "http://www.w3.org/2001/XMLSchema#",
-		}
 		return
 	}
-	if _, ok := context["dcs"]; !ok {
-		context["dcs"] = "https://w3id.org/facis/dcs/ontology/v1#"
+	nodes, ok := topLevelValue(documentData(structure), "layout").([]any)
+	if !ok {
+		return
 	}
-	if _, ok := context["odrl"]; !ok {
-		context["odrl"] = "http://www.w3.org/ns/odrl/2/"
-	}
-	if _, ok := context["xsd"]; !ok {
-		context["xsd"] = "http://www.w3.org/2001/XMLSchema#"
+	for _, rawNode := range nodes {
+		node, ok := rawNode.(map[string]any)
+		if !ok {
+			continue
+		}
+		if existing, _ := node["@type"].(string); existing == "" {
+			node["@type"] = "dcs:LayoutNode"
+		}
 	}
 }
 
-func validateCanonicalEnvelope(data documentData) error {
+// normalizeCanonicalContext anchors "@context" to the Semantic Hub's
+// versioned context URL, keeping a submitted inline prefix map alongside
+// it in JSON-LD array form. A document whose @context already carries a
+// URL entry keeps it.
+func normalizeCanonicalContext(data documentData) {
+	switch context := data["@context"].(type) {
+	case string:
+		if isHubContextAnchor(context) {
+			return
+		}
+		data["@context"] = []any{schemaRefJSONLDContext, context}
+	case []any:
+		for _, entry := range context {
+			if url, ok := entry.(string); ok && isHubContextAnchor(url) {
+				return
+			}
+		}
+		data["@context"] = append([]any{schemaRefJSONLDContext}, context...)
+	case map[string]any:
+		data["@context"] = []any{schemaRefJSONLDContext, context}
+	default:
+		data["@context"] = schemaRefJSONLDContext
+	}
+}
+
+// validateExternalContextsResolvable rejects documents whose "@context"
+// references an external context IRI that is not registered in the Semantic
+// Hub — validation resolves contexts hermetically, so an unregistered IRI
+// would make every later audit of the document fail.
+func validateExternalContextsResolvable(data documentData) error {
+	iris := externalContextIRIs(data)
+	if len(iris) == 0 || activeShapeSource == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, iri := range iris {
+		if _, err := activeShapeSource.ContextByIRI(ctx, iri); err != nil {
+			return fmt.Errorf("%w: @context references %q, which is not registered in the Semantic Hub", ErrDocumentSchemaConflict, iri)
+		}
+	}
+	return nil
+}
+
+// expectedPolicyTypes reflects the policy lifecycle: a template's policy
+// set is an odrl:Offer, a contract instance remains an odrl:Offer through
+// negotiation and becomes an odrl:Agreement when signing completes.
+func expectedPolicyTypes(documentType string) []string {
+	if documentType == "dcs:Contract" {
+		return []string{"Offer", "Agreement"}
+	}
+	return []string{"Offer"}
+}
+
+func validateCanonicalEnvelope(data documentData, policyTypes []string) error {
 	documentStructure, ok := topLevelValue(data, "documentStructure").(map[string]any)
 	if !ok {
 		return errors.New("documentStructure must be an object")
@@ -460,7 +540,7 @@ func validateCanonicalEnvelope(data documentData) error {
 		}
 	}
 	if policies, exists := topLevelValueExists(data, "policies"); exists {
-		if err := validateODRLPoliciesShape(policies); err != nil {
+		if err := validateODRLPoliciesShape(policies, policyTypes); err != nil {
 			return err
 		}
 	}
@@ -625,7 +705,7 @@ func validatePolicyOperands(data documentData, fieldIDs map[string]bool) error {
 
 // odrlRuleBucketKeys are the ODRL 2.2 rule-bucket properties an enclosing
 // odrl:Set may carry.
-var odrlRuleBucketKeys = []string{"odrl:permission", "odrl:prohibition", "odrl:duty", "odrl:obligation"}
+var odrlRuleBucketKeys = []string{"odrl:permission", "odrl:prohibition", "odrl:obligation"}
 
 // collectODRLPolicyRules flattens dcs:policies into a plain list of rule
 // nodes. Only the canonical shape yields rules: a single enclosing odrl:Set
@@ -674,32 +754,42 @@ func collectODRLSetRules(set map[string]any) []map[string]any {
 //   - A single enclosing odrl:Set object is validated structurally: it must
 //     declare odrl:profile and a uid, and every contained rule must declare
 //     exactly one odrl:action plus odrl:assigner/odrl:assignee/odrl:target.
-func validateODRLPoliciesShape(policies any) error {
+func validateODRLPoliciesShape(policies any, policyTypes []string) error {
 	switch typed := policies.(type) {
 	case []any:
 		if len(typed) == 0 {
 			return nil
 		}
-		return errors.New("dcs:policies is a bare rule array (no enclosing odrl:Set, " +
+		return errors.New("dcs:policies is a bare rule array (no enclosing policy node, " +
 			"no odrl:action, and no odrl:assigner/odrl:assignee/odrl:target), which is not accepted; " +
-			"policies must form a single enclosing odrl:Set declaring odrl:profile, whose rules each carry " +
+			"policies must form a single enclosing odrl:" + policyTypeLabel(policyTypes) + " declaring odrl:profile, whose rules each carry " +
 			"exactly one odrl:action plus odrl:assigner, odrl:assignee, and odrl:target")
 	case map[string]any:
-		return validateODRLPolicySet(typed)
+		return validateODRLPolicySet(typed, policyTypes)
 	default:
-		return fmt.Errorf("dcs:policies must be an odrl:Set object (or an empty array), got %T", policies)
+		return fmt.Errorf("dcs:policies must be an odrl:%s object (or an empty array), got %T", policyTypeLabel(policyTypes), policies)
 	}
 }
 
-func validateODRLPolicySet(set map[string]any) error {
-	if compactTerm(fmt.Sprint(set["@type"])) != "Set" {
-		return fmt.Errorf("dcs:policies enclosing node @type must be odrl:Set, got %v", set["@type"])
+func policyTypeLabel(policyTypes []string) string {
+	return strings.Join(policyTypes, " or odrl:")
+}
+
+func validateODRLPolicySet(set map[string]any, policyTypes []string) error {
+	if !slices.Contains(policyTypes, compactTerm(fmt.Sprint(set["@type"]))) {
+		return fmt.Errorf("dcs:policies enclosing node @type must be odrl:%s, got %v", policyTypeLabel(policyTypes), set["@type"])
 	}
-	if uid, _ := set["uid"].(string); strings.TrimSpace(uid) == "" {
-		return errors.New("dcs:policies odrl:Set requires a uid")
+	if _, hasDutyBucket := set["odrl:duty"]; hasDutyBucket {
+		return errors.New("odrl:duty is not a policy-level property in ODRL 2.2 (a Duty hangs under a Permission); policy-level duties belong under odrl:obligation")
+	}
+	if _, hasUID := set["uid"]; hasUID {
+		return errors.New("the policy's identity is its @id (the ODRL JSON-LD context maps uid to @id); a separate uid key is not accepted")
+	}
+	if id, _ := set["@id"].(string); strings.TrimSpace(id) == "" {
+		return fmt.Errorf("dcs:policies odrl:%s requires an @id (its odrl:uid)", policyTypeLabel(policyTypes))
 	}
 	if _, hasProfile := set["odrl:profile"]; !hasProfile {
-		return errors.New("dcs:policies odrl:Set must declare odrl:profile")
+		return fmt.Errorf("dcs:policies odrl:%s must declare odrl:profile", policyTypeLabel(policyTypes))
 	}
 	rules := collectODRLSetRules(set)
 	for index, rule := range rules {
@@ -727,6 +817,11 @@ func validateODRLRuleShape(rule map[string]any) error {
 		if _, ok := rule[key]; !ok {
 			return fmt.Errorf("rule is missing %s", key)
 		}
+	}
+	prose, _ := rule["dcs:prose"].(map[string]any)
+	proseID, _ := prose["@id"].(string)
+	if strings.TrimSpace(proseID) == "" {
+		return errors.New("rule is missing dcs:prose — every machine-readable rule must reference the human-readable clause it is backed by")
 	}
 	return nil
 }
@@ -786,631 +881,6 @@ func containsODRLTerms(value any) bool {
 	return false
 }
 
-func normalizeContractMetadata(data documentData) {
-	data["@context"] = jsonLDContextIRI
-	data["@type"] = "Contract"
-	data["schemaRefs"] = map[string]any{
-		"documentStructure": SchemaDocumentStructureV1,
-		"semanticCondition": SchemaSemanticConditionV1,
-		"contractData":      SchemaContractDataV1,
-		"jsonLdContext":     schemaRefJSONLDContext,
-		"ontology":          schemaRefOntology,
-		"shaclShapes":       schemaRefSHACLShapes,
-	}
-	data["policyRefs"] = contractPolicyRefs
-	data["validation"] = map[string]any{
-		"schemaVersion":     "v1",
-		"profile":           "FACIS_DCS_CONTRACT_V1",
-		"requiredPolicies":  []string{PolicyContractStructureV1, PolicyContractSemanticValuesV1},
-		"validatedBySchema": true,
-	}
-	normalizeSemanticRuntimeMetadata(data)
-}
-
-func normalizeSemanticRuntimeMetadata(data documentData) {
-	data["placeholderBindings"] = buildPlaceholderBindings(data)
-	data["semanticRules"] = mergeSemanticRules(data["semanticRules"], buildSemanticRules(data))
-	data["policyBundle"] = buildODRLPolicyBundle(data["semanticRules"])
-}
-
-func normalizeContractSemanticRuntime(data documentData) {
-	statements, err := buildContractStatements(data)
-	if err == nil {
-		data[statementSetDocumentProperty()] = map[string]any{
-			"@type":      statementSetOntologyType(),
-			"statements": statementsToAny(statements),
-		}
-	}
-	generated := buildSemanticRules(data)
-	data["semanticRules"] = mergeSemanticRules(data["semanticRules"], generated)
-	data["policyBundle"] = buildODRLPolicyBundle(data["semanticRules"])
-}
-
-func validateSchemaRefs(data documentData, template bool) error {
-	refs, ok := data["schemaRefs"].(map[string]any)
-	if !ok {
-		return errors.New("schemaRefs must be an object")
-	}
-	required := map[string]string{
-		"documentStructure": SchemaDocumentStructureV1,
-		"semanticCondition": SchemaSemanticConditionV1,
-	}
-	if template {
-		required["templateData"] = SchemaTemplateDataV1
-	} else {
-		required["contractData"] = SchemaContractDataV1
-	}
-	for key, expected := range required {
-		if actual, _ := refs[key].(string); actual != expected {
-			return fmt.Errorf("schemaRefs.%s must be %q", key, expected)
-		}
-	}
-	return nil
-}
-
-func validatePolicyRefs(data documentData, template bool) error {
-	policies, ok := asArray(data["policyRefs"])
-	if !ok {
-		return errors.New("policyRefs must be an array")
-	}
-	required := []string{PolicyContractStructureV1, PolicyContractSemanticValuesV1}
-	if template {
-		required = []string{PolicyTemplateStructureV1, PolicyTemplateSemanticConditionsV1}
-	}
-	seen := map[string]bool{}
-	for _, item := range policies {
-		policy, ok := item.(map[string]any)
-		if !ok {
-			return errors.New("policyRefs entries must be objects")
-		}
-		policyID, _ := policy["policyId"].(string)
-		version, _ := policy["version"].(string)
-		if strings.TrimSpace(policyID) == "" || strings.TrimSpace(version) == "" {
-			return errors.New("policyRefs entries require policyId and version")
-		}
-		seen[policyID] = true
-	}
-	for _, policyID := range required {
-		if !seen[policyID] {
-			return fmt.Errorf("required policy %q is missing", policyID)
-		}
-	}
-	return nil
-}
-
-func buildPlaceholderBindings(data documentData) []map[string]any {
-	blocks, _ := asArray(data["documentBlocks"])
-	conditions, _ := semanticConditionIndex(data)
-
-	placeholderPattern := regexp.MustCompile(`\{\{([^}.]+)\.([^}]+)\}\}`)
-	seen := map[string]bool{}
-	bindings := []map[string]any{}
-	for _, item := range blocks {
-		block, ok := item.(map[string]any)
-		if !ok || block["type"] != "CLAUSE" {
-			continue
-		}
-		blockID, _ := block["blockId"].(string)
-		text, _ := block["text"].(string)
-		for _, match := range placeholderPattern.FindAllStringSubmatch(text, -1) {
-			if len(match) != 3 {
-				continue
-			}
-			conditionID := match[1]
-			parameterName := match[2]
-			condition := conditions.conditionForBlock(blockID, conditionID)
-			if condition == nil {
-				continue
-			}
-			if _, found := findParameter(condition, parameterName); !found {
-				continue
-			}
-			key := blockID + "\x00" + conditionID + "\x00" + parameterName
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			bindings = append(bindings, map[string]any{
-				"@type":            "PlaceholderBinding",
-				"placeholder":      "{{" + conditionID + "." + parameterName + "}}",
-				"boundToCondition": conditionID,
-				"boundToParameter": parameterName,
-				"blockId":          blockID,
-				"source":           "clause-placeholder",
-			})
-		}
-	}
-	return bindings
-}
-
-func buildSemanticRules(data documentData) []map[string]any {
-	blocks, _ := asArray(data["documentBlocks"])
-	conditions, _ := asArray(data["semanticConditions"])
-	blockIDsByCondition := map[string][]string{}
-	for _, item := range blocks {
-		block, ok := item.(map[string]any)
-		if !ok || block["type"] != "CLAUSE" {
-			continue
-		}
-		blockID, _ := block["blockId"].(string)
-		refs, _ := asArray(block["conditionIds"])
-		for _, rawConditionID := range refs {
-			conditionID, ok := rawConditionID.(string)
-			if !ok {
-				continue
-			}
-			blockIDsByCondition[conditionID] = append(blockIDsByCondition[conditionID], blockID)
-		}
-	}
-
-	rules := []map[string]any{}
-	for _, item := range conditions {
-		condition, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		conditionID, _ := condition["conditionId"].(string)
-		conditionName, _ := condition["conditionName"].(string)
-		if conditionName == "" {
-			conditionName = conditionID
-		}
-		parameters, _ := asArray(condition["parameters"])
-		for _, rawParam := range parameters {
-			param, ok := rawParam.(map[string]any)
-			if !ok {
-				continue
-			}
-			parameterName, _ := param["parameterName"].(string)
-			parameterType, _ := param["type"].(string)
-			operators, _ := asArray(param["operators"])
-			for _, rawOperator := range operators {
-				operate, targets := parseSemanticOperator(rawOperator)
-				operator := normalizeSemanticOperator(operate)
-				if operator == "" {
-					continue
-				}
-				ruleType := "SemanticRule"
-				switch parameterType {
-				case "date":
-					ruleType = "DateConstraintRule"
-				case "decimal", "integer":
-					ruleType = "ThresholdRule"
-				}
-				var rightOperand any = targets
-				if len(targets) == 1 && !isSetOperator(operator) {
-					rightOperand = targets[0]
-				}
-				rules = append(rules, map[string]any{
-					"@type":                             ruleType,
-					"ruleId":                            "rule-" + slugify(conditionID) + "-" + slugify(parameterName) + "-" + slugify(operator),
-					"conditionId":                       conditionID,
-					"parameterName":                     parameterName,
-					semanticRuleAppliesToClauseProperty: stringSliceToAny(blockIDsByCondition[conditionID]),
-					"leftOperand":                       "{{" + conditionID + "." + parameterName + "}}",
-					semanticRuleOperatorProperty:        operator,
-					semanticRuleRightOperandProperty:    rightOperand,
-					"valueType":                         parameterType,
-					"severity":                          semanticRuleSeverity(param),
-					"source":                            semanticRuleSourceCondition,
-					"message":                           fmt.Sprintf("%s.%s must satisfy %s.", conditionName, parameterName, operator),
-				})
-			}
-		}
-	}
-	return rules
-}
-
-func buildODRLPolicyBundle(rawRules any) map[string]any {
-	rules, ok := asArray(rawRules)
-	if !ok {
-		return map[string]any{
-			"@type":  "PolicyBundle",
-			"format": "odrl-jsonld",
-			"rules":  []any{},
-		}
-	}
-	duties := []any{}
-	for _, item := range rules {
-		rule, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		operator, _ := rule[semanticRuleOperatorProperty].(string)
-		odrlOperator := odrlOperator(operator)
-		if odrlOperator == "" {
-			continue
-		}
-		ruleID, _ := rule["ruleId"].(string)
-		if ruleID == "" {
-			ruleID = "semantic-rule-" + fmt.Sprint(len(duties)+1)
-		}
-		duties = append(duties, map[string]any{
-			"@id":   ruleID + "-duty",
-			"@type": "odrl:Duty",
-			"odrl:constraint": []any{
-				map[string]any{
-					"@type":             "odrl:Constraint",
-					"odrl:leftOperand":  rule["leftOperand"],
-					"odrl:operator":     map[string]any{"@id": odrlOperator},
-					"odrl:rightOperand": rule[semanticRuleRightOperandProperty],
-				},
-			},
-		})
-	}
-	return map[string]any{
-		"@type":  "PolicyBundle",
-		"format": "odrl-jsonld",
-		"rules":  duties,
-	}
-}
-
-func odrlOperator(operator string) string {
-	switch operator {
-	case "Equals", "odrl:eq":
-		return "odrl:eq"
-	case "NotEquals", "odrl:neq":
-		return "odrl:neq"
-	case "In", "odrl:isAnyOf":
-		return "odrl:isAnyOf"
-	case "NotIn", "odrl:isNoneOf":
-		return "odrl:isNoneOf"
-	case "GreaterThan", "odrl:gt":
-		return "odrl:gt"
-	case "GreaterThanOrEqual", "odrl:gteq":
-		return "odrl:gteq"
-	case "LessThan", "odrl:lt":
-		return "odrl:lt"
-	case "LessThanOrEqual", "odrl:lteq":
-		return "odrl:lteq"
-	case "Contains", "odrl:hasPart":
-		return "odrl:hasPart"
-	default:
-		return ""
-	}
-}
-
-func isSetOperator(operator string) bool {
-	return operator == "In" || operator == "NotIn" || operator == "odrl:isAnyOf" || operator == "odrl:isNoneOf"
-}
-
-func mergeSemanticRules(rawExisting any, generated []map[string]any) []any {
-	result := []any{}
-	seen := map[string]bool{}
-	if existing, ok := asArray(rawExisting); ok {
-		for _, item := range existing {
-			rule, ok := item.(map[string]any)
-			if !ok {
-				continue
-			}
-			if source, _ := rule["source"].(string); source == semanticRuleSourceCondition || source == semanticRuleSourceContract {
-				continue
-			}
-			canonicalizeSemanticRule(rule)
-			ruleID, _ := rule["ruleId"].(string)
-			if strings.TrimSpace(ruleID) == "" || seen[ruleID] {
-				continue
-			}
-			seen[ruleID] = true
-			result = append(result, rule)
-		}
-	}
-	for _, rule := range generated {
-		ruleID, _ := rule["ruleId"].(string)
-		if strings.TrimSpace(ruleID) == "" || seen[ruleID] {
-			continue
-		}
-		seen[ruleID] = true
-		result = append(result, rule)
-	}
-	return result
-}
-
-// Keep generated and client-provided rules on the JSON-LD v1 ontology terms.
-func canonicalizeSemanticRule(rule map[string]any) {
-	if rawOperator, ok := rule[semanticRuleOperatorProperty].(string); ok {
-		if operator := normalizeSemanticOperator(rawOperator); operator != "" {
-			rule[semanticRuleOperatorProperty] = operator
-		}
-	}
-}
-
-func parseSemanticOperator(raw any) (string, []any) {
-	switch value := raw.(type) {
-	case string:
-		return value, nil
-	case map[string]any:
-		operate, _ := value["operate"].(string)
-		if strings.TrimSpace(operate) == "" {
-			operate, _ = value[semanticRuleOperatorProperty].(string)
-		}
-		if strings.TrimSpace(operate) == "" {
-			operate = semanticResourceID(value["odrl:operator"])
-		}
-		targets := []any{}
-		if rawTargets, ok := asArray(value["targets"]); ok {
-			targets = append(targets, rawTargets...)
-		} else if rawTarget, ok := value[semanticRuleRightOperandProperty]; ok {
-			if rawTargets, ok := asArray(rawTarget); ok {
-				targets = append(targets, rawTargets...)
-			} else {
-				targets = append(targets, rawTarget)
-			}
-		} else if rawTarget, ok := value["odrl:rightOperand"]; ok {
-			if rawTargets, ok := asArray(rawTarget); ok {
-				targets = append(targets, rawTargets...)
-			} else {
-				targets = append(targets, rawTarget)
-			}
-		}
-		return operate, targets
-	default:
-		return "", nil
-	}
-}
-
-func semanticResourceID(value any) string {
-	switch typed := value.(type) {
-	case string:
-		return typed
-	case map[string]any:
-		id, _ := typed["@id"].(string)
-		return id
-	default:
-		return ""
-	}
-}
-
-func normalizeSemanticOperator(value string) string {
-	switch value {
-	case "odrl:eq", "Equals":
-		return "odrl:eq"
-	case "odrl:neq", "NotEquals":
-		return "odrl:neq"
-	case "odrl:isAnyOf", "In":
-		return "odrl:isAnyOf"
-	case "odrl:isNoneOf", "NotIn":
-		return "odrl:isNoneOf"
-	case "odrl:gt", "GreaterThan":
-		return "odrl:gt"
-	case "odrl:gteq", "GreaterThanOrEqual":
-		return "odrl:gteq"
-	case "odrl:lt", "LessThan":
-		return "odrl:lt"
-	case "odrl:lteq", "LessThanOrEqual":
-		return "odrl:lteq"
-	case "odrl:hasPart", "Contains":
-		return "odrl:hasPart"
-	case "dcs:between", "Between":
-		return "dcs:between"
-	case "dcs:matchesRegex", "MatchesRegex":
-		return "dcs:matchesRegex"
-	default:
-		return ""
-	}
-}
-
-func normalizeSemanticOperateValue(value string) string {
-	switch value {
-	case "Equals":
-		return "odrl:eq"
-	case "NotEquals":
-		return "odrl:neq"
-	case "In":
-		return "odrl:isAnyOf"
-	case "NotIn":
-		return "odrl:isNoneOf"
-	case "GreaterThan":
-		return "odrl:gt"
-	case "GreaterThanOrEqual":
-		return "odrl:gteq"
-	case "LessThan":
-		return "odrl:lt"
-	case "LessThanOrEqual":
-		return "odrl:lteq"
-	case "Contains":
-		return "odrl:hasPart"
-	case "Between":
-		return "dcs:between"
-	case "MatchesRegex":
-		return "dcs:matchesRegex"
-	case "odrl:eq", "odrl:neq", "odrl:isAnyOf", "odrl:isNoneOf", "odrl:gt", "odrl:gteq", "odrl:lt", "odrl:lteq", "odrl:hasPart", "dcs:between", "dcs:matchesRegex":
-		return value
-	default:
-		return ""
-	}
-}
-
-func semanticRuleSeverity(param map[string]any) string {
-	if isTrue(param["isRequired"]) {
-		return "blocking"
-	}
-	return "error"
-}
-
-func stringSliceToAny(values []string) []any {
-	result := make([]any, len(values))
-	for i, value := range values {
-		result[i] = value
-	}
-	return result
-}
-
-func slugify(value string) string {
-	value = regexp.MustCompile(`([a-z])([A-Z])`).ReplaceAllString(value, "${1}-${2}")
-	value = regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(value, "-")
-	value = strings.Trim(value, "-")
-	return strings.ToLower(value)
-}
-
-func buildContractStatements(data documentData) ([]map[string]any, error) {
-	if statements := statementsFromValue(data["content"]); len(statements) > 0 {
-		return statements, nil
-	}
-	if statements := statementsFromValue(data["contractData"]); len(statements) > 0 {
-		return statements, nil
-	}
-	if statementSet, ok := data[statementSetDocumentProperty()].(map[string]any); ok {
-		return statementsFromValue(statementSet["statements"]), nil
-	}
-	return []map[string]any{}, nil
-}
-
-func normalizeSemanticConditions(data documentData) error {
-	conditions, ok := asArray(data["semanticConditions"])
-	if !ok {
-		return nil
-	}
-	conditionIDs := map[string]bool{}
-	for _, item := range conditions {
-		condition, ok := item.(map[string]any)
-		if !ok {
-			return errors.New("semanticConditions entries must be objects")
-		}
-		id, err := validateSemanticCondition(condition)
-		if err != nil {
-			return err
-		}
-		if conditionIDs[id] {
-			return fmt.Errorf("duplicate semantic condition id %q", id)
-		}
-		conditionIDs[id] = true
-	}
-	return nil
-}
-
-func statementsFromValue(value any) []map[string]any {
-	switch typed := value.(type) {
-	case []any:
-		statements := []map[string]any{}
-		for _, item := range typed {
-			if statement, ok := item.(map[string]any); ok {
-				statements = append(statements, statement)
-			}
-		}
-		return statements
-	case map[string]any:
-		if statements := statementsFromValue(typed["statements"]); len(statements) > 0 {
-			return statements
-		}
-		if statements := statementsFromValue(typed["@graph"]); len(statements) > 0 {
-			return statements
-		}
-		if len(typed) > 0 {
-			return []map[string]any{typed}
-		}
-	}
-	return []map[string]any{}
-}
-
-func validateContractSemanticsData(data documentData, requireCompleteStatements bool) error {
-	if err := validatePlaceholderBindings(data, requireCompleteStatements); err != nil {
-		return err
-	}
-	if _, err := buildContractStatements(data); err != nil {
-		return err
-	}
-	if requireCompleteStatements && hasContractStatementIntent(data) {
-		if err := validateContractStatementCompleteness(data); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func validateSemanticRules(data documentData) error {
-	rules, ok := asArray(data["semanticRules"])
-	if !ok {
-		return errors.New("semanticRules must be an array")
-	}
-	for _, item := range rules {
-		rule, ok := item.(map[string]any)
-		if !ok {
-			return errors.New("semanticRules entries must be objects")
-		}
-		ruleID, _ := rule["ruleId"].(string)
-		operator, _ := rule[semanticRuleOperatorProperty].(string)
-		if normalizeSemanticOperator(operator) == "" {
-			return fmt.Errorf("semantic rule %q uses unsupported semantic rule operator %q", ruleID, operator)
-		}
-	}
-	return nil
-}
-
-func hasContractStatementIntent(data documentData) bool {
-	statements, err := buildContractStatements(data)
-	if err != nil {
-		return false
-	}
-	profile := defaultContractStatementValidationProfile()
-	for _, rule := range profile.Rules {
-		if CountStatements(statements, rule.Where) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
-func validatePlaceholderBindings(data documentData, _ bool) error {
-	conditions, err := semanticConditionIndex(data)
-	if err != nil {
-		return err
-	}
-
-	bindings, ok := asArray(data["placeholderBindings"])
-	if !ok {
-		return errors.New("placeholderBindings must be an array")
-	}
-	bindingByPlaceholder := map[string]map[string]any{}
-	for _, item := range bindings {
-		binding, ok := item.(map[string]any)
-		if !ok {
-			return errors.New("placeholderBindings entries must be objects")
-		}
-		blockID, _ := binding["blockId"].(string)
-		placeholder, _ := binding["placeholder"].(string)
-		conditionID, _ := binding["boundToCondition"].(string)
-		parameterName, _ := binding["boundToParameter"].(string)
-		condition := conditions.conditionForBlock(blockID, conditionID)
-		if condition == nil {
-			return fmt.Errorf("placeholder binding %q references unknown condition %q", placeholder, conditionID)
-		}
-		if _, found := findParameter(condition, parameterName); !found {
-			return fmt.Errorf("placeholder binding %q references unknown parameter %q on condition %q", placeholder, parameterName, conditionID)
-		}
-		bindingByPlaceholder[blockID+"\x00"+placeholder] = binding
-	}
-
-	placeholderPattern := regexp.MustCompile(`\{\{([^}.]+)\.([^}]+)\}\}`)
-	blocks, _ := asArray(data["documentBlocks"])
-	for _, item := range blocks {
-		block, ok := item.(map[string]any)
-		if !ok || block["type"] != "CLAUSE" {
-			continue
-		}
-		blockID, _ := block["blockId"].(string)
-		text, _ := block["text"].(string)
-		for _, match := range placeholderPattern.FindAllStringSubmatch(text, -1) {
-			placeholder := match[0]
-			if bindingByPlaceholder[blockID+"\x00"+placeholder] == nil {
-				return fmt.Errorf("placeholder %q in block %q has no binding", placeholder, blockID)
-			}
-		}
-	}
-	return nil
-}
-
-func validateContractStatementCompleteness(data documentData) error {
-	statements, err := buildContractStatements(data)
-	if err != nil {
-		return err
-	}
-	issues := ValidateContractStatements(statements, defaultContractStatementValidationProfile())
-	if len(issues) > 0 {
-		return ContractStatementValidationError{Issues: issues}
-	}
-	return nil
-}
-
 func numericValue(value any) (float64, bool) {
 	switch typed := value.(type) {
 	case int:
@@ -1424,116 +894,6 @@ func numericValue(value any) (float64, bool) {
 	default:
 		return 0, false
 	}
-}
-
-type semanticConditionsByBlock struct {
-	topLevel map[string]map[string]any
-}
-
-func (conditions semanticConditionsByBlock) conditionForBlock(_ string, conditionID string) map[string]any {
-	return conditions.topLevel[conditionID]
-}
-
-func semanticConditionIndex(data documentData) (semanticConditionsByBlock, error) {
-	conditions := semanticConditionsByBlock{topLevel: map[string]map[string]any{}}
-	topLevelConditions, _ := asArray(data["semanticConditions"])
-	for _, item := range topLevelConditions {
-		condition, ok := item.(map[string]any)
-		if !ok {
-			return conditions, errors.New("semanticConditions entries must be objects")
-		}
-		conditionID, _ := condition["conditionId"].(string)
-		conditions.topLevel[conditionID] = condition
-	}
-	return conditions, nil
-}
-
-//nolint:unused
-func allowedValuesForDomainPath(domainPath string) []any {
-	field, ok := ontologyDomainFieldIndex[domainPath]
-	if !ok || field.Constraint == nil {
-		return []any{}
-	}
-	values := make([]any, len(field.Constraint.AllowedValues))
-	for i, value := range field.Constraint.AllowedValues {
-		values[i] = value
-	}
-	return values
-}
-
-func statementsToAny(statements []map[string]any) []any {
-	result := make([]any, len(statements))
-	for i, statement := range statements {
-		result[i] = statement
-	}
-	return result
-}
-
-func validateSemanticCondition(condition map[string]any) (string, error) {
-	id, _ := condition["conditionId"].(string)
-	if strings.TrimSpace(id) == "" {
-		return "", errors.New("semanticConditions entries require conditionId")
-	}
-	if version, _ := condition["schemaVersion"].(string); version != "v1" {
-		return "", fmt.Errorf("semantic condition %q must use schemaVersion v1", id)
-	}
-	if err := validateSemanticConditionEntity(id, condition); err != nil {
-		return "", err
-	}
-	parameters, ok := asArray(condition["parameters"])
-	if !ok {
-		return "", fmt.Errorf("semantic condition %q parameters must be an array", id)
-	}
-	for _, rawParam := range parameters {
-		param, ok := rawParam.(map[string]any)
-		if !ok {
-			return "", fmt.Errorf("semantic condition %q parameter entries must be objects", id)
-		}
-		name, _ := param["parameterName"].(string)
-		paramType, _ := param["type"].(string)
-		if strings.TrimSpace(name) == "" || !validSemanticType(paramType) {
-			return "", fmt.Errorf("semantic condition %q has invalid parameter", id)
-		}
-		if err := validateDomainParameter(id, param); err != nil {
-			return "", err
-		}
-		if _, exists := param["fixedValue"]; exists {
-			return "", fmt.Errorf("semantic condition %q parameter %q must not use fixedValue", id, param["parameterName"])
-		}
-		if err := validateSemanticOperators(id, param); err != nil {
-			return "", err
-		}
-	}
-	return id, nil
-}
-
-func validateSemanticConditionEntity(conditionID string, condition map[string]any) error {
-	rawEntityType, _ := condition["entityType"].(string)
-	rawEntityRole, hasEntityRole := condition["entityRole"].(string)
-	if strings.TrimSpace(rawEntityType) == "" {
-		if hasEntityRole && strings.TrimSpace(rawEntityRole) != "" {
-			return fmt.Errorf("semantic condition %q entityRole requires entityType", conditionID)
-		}
-		return nil
-	}
-	entityType := canonicalStatementEntityType(rawEntityType)
-	if entityType == "" {
-		return fmt.Errorf("semantic condition %q uses unsupported entityType %q", conditionID, rawEntityType)
-	}
-	condition["entityType"] = entityType
-	if strings.TrimSpace(rawEntityRole) == "" {
-		if inferredRole := entityRoleFromEntityType(rawEntityType); inferredRole != "" {
-			condition["entityRole"] = inferredRole
-		}
-		return nil
-	}
-	if hasEntityRole && strings.TrimSpace(rawEntityRole) != "" {
-		if !statementEntityTypeSupportsRole(entityType) {
-			return fmt.Errorf("semantic condition %q entityRole is not supported for entityType %q", conditionID, rawEntityType)
-		}
-		condition["entityRole"] = canonicalEntityRole(rawEntityRole)
-	}
-	return nil
 }
 
 func asArray(value any) ([]any, bool) {
@@ -1557,154 +917,6 @@ func asArray(value any) ([]any, bool) {
 	}
 }
 
-func validSemanticType(value string) bool {
-	switch value {
-	case "date", "string", "integer", "decimal", "boolean", "enum":
-		return true
-	default:
-		return false
-	}
-}
-
-func validateDomainParameter(conditionID string, param map[string]any) error {
-	semanticPath, _ := param["semanticPath"].(string)
-	if strings.TrimSpace(semanticPath) == "" {
-		return fmt.Errorf("semantic condition %q parameter %q requires semanticPath", conditionID, param["parameterName"])
-	}
-	field, ok := ontologyDomainFieldIndex[semanticPath]
-	if !ok {
-		return fmt.Errorf("semantic condition %q uses unknown domain semanticPath %q", conditionID, semanticPath)
-	}
-	if field.OntologyTerm != "" {
-		param["semanticPath"] = field.OntologyTerm
-	}
-	schemaRef, _ := param["schemaRef"].(string)
-	if schemaRef != field.SchemaRef {
-		return fmt.Errorf("semantic condition %q parameter %q schemaRef must be %q", conditionID, param["parameterName"], field.SchemaRef)
-	}
-	paramType, _ := param["type"].(string)
-	if paramType != field.Type {
-		return fmt.Errorf("semantic condition %q parameter %q type must be %q for semanticPath %q", conditionID, param["parameterName"], field.Type, semanticPath)
-	}
-	if field.Constraint != nil {
-		param["valueConstraint"] = field.Constraint.asMap()
-	}
-	return nil
-}
-
-func validateSemanticOperators(conditionID string, param map[string]any) error {
-	rawOperators, exists := param["operators"]
-	if !exists {
-		param["operators"] = []any{}
-		return nil
-	}
-	operators, ok := asArray(rawOperators)
-	if !ok {
-		return fmt.Errorf("semantic condition %q parameter %q operators must be an array", conditionID, param["parameterName"])
-	}
-	for _, rawOperator := range operators {
-		operate, targets := parseSemanticOperator(rawOperator)
-		normalizedOperator := normalizeSemanticOperateValue(operate)
-		if normalizedOperator == "" {
-			return fmt.Errorf("semantic condition %q parameter %q uses unsupported operator %q", conditionID, param["parameterName"], operate)
-		}
-		if operatorMap, ok := rawOperator.(map[string]any); ok {
-			operatorMap["operate"] = normalizedOperator
-		}
-		if err := validateSemanticOperatorTargets(conditionID, param, targets); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func validateSemanticOperatorTargets(conditionID string, param map[string]any, targets []any) error {
-	if len(targets) == 0 {
-		return nil
-	}
-	semanticPath, _ := param["semanticPath"].(string)
-	field, ok := ontologyDomainFieldIndex[semanticPath]
-	if !ok || field.Constraint == nil {
-		return nil
-	}
-	for _, target := range targets {
-		if err := valueMatchesConstraint(target, field.Constraint); err != nil {
-			return fmt.Errorf("semantic condition %q parameter %q operator target violates constraint: %w", conditionID, param["parameterName"], err)
-		}
-	}
-	return nil
-}
-
-func isTrue(value any) bool {
-	v, ok := value.(bool)
-	return ok && v
-}
-
-func findParameter(condition map[string]any, parameterName string) (map[string]any, bool) {
-	parameters, _ := asArray(condition["parameters"])
-	for _, rawParam := range parameters {
-		param := rawParam.(map[string]any)
-		if param["parameterName"] == parameterName {
-			return param, true
-		}
-	}
-	return nil, false
-}
-
-func valueMatchesConstraint(value any, constraint *valueConstraint) error {
-	if allowedValues := allowedValuesForConstraint(constraint); len(allowedValues) > 0 {
-		text, ok := value.(string)
-		if !ok || !containsString(allowedValues, text) {
-			return fmt.Errorf("expected one of %s", strings.Join(allowedValues, ", "))
-		}
-	}
-	if constraint.Pattern != "" {
-		text, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("expected value matching %s", constraint.Pattern)
-		}
-		matched, err := regexp.MatchString(constraint.Pattern, text)
-		if err != nil {
-			return fmt.Errorf("invalid constraint pattern %q: %w", constraint.Pattern, err)
-		}
-		if !matched {
-			return fmt.Errorf("expected value matching %s", constraint.Pattern)
-		}
-	}
-	if constraint.Format != "" {
-		if err := valueMatchesFormat(value, constraint.Format); err != nil {
-			return err
-		}
-	}
-	if constraint.Min != nil || constraint.Max != nil {
-		number, ok := value.(float64)
-		if !ok {
-			return errors.New("expected numeric constrained value")
-		}
-		if constraint.Min != nil && number < *constraint.Min {
-			return fmt.Errorf("expected value greater than or equal to %v", *constraint.Min)
-		}
-		if constraint.Max != nil && number > *constraint.Max {
-			return fmt.Errorf("expected value less than or equal to %v", *constraint.Max)
-		}
-	}
-	return nil
-}
-
-func valueMatchesFormat(value any, format string) error {
-	switch strings.ToLower(strings.TrimSpace(format)) {
-	case "iso-3166-1-alpha-3", "iso-4217":
-		text, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("expected value matching format %s", format)
-		}
-		if !regexp.MustCompile(`^[A-Z]{3}$`).MatchString(text) {
-			return fmt.Errorf("expected value matching format %s", format)
-		}
-	}
-	return nil
-}
-
 func containsString(values []string, candidate string) bool {
 	for _, value := range values {
 		if value == candidate {
@@ -1712,29 +924,4 @@ func containsString(values []string, candidate string) bool {
 		}
 	}
 	return false
-}
-
-func validateRoleEntities(data documentData) error {
-	documentField := ontologyRuntime.RoleEntityDocumentField
-	if documentField == "" {
-		return nil
-	}
-	rawEntities, exists := data[documentField]
-	if !exists {
-		return nil
-	}
-	entities, ok := asArray(rawEntities)
-	if !ok {
-		return fmt.Errorf("%s must be an array", documentField)
-	}
-	for index, rawEntity := range entities {
-		entity, ok := rawEntity.(map[string]any)
-		if !ok {
-			return fmt.Errorf("%s.%d must be an object", documentField, index)
-		}
-		if err := validateOntologyRoleEntity(entity); err != nil {
-			return fmt.Errorf("%s.%d.%w", documentField, index, err)
-		}
-	}
-	return nil
 }

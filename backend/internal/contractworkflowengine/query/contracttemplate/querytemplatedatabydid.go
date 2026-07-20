@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/db"
@@ -29,7 +31,7 @@ func (h *GetTemplateDataByDIDHandler) Handle(ctx context.Context, qry GetTemplat
 	if err != nil {
 		return nil, err
 	}
-	return convertTemplateDataToContractData(templateData, qry.DID, version)
+	return ConvertTemplateDataToContractData(templateData, qry.DID, version)
 }
 
 func (h *GetTemplateDataByDIDHandler) getTemplateData(ctx context.Context, qry GetTemplateDataByDIDQry) (*datatype.JSON, int, error) {
@@ -64,7 +66,13 @@ func (h *GetTemplateDataByDIDHandler) getContractTemplateDataFromDB(ctx context.
 	return templateData.TemplateData, templateData.TemplateVersion, nil
 }
 
-func convertTemplateDataToContractData(raw *datatype.JSON, templateDID string, templateVersions ...int) (*datatype.JSON, error) {
+// ConvertTemplateDataToContractData derives a contract document from a
+// stored template document: @type becomes dcs:Contract, dcs:metadata's
+// @type becomes dcs:ContractMetadata, derivedFromTemplate provenance is
+// attached, and every party IRI the ODRL rules reference is materialized
+// as a typed dcs:CompanyParty node. Used by both the creation preview
+// (this package's query handler) and the create command.
+func ConvertTemplateDataToContractData(raw *datatype.JSON, templateDID string, templateVersions ...int) (*datatype.JSON, error) {
 	if raw == nil || !raw.IsNotNullValue() {
 		return raw, nil
 	}
@@ -82,23 +90,17 @@ func convertTemplateDataToContractData(raw *datatype.JSON, templateDID string, t
 	if metadata, ok := templateDataMap["dcs:metadata"].(map[string]interface{}); ok {
 		metadata["@type"] = "dcs:ContractMetadata"
 	}
-	templateDataMap["sourceTemplate"] = map[string]interface{}{
-		"did": templateDID,
-	}
 
+	provenance := map[string]interface{}{"@id": base.ResourceIRI("template", templateDID)}
 	if len(templateVersions) > 0 && templateVersions[0] > 0 {
-		templateDataMap["sourceTemplate"].(map[string]interface{})["version"] = templateVersions[0]
-	}
-
-	if metadata, ok := templateDataMap["dcs:metadata"].(map[string]interface{}); ok {
-		if _, exists := templateDataMap["sourceTemplate"].(map[string]interface{})["version"]; !exists {
-			if version, exists := metadata["dcs:templateVersion"]; exists {
-				templateDataMap["sourceTemplate"].(map[string]interface{})["version"] = version
-			}
+		provenance["version"] = templateVersions[0]
+	} else if metadata, ok := templateDataMap["dcs:metadata"].(map[string]interface{}); ok {
+		if version, exists := metadata["dcs:templateVersion"]; exists {
+			provenance["version"] = version
 		}
 	}
-	templateDataMap["derivedFromTemplate"] = templateDID
-	templateDataMap["semanticConditionValues"] = []any{}
+	templateDataMap["derivedFromTemplate"] = provenance
+	materializeRuleParties(templateDataMap)
 
 	contractData, err := datatype.NewJSON(templateDataMap)
 	if err != nil {
@@ -106,4 +108,66 @@ func convertTemplateDataToContractData(raw *datatype.JSON, templateDID string, t
 	}
 
 	return validation.NormalizeContractData(&contractData, false)
+}
+
+// materializeRuleParties ensures every role-derived party IRI referenced as
+// odrl:assigner/odrl:assignee resolves to a typed dcs:CompanyParty node in
+// the document's dcs:parties.
+func materializeRuleParties(doc map[string]interface{}) {
+	policies, ok := doc["dcs:policies"].(map[string]interface{})
+	if !ok {
+		return
+	}
+	roles := map[string]string{}
+	order := []string{}
+	for _, bucket := range []string{"odrl:permission", "odrl:prohibition", "odrl:obligation"} {
+		rules, ok := policies[bucket].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, rawRule := range rules {
+			rule, ok := rawRule.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			for _, side := range []string{"odrl:assigner", "odrl:assignee"} {
+				ref, ok := rule[side].(map[string]interface{})
+				if !ok {
+					continue
+				}
+				iri, _ := ref["@id"].(string)
+				_, role, found := strings.Cut(iri, "#party-")
+				if !found || role == "" {
+					continue
+				}
+				if _, seen := roles[iri]; !seen {
+					roles[iri] = role
+					order = append(order, iri)
+				}
+			}
+		}
+	}
+	if len(order) == 0 {
+		return
+	}
+	parties, _ := doc["dcs:parties"].([]interface{})
+	existing := map[string]bool{}
+	for _, rawParty := range parties {
+		if party, ok := rawParty.(map[string]interface{}); ok {
+			if iri, _ := party["@id"].(string); iri != "" {
+				existing[iri] = true
+			}
+		}
+	}
+	for _, iri := range order {
+		if existing[iri] {
+			continue
+		}
+		parties = append(parties, map[string]interface{}{
+			"@id":      iri,
+			"@type":    "dcs:CompanyParty",
+			"dcs:role": roles[iri],
+		})
+	}
+	doc["dcs:parties"] = parties
 }

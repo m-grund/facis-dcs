@@ -14,7 +14,8 @@ var ContractCreateRequest = Type("ContractCreateRequest", func() {
 	Attribute("reviewers", ArrayOf(String), "A list of reviewers for that contract")
 	Attribute("approvers", ArrayOf(String), "A list of approvers for that contract")
 	Attribute("negotiators", ArrayOf(String), "A list of negotiators for that contract")
-	Attribute("parties", ArrayOf(String), "Organizations that are parties to this contract; party membership gates read access to the contract (stored as the dcs:parties JSON-LD property)")
+	Attribute("parties", ArrayOf(String), "Organizations authorized to read this contract (legal names, matched against the OID4VP organization claim; stored as dcs:parties). Read authorization only — the contract's ODRL rule parties are bound from workflow evidence: the originator at creation via originator_role, the counterparty when signing completes.")
+	Attribute("originator_role", String, "The contractual role the creating organization declares for itself (e.g. provider, customer); binds the origin DID to that role's party node in the contract's ODRL rules. The counterpart role stays open until the counterparty accepts by signing.")
 
 	Required("template_did")
 })
@@ -881,6 +882,75 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Param("parent_did")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// GET /contract/kpis/{did}
+	Method("kpi_observations", func() {
+		Description("The KPI values reported for a deployed contract as a JSON-LD observation set: dcs:KPIObservation nodes anchored to the Semantic Hub context, machine-readable alongside the human-facing kpis field of retrieve (DCS-FR-CWE-09/-31).")
+		Meta("dcs:requirements", "DCS-FR-CWE-09", "DCS-FR-CWE-31")
+		Meta("dcs:ui", "Contract Management Dashboard")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Sys. Contract Approver")
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
+		})
+
+		Payload(ContractRetrieveByIDRequest)
+		Result(Any)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/contract/kpis/{did}")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// GET /contract/{did} — the contract's resource IRI
+	Method("resolve", func() {
+		Description("Dereference a contract's resource IRI ({DCS_PUBLIC_URL}/contract/{did}): serves the canonical JSON-LD contract document under the same party read authorization as retrieve_by_id. This route is what makes a contract's @id follow-your-nose resolvable.")
+		Meta("dcs:requirements", "DCS-FR-CWE-02")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Approver")
+			Scope("Sys. Contract Approver")
+			Scope("Contract Manager")
+			Scope("Sys. Contract Manager")
+			Scope("Contract Observer")
+		})
+
+		Payload(ContractRetrieveByIDRequest)
+		Result(Any)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("forbidden", ErrorResult, "Caller is not an authorized party of this contract")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/contract/{did}")
+			Param("did")
+
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("forbidden", StatusForbidden)
 			Response("internal_error", StatusInternalServerError)
 		})
 	})

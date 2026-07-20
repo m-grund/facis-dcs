@@ -24,6 +24,16 @@ type SigningSummary struct {
 	KBSDHash        string // KB-JWT sd_hash of the presented PID
 	PIDPresentation string // verbatim SD-JWT VC + KB-JWT compact presentation
 	SignedAt        time.Time
+	// SchemaVersion/ValidationReportHash (Phase 4, ADR-9): the Semantic Hub
+	// SHACL shapes version this contract validated against at signing time,
+	// and a stable hash of the resulting findings
+	// (validation.SHACLEvidence) — an external verifier resolves
+	// sh:shapesGraph to fetch those exact pinned shapes from the public hub
+	// endpoints, re-runs validation, and compares hashes to detect drift.
+	// Optional: zero/empty when SHACL evidence could not be produced (e.g.
+	// signing evidence is mandatory).
+	SchemaVersion        int
+	ValidationReportHash string
 }
 
 // IssueSigningSummaryVC builds and signs a ContractSigningSummaryCredential over
@@ -36,7 +46,7 @@ func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID strin
 			"https://www.w3.org/ns/credentials/v2",
 			dataIntegrityContext,
 			map[string]interface{}{
-				"dcs":                              "https://w3id.org/facis/dcs#",
+				"dcs":                              "https://w3id.org/facis/dcs/ontology/v1#",
 				"ContractSigningSummaryCredential": "dcs:ContractSigningSummaryCredential",
 				"contract_id":                      "dcs:contractId",
 				"ceremony_id":                      "dcs:ceremonyId",
@@ -50,6 +60,8 @@ func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID strin
 					"@id":   "dcs:signedAt",
 					"@type": "http://www.w3.org/2001/XMLSchema#dateTime",
 				},
+				"schema_version":         "dcs:schemaVersion",
+				"validation_report_hash": "dcs:validationReportHash",
 			},
 		},
 		Type:      []string{"VerifiableCredential", "ContractSigningSummaryCredential"},
@@ -67,6 +79,10 @@ func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID strin
 			"pid_presentation": s.PIDPresentation,
 			"signed_at":        s.SignedAt.UTC().Format(time.RFC3339),
 		},
+	}
+	if s.ValidationReportHash != "" {
+		unsignedVC.CredentialSubject["schema_version"] = s.SchemaVersion
+		unsignedVC.CredentialSubject["validation_report_hash"] = s.ValidationReportHash
 	}
 
 	raw, err := json.Marshal(unsignedVC)

@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -216,164 +217,155 @@ func selectArchiveNotaryEvent(archiveEntryID string, receipt *archiveNotaryRecei
 	return archiveNotaryEvent{}, fmt.Errorf("ORCE archive audit log has no event matching stored notary receipt for %s", archiveEntryID)
 }
 
+var archiveIntegrityRules = []string{
+	"ARCHIVE_DB_SNAPSHOT",
+	"ARCHIVE_CONTENT_HASH",
+	"ARCHIVE_IPFS_SNAPSHOT",
+	"ARCHIVE_ORCE_RECEIPT",
+	"ARCHIVE_ORCE_CHAIN",
+	"ARCHIVE_TSA_RFC3161",
+}
+
+// archiveIntegrityTrailEntries turns validation into independent, stable
+// findings. A corrupt archive entry is audit evidence, not an endpoint error.
 func (s *processAuditAndCompliancesrvc) archiveIntegrityTrailEntries(
 	ctx context.Context,
 	entry db.ContractArchiveEntry,
 	entryIndex int,
 	archiveStoreEvents []datatype.AuditLogEntry,
 	notaryEvents map[string][]archiveNotaryEvent,
-) (*processauditandcompliance.PACResourceAuditTrailEntry, error) {
+	chainErr error,
+) []*processauditandcompliance.PACResourceAuditTrailEntry {
+	checks := s.evaluateArchiveIntegrityChecks(ctx, entry, archiveStoreEvents, notaryEvents, chainErr)
+	now := time.Now().UTC().Format(time.RFC3339)
+	did := entry.DID
+	findings := make([]*processauditandcompliance.PACResourceAuditTrailEntry, 0, len(archiveIntegrityRules))
+	for ruleIndex, rule := range archiveIntegrityRules {
+		check := checks[rule]
+		result, reason := "PASSED", "Integrity evidence verified"
+		if check != nil {
+			result, reason = "FAILED", check.Error()
+		}
+		kind := "CHECK"
+		ruleID := rule
+		resultValue := result
+		reasonValue := reason
+		findings = append(findings, &processauditandcompliance.PACResourceAuditTrailEntry{
+			ID: int64(-5100000 - entryIndex*100 - ruleIndex), Component: componenttype.ContractStorageArchive.String(),
+			EventType: "ARCHIVE_INTEGRITY_AUDIT_CHECK", Did: &did, CreatedAt: now,
+			Kind: &kind, Result: &resultValue, RuleID: &ruleID, Reason: &reasonValue,
+			EventData: map[string]any{"kind": kind, "result": result, "rule_id": rule, "ruleId": rule, "reason": reason, "message": reason, "severity": result, "archiveEntryId": archiveNotaryEntryID(entry.DID, entry.ContractVersion)},
+		})
+	}
+	return findings
+}
+
+func (s *processAuditAndCompliancesrvc) evaluateArchiveIntegrityChecks(ctx context.Context, entry db.ContractArchiveEntry, archiveStoreEvents []datatype.AuditLogEntry, notaryEvents map[string][]archiveNotaryEvent, chainErr error) map[string]error {
+	checks := make(map[string]error, len(archiveIntegrityRules))
 	if !entry.ContractSnapshot.IsNotNullValue() {
-		return nil, fmt.Errorf("archive entry %s#%d has empty contract_snapshot", entry.DID, entry.ContractVersion)
+		checks["ARCHIVE_DB_SNAPSHOT"] = errors.New("contract_snapshot is empty")
+	} else if _, err := cwecommand.CanonicalizeArchiveSnapshot(entry.ContractSnapshot); err != nil {
+		checks["ARCHIVE_DB_SNAPSHOT"] = fmt.Errorf("contract_snapshot is invalid: %w", err)
 	}
 	if !archiveContentHashPattern.MatchString(entry.ContentHash) {
-		return nil, fmt.Errorf("archive entry %s#%d has invalid content_hash", entry.DID, entry.ContractVersion)
-	}
-	calculatedHash, err := cwecommand.HashArchiveSnapshot(entry.ContractSnapshot)
-	if err != nil {
-		return nil, fmt.Errorf("archive entry %s#%d has invalid contract_snapshot JSON: %w", entry.DID, entry.ContractVersion, err)
-	}
-	if calculatedHash != entry.ContentHash {
-		return nil, fmt.Errorf("archive entry %s#%d content_hash mismatch", entry.DID, entry.ContractVersion)
+		checks["ARCHIVE_CONTENT_HASH"] = errors.New("content_hash has invalid SHA-256 format")
+	} else if checks["ARCHIVE_DB_SNAPSHOT"] != nil {
+		checks["ARCHIVE_CONTENT_HASH"] = errors.New("content hash cannot be verified because DB snapshot is invalid")
+	} else if calculated, err := cwecommand.HashArchiveSnapshot(entry.ContractSnapshot); err != nil || calculated != entry.ContentHash {
+		checks["ARCHIVE_CONTENT_HASH"] = errors.New("content_hash does not match DB snapshot")
 	}
 	if strings.TrimSpace(entry.SnapshotCID) == "" {
-		return nil, fmt.Errorf("archive entry %s#%d has empty snapshot_cid", entry.DID, entry.ContractVersion)
+		checks["ARCHIVE_IPFS_SNAPSHOT"] = errors.New("snapshot_cid is empty")
+	} else if s.ATrailReader.IPFSClient == nil {
+		checks["ARCHIVE_IPFS_SNAPSHOT"] = errors.New("IPFS client is unavailable")
+	} else if fetched, err := s.ATrailReader.IPFSClient.FetchFile(entry.SnapshotCID); err != nil {
+		checks["ARCHIVE_IPFS_SNAPSHOT"] = fmt.Errorf("IPFS snapshot fetch failed: %w", err)
+	} else if hash, err := cwecommand.HashArchiveSnapshot(datatype.JSON(fetched.Data)); err != nil || hash != entry.ContentHash || !jsonSemanticallyEqual(entry.ContractSnapshot, fetched.Data) {
+		checks["ARCHIVE_IPFS_SNAPSHOT"] = errors.New("IPFS snapshot does not match archived DB snapshot and content hash")
 	}
-	if s.ATrailReader.IPFSClient == nil {
-		return nil, fmt.Errorf("IPFS client is required for archive audit")
-	}
-	ipfsResult, err := s.ATrailReader.IPFSClient.FetchFile(entry.SnapshotCID)
-	if err != nil {
-		return nil, fmt.Errorf("fetch archive snapshot from IPFS: %w", err)
-	}
-	ipfsHash, err := cwecommand.HashArchiveSnapshot(datatype.JSON(ipfsResult.Data))
-	if err != nil {
-		return nil, fmt.Errorf("archive entry %s#%d has invalid IPFS snapshot JSON: %w", entry.DID, entry.ContractVersion, err)
-	}
-	if ipfsHash != entry.ContentHash {
-		return nil, fmt.Errorf("archive entry %s#%d IPFS snapshot hash mismatch", entry.DID, entry.ContractVersion)
-	}
-	if !jsonSemanticallyEqual(entry.ContractSnapshot, ipfsResult.Data) {
-		return nil, fmt.Errorf("archive entry %s#%d IPFS snapshot JSON mismatch", entry.DID, entry.ContractVersion)
-	}
-
 	archiveEntryID := archiveNotaryEntryID(entry.DID, entry.ContractVersion)
-	storeEvent, receipt, eventTSAReceipt, err := findArchiveStoreEvent(entry, archiveEntryID, archiveStoreEvents)
-	if err != nil {
-		return nil, err
+	_, receipt, eventTSAReceipt, receiptErr := findArchiveStoreEvent(entry, archiveEntryID, archiveStoreEvents)
+	if receiptErr != nil {
+		checks["ARCHIVE_ORCE_RECEIPT"] = receiptErr
 	}
-	notaryEventCandidates := notaryEvents[archiveEntryID]
-	if len(notaryEventCandidates) == 0 {
-		return nil, fmt.Errorf("ORCE archive audit log does not contain archiveEntryId %s", archiveEntryID)
+	candidates := notaryEvents[archiveEntryID]
+	if chainErr != nil {
+		checks["ARCHIVE_ORCE_CHAIN"] = chainErr
+	} else if len(candidates) == 0 {
+		checks["ARCHIVE_ORCE_CHAIN"] = fmt.Errorf("ORCE chain has no event for %s", archiveEntryID)
 	}
-	notaryEvent, err := selectArchiveNotaryEvent(archiveEntryID, receipt, notaryEventCandidates)
-	if err != nil {
-		return nil, err
+	if receiptErr == nil && checks["ARCHIVE_ORCE_CHAIN"] == nil {
+		if _, err := selectArchiveNotaryEvent(archiveEntryID, receipt, candidates); err != nil {
+			checks["ARCHIVE_ORCE_RECEIPT"] = err
+		}
 	}
-	if notaryEvent.ContentHash != entry.ContentHash || notaryEvent.SnapshotCID != entry.SnapshotCID {
-		return nil, fmt.Errorf("ORCE archive audit log event does not match archive entry %s", archiveEntryID)
+	if err := verifyArchiveTSAEvidence(entry, receipt, eventTSAReceipt, candidates); err != nil {
+		checks["ARCHIVE_TSA_RFC3161"] = err
 	}
-	if notaryEvent.EventType != "ARCHIVE_STORED" || notaryEvent.DID != entry.DID || notaryEvent.ContractVersion != entry.ContractVersion {
-		return nil, fmt.Errorf("ORCE archive audit log event identity mismatch for %s", archiveEntryID)
-	}
-	if receipt.ArchiveEntryID != archiveEntryID || receipt.EventHash != notaryEvent.EventHash || !stringPtrsEqual(receipt.PreviousHash, notaryEvent.PreviousHash) || !archiveTimestampsEqual(receipt.ReceivedAt, notaryEvent.ReceivedAt) {
-		return nil, fmt.Errorf("archive notary receipt does not match ORCE audit log for %s", archiveEntryID)
-	}
+	return checks
+}
 
-	tsaVerified := false
-	tsaGeneratedAt := ""
-	tsaPolicy := ""
-	tsaSerialNumber := ""
-	tsaReceipt, err := readArchiveTSAReceipt(entry, eventTSAReceipt)
+func verifyArchiveTSAEvidence(entry db.ContractArchiveEntry, receipt *archiveNotaryReceiptData, eventReceipt *archiveTSAReceiptData, candidates []archiveNotaryEvent) error {
+	archiveEntryID := archiveNotaryEntryID(entry.DID, entry.ContractVersion)
+	if receipt == nil {
+		return errors.New("TSA cannot be verified without archive notary receipt")
+	}
+	notaryEvent, err := selectArchiveNotaryEvent(archiveEntryID, receipt, candidates)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("TSA cannot be verified: %w", err)
 	}
-	if tsaReceipt != nil {
-		storedAt, err := time.Parse(time.RFC3339Nano, notaryEvent.StoredAt)
-		if err != nil {
-			return nil, fmt.Errorf("ORCE archive audit log event has invalid storedAt for %s: %w", archiveEntryID, err)
-		}
-		notaryReceivedAt, err := time.Parse(time.RFC3339Nano, notaryEvent.ReceivedAt)
-		if err != nil {
-			return nil, fmt.Errorf("ORCE archive audit log event has invalid receivedAt for %s: %w", archiveEntryID, err)
-		}
-		evidence, err := cwecommand.BuildArchiveTimestampEvidence(cwecommand.ArchiveNotaryPayload{
-			EventType:       notaryEvent.EventType,
-			ArchiveEntryID:  notaryEvent.ArchiveEntryID,
-			DID:             notaryEvent.DID,
-			ContractVersion: notaryEvent.ContractVersion,
-			ContentHash:     notaryEvent.ContentHash,
-			SnapshotCID:     notaryEvent.SnapshotCID,
-			StoredBy:        notaryEvent.StoredBy,
-			StoredAt:        storedAt,
-		}, &cwecommand.ArchiveNotaryReceipt{
-			ReceiptType:    receipt.ReceiptType,
-			ArchiveEntryID: receipt.ArchiveEntryID,
-			EventHash:      receipt.EventHash,
-			PreviousHash:   receipt.PreviousHash,
-			ReceivedAt:     notaryReceivedAt,
-		})
-		if err != nil {
-			return nil, err
-		}
-		evidenceBytes, err := cwecommand.CanonicalArchiveTimestampEvidence(evidence)
-		if err != nil {
-			return nil, err
-		}
-		ts, err := tsa.VerifyReceipt(tsa.Receipt{
-			Token:          tsaReceipt.Token,
-			TokenEncoding:  tsaReceipt.TokenEncoding,
-			HashAlgorithm:  tsaReceipt.HashAlgorithm,
-			MessageImprint: tsaReceipt.MessageImprint,
-			GeneratedAt:    tsaReceipt.GeneratedAt,
-			Policy:         tsaReceipt.Policy,
-			SerialNumber:   tsaReceipt.SerialNumber,
-		}, evidenceBytes)
-		if err != nil {
-			return nil, fmt.Errorf("archive TSA receipt verification failed for %s: %w", archiveEntryID, err)
-		}
-		if ts.Time.Before(storedAt) {
-			return nil, fmt.Errorf("archive TSA timestamp precedes storedAt for %s", archiveEntryID)
-		}
-		tsaVerified = true
-		tsaGeneratedAt = ts.Time.UTC().Format(time.RFC3339Nano)
-		if len(ts.Policy) > 0 {
-			tsaPolicy = ts.Policy.String()
-		}
-		if ts.SerialNumber != nil {
-			tsaSerialNumber = ts.SerialNumber.String()
-		}
+	tsaReceipt, err := readArchiveTSAReceipt(entry, eventReceipt)
+	if err != nil {
+		return err
 	}
+	if tsaReceipt == nil {
+		return errors.New("archive TSA RFC-3161 receipt is missing")
+	}
+	storedAt, err := time.Parse(time.RFC3339Nano, notaryEvent.StoredAt)
+	if err != nil {
+		return fmt.Errorf("invalid ORCE storedAt: %w", err)
+	}
+	receivedAt, err := time.Parse(time.RFC3339Nano, notaryEvent.ReceivedAt)
+	if err != nil {
+		return fmt.Errorf("invalid ORCE receivedAt: %w", err)
+	}
+	evidence, err := cwecommand.BuildArchiveTimestampEvidence(cwecommand.ArchiveNotaryPayload{EventType: notaryEvent.EventType, ArchiveEntryID: notaryEvent.ArchiveEntryID, DID: notaryEvent.DID, ContractVersion: notaryEvent.ContractVersion, ContentHash: notaryEvent.ContentHash, SnapshotCID: notaryEvent.SnapshotCID, StoredBy: notaryEvent.StoredBy, StoredAt: storedAt}, &cwecommand.ArchiveNotaryReceipt{ReceiptType: receipt.ReceiptType, ArchiveEntryID: receipt.ArchiveEntryID, EventHash: receipt.EventHash, PreviousHash: receipt.PreviousHash, ReceivedAt: receivedAt})
+	if err != nil {
+		return err
+	}
+	evidenceBytes, err := cwecommand.CanonicalArchiveTimestampEvidence(evidence)
+	if err != nil {
+		return err
+	}
+	stamp, err := tsa.VerifyReceipt(tsa.Receipt{Token: tsaReceipt.Token, TokenEncoding: tsaReceipt.TokenEncoding, HashAlgorithm: tsaReceipt.HashAlgorithm, MessageImprint: tsaReceipt.MessageImprint, GeneratedAt: tsaReceipt.GeneratedAt, Policy: tsaReceipt.Policy, SerialNumber: tsaReceipt.SerialNumber}, evidenceBytes)
+	if err != nil {
+		return fmt.Errorf("archive TSA receipt verification failed: %w", err)
+	}
+	if stamp.Time.Before(storedAt) {
+		return errors.New("archive TSA timestamp precedes storedAt")
+	}
+	return nil
+}
 
-	did := entry.DID
-	now := time.Now().UTC().Format(time.RFC3339)
-	return &processauditandcompliance.PACResourceAuditTrailEntry{
-		ID:        int64(-5100000 - entryIndex),
-		Component: componenttype.ContractStorageArchive.String(),
-		EventType: "ARCHIVE_INTEGRITY_AUDIT_CHECK",
-		EventData: map[string]any{
-			"objectType":            "contractArchiveEntry",
-			"objectDid":             entry.DID,
-			"contractVersion":       entry.ContractVersion,
-			"archiveEntryId":        archiveEntryID,
-			"contentHashVerified":   true,
-			"ipfsSnapshotVerified":  true,
-			"notaryReceiptVerified": true,
-			"orceChainVerified":     true,
-			"storeEventId":          storeEvent.ID,
-			"notaryEventHash":       notaryEvent.EventHash,
-			"notaryPreviousHash":    notaryEvent.PreviousHash,
-			"notaryReceivedAt":      notaryEvent.ReceivedAt,
-			"tsaTimestampVerified":  tsaVerified,
-			"tsaGeneratedAt":        tsaGeneratedAt,
-			"tsaPolicy":             tsaPolicy,
-			"tsaSerialNumber":       tsaSerialNumber,
-			"snapshotHashAlgorithm": "SHA-256",
-			"checkedAt":             now,
-		},
-		Did:       &did,
-		CreatedAt: now,
-	}, nil
+func archiveIntegrityRuleForError(err error) string {
+	if err == nil {
+		return ""
+	}
+	message := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(message, "tsa") || strings.Contains(message, "timestamp"):
+		return "ARCHIVE_TSA_RFC3161"
+	case strings.Contains(message, "receipt") || strings.Contains(message, "store event"):
+		return "ARCHIVE_ORCE_RECEIPT"
+	case strings.Contains(message, "orce") || strings.Contains(message, "previoushash") || strings.Contains(message, "eventhash"):
+		return "ARCHIVE_ORCE_CHAIN"
+	case strings.Contains(message, "ipfs") || strings.Contains(message, "snapshot_cid"):
+		return "ARCHIVE_IPFS_SNAPSHOT"
+	case strings.Contains(message, "content_hash") || strings.Contains(message, "content hash"):
+		return "ARCHIVE_CONTENT_HASH"
+	default:
+		return "ARCHIVE_DB_SNAPSHOT"
+	}
 }
 
 func jsonSemanticallyEqual(left datatype.JSON, right json.RawMessage) bool {

@@ -49,7 +49,7 @@ Feature: PKI consolidation - PKCS#11 + SoftHSM2, ECDSA P-256, trust anchors, rot
     Then get http 200:Success code
 
   @DCS-IR-HI-01
-  Scenario: The published DID key is an ECDSA P-256 JWK, not the legacy RSA JWK
+  Scenario: The published DID key is an ECDSA P-256 JWK, not an RSA JWK
     # Reuses the existing public DID-document endpoint as the test point
     # rather than inventing a test-only API. A full sign+verify round trip
     # (proving hsm.Signer(label) output verifies against

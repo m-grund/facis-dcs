@@ -11,6 +11,7 @@ import (
 	"digital-contracting-service/internal/base/identity"
 	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/base/jades"
+	"digital-contracting-service/internal/base/validation"
 
 	trustedpeer "digital-contracting-service/internal/dcstodcs"
 
@@ -365,6 +366,22 @@ func (s *dcsToDcssrvc) Action(ctx context.Context, req *dcstodcs.DCSToDCSContrac
 	}, nil
 }
 
+// verifyAgainstOriginatorHubAnyScheme tries https then http, mirroring
+// identity.FetchDIDDocumentFromHostname's convention for reaching a peer's
+// origin — the BDD/dev two-instance deployment serves plain HTTP (no TLS
+// termination), while a real deployment is HTTPS-only.
+func verifyAgainstOriginatorHubAnyScheme(ctx context.Context, contractDocument any, hostname string) ([]validation.PolicyFinding, error) {
+	var lastErr error
+	for _, scheme := range []string{"https", "http"} {
+		findings, err := validation.VerifyAgainstOriginatorHub(ctx, contractDocument, scheme+"://"+hostname)
+		if err == nil {
+			return findings, nil
+		}
+		lastErr = err
+	}
+	return nil, lastErr
+}
+
 func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContractPostSyncRequest) (res *dcstodcs.DCSToDCSContractPostSyncResponse, err error) {
 
 	senderHostname, err := identity.DIDWebToHostname(req.FromPeerDid)
@@ -564,6 +581,24 @@ func (s *dcsToDcssrvc) PostSync(ctx context.Context, req *dcstodcs.DCSToDCSContr
 	if err != nil {
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
+
+	// Resolve the synced contract's own sh:shapesGraph back to the
+	// ORIGINATOR's public Semantic Hub and re-validate against those exact
+	// pinned shapes. Advisory, logged, and detached from the request: the
+	// remote fetches and SHACL run must not delay sync replication, and a
+	// peer's hub being briefly unreachable must never fail an
+	// otherwise-trusted, JAdES-verified sync.
+	go func(contractDID string, contractDocument any) {
+		verifyCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
+		defer cancel()
+		if findings, verifyErr := verifyAgainstOriginatorHubAnyScheme(verifyCtx, contractDocument, senderHostname); verifyErr != nil {
+			log.Printf(verifyCtx, "post_sync: could not verify %s against originator %s's Semantic Hub: %v", contractDID, senderHostname, verifyErr)
+		} else if len(findings) > 0 {
+			log.Printf(verifyCtx, "post_sync: %s has %d SHACL finding(s) against originator %s's own Semantic Hub", contractDID, len(findings), senderHostname)
+		} else {
+			log.Printf(verifyCtx, "post_sync: %s validates cleanly against originator %s's own Semantic Hub", contractDID, senderHostname)
+		}
+	}(req.Contract.Did, req.Contract.ContractData)
 
 	// Persist the verified JAdES artifact so the synced contract's
 	// cross-instance provenance stays independently re-verifiable

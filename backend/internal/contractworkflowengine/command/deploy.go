@@ -137,7 +137,6 @@ func (h *Deployer) Handle(ctx context.Context, cmd DeployCmd) (*DeployResult, er
 		"odrl:policy": map[string]any{
 			"@id":   "urn:uuid:deployment-policy-" + correlationID,
 			"@type": "odrl:Set",
-			"uid":   cmd.DID,
 		},
 	}
 

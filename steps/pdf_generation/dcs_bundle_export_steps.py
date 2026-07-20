@@ -177,7 +177,8 @@ def step_then_template_bundle_no_parent_chain(context, name):
 
 
 # ---------------------------------------------------------------------------
-# Then — parent chain present, sibling absent
+# Then — parent chain present (related/ family assertions live in
+# steps/contract_bundle_export_steps.py)
 # ---------------------------------------------------------------------------
 
 
@@ -192,22 +193,6 @@ def step_then_bundle_contains_parent_chain(context, name, parent_name):
         f"Expected the contract bundle ZIP for '{name}' to contain the parent chain for "
         f"'{parent_name}' under '{expected_prefix}', got entries: {names}"
     )
-
-
-@then('the contract bundle ZIP for "{name}" contains nothing about sibling contract "{sibling_name}"')
-def step_then_bundle_excludes_sibling(context, name, sibling_name):
-    sibling_did, _ = ContractService._contract_data(context, sibling_name)
-    zf = _open_bundle_zip(context)
-    for entry_name in zf.namelist():
-        if entry_name.endswith("/"):
-            continue
-        content = zf.read(entry_name)
-        assert sibling_did.encode() not in content, (
-            f"Contract bundle ZIP entry '{entry_name}' for '{name}' unexpectedly references "
-            f"sibling contract '{sibling_name}' ({sibling_did}) — sibling confidentiality "
-            f"(FR-CSA-26 per-party-scope) must hold inside bundle "
-            f"exports too, not just live retrieval"
-        )
 
 
 # ---------------------------------------------------------------------------

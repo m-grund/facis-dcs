@@ -1,0 +1,189 @@
+@prefix dcs:  <https://w3id.org/facis/dcs/ontology/v1#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Clause catalog (DCS-FR-TR-03/TR-04, Phase 3 / ADR-10): typed clause
+# instances the template builder's palette generates a form from
+# (GET /semantic/clauses) and server-side validation checks the same way it
+# checks the rest of a contract's SHACL shapes (concatenated with the
+# canonical shapes graph — see validateAgainstHubShapes, ADR-9). One source
+# of truth: authoring a clause type here changes both the generated form and
+# what's enforced. Versions independently of the canonical shapes
+# (kind="shapes", name="clause-catalog" vs. name="facis-dcs").
+
+dcs:PaymentClauseShape
+  a sh:NodeShape ;
+  sh:targetClass dcs:PaymentClause ;
+  rdfs:label "Payment terms" ;
+  sh:property [
+    sh:path dcs:amount ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 0 ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path dcs:currency ;
+    sh:datatype xsd:string ;
+    sh:in ( "EUR" "USD" ) ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path dcs:dueDays ;
+    sh:datatype xsd:integer ;
+    sh:minInclusive 0 ;
+    sh:maxInclusive 365 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path dcs:invoiceReference ;
+    sh:datatype xsd:string ;
+    sh:pattern "^INV-[0-9]{4,}$" ;
+    sh:maxCount 1 ;
+  ] .
+
+# Hub-templated ODRL: the obligation rule shape the builder derives ODRL
+# from (shacl-form renders it; the same shape validates every odrl:Duty a
+# document carries, since this catalog concatenates into the enforcement
+# graph). Prose backing (dcs:prose) is enforced by the canonical shapes.
+@prefix odrl: <http://www.w3.org/ns/odrl/2/> .
+
+dcs:OdrlObligationShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Duty ;
+  rdfs:label "ODRL Obligation" ;
+  sh:property [
+    sh:path odrl:action ;
+    sh:name "Action" ;
+    sh:description "What the assignee is obliged to do." ;
+    sh:order 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in ( dcs:provideCompliantValue odrl:use odrl:distribute odrl:delete ) ;
+  ] ;
+  sh:property [
+    sh:path odrl:constraint ;
+    sh:name "Constraint" ;
+    sh:order 2 ;
+    sh:node dcs:OdrlConstraintShape ;
+  ] .
+
+# Grants and bans (the SRS Appendix C agreement — API access for named
+# parties under spatial/temporal constraints — is an odrl:Permission carrying
+# odrl:spatial / odrl:dateTime constraints; nothing about it is code, it is
+# all expressible through these hub-served shapes).
+
+dcs:OdrlPermissionShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Permission ;
+  rdfs:label "ODRL Permission" ;
+  sh:property [
+    sh:path odrl:action ;
+    sh:name "Action" ;
+    sh:description "What the assignees are permitted to do." ;
+    sh:order 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in ( odrl:use odrl:read odrl:distribute odrl:reproduce odrl:execute odrl:play odrl:present ) ;
+  ] ;
+  sh:property [
+    sh:path odrl:assigner ;
+    sh:name "Assigner" ;
+    sh:description "The party granting the permission (IRI)." ;
+    sh:order 2 ;
+    sh:nodeKind sh:IRI ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:assignee ;
+    sh:name "Assignees" ;
+    sh:description "The parties receiving the permission (one IRI per party)." ;
+    sh:order 3 ;
+    sh:nodeKind sh:IRI ;
+  ] ;
+  sh:property [
+    sh:path odrl:target ;
+    sh:name "Target asset" ;
+    sh:description "The asset the permission applies to (IRI)." ;
+    sh:order 4 ;
+    sh:nodeKind sh:IRI ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:constraint ;
+    sh:name "Constraints" ;
+    sh:order 5 ;
+    sh:node dcs:OdrlConstraintShape ;
+  ] .
+
+dcs:OdrlProhibitionShape
+  a sh:NodeShape ;
+  sh:targetClass odrl:Prohibition ;
+  rdfs:label "ODRL Prohibition" ;
+  sh:property [
+    sh:path odrl:action ;
+    sh:name "Action" ;
+    sh:description "What the assignees are prohibited from doing." ;
+    sh:order 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in ( odrl:use odrl:distribute odrl:reproduce odrl:modify odrl:delete odrl:transfer ) ;
+  ] ;
+  sh:property [
+    sh:path odrl:assigner ;
+    sh:name "Assigner" ;
+    sh:order 2 ;
+    sh:nodeKind sh:IRI ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:assignee ;
+    sh:name "Assignees" ;
+    sh:order 3 ;
+    sh:nodeKind sh:IRI ;
+  ] ;
+  sh:property [
+    sh:path odrl:target ;
+    sh:name "Target asset" ;
+    sh:order 4 ;
+    sh:nodeKind sh:IRI ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:constraint ;
+    sh:name "Constraints" ;
+    sh:order 5 ;
+    sh:node dcs:OdrlConstraintShape ;
+  ] .
+
+dcs:OdrlConstraintShape
+  a sh:NodeShape ;
+  sh:property [
+    sh:path odrl:leftOperand ;
+    sh:name "Left operand" ;
+    sh:description "What the constraint governs: an ODRL left operand (odrl:spatial, odrl:dateTime, ...) or a contract-data field (dcs:RequirementField IRI)." ;
+    sh:order 1 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+  ] ;
+  sh:property [
+    sh:path odrl:operator ;
+    sh:name "Operator" ;
+    sh:order 2 ;
+    sh:nodeKind sh:IRI ;
+    sh:minCount 1 ;
+    sh:maxCount 1 ;
+    sh:in ( odrl:eq odrl:neq odrl:gt odrl:gteq odrl:lt odrl:lteq odrl:isAnyOf odrl:isNoneOf ) ;
+  ] ;
+  sh:property [
+    sh:path odrl:rightOperand ;
+    sh:name "Required value" ;
+    sh:order 3 ;
+    sh:minCount 1 ;
+  ] .
