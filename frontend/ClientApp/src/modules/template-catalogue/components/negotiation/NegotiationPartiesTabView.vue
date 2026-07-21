@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Participant } from '@/modules/template-catalogue/models/participant'
+import type { Participant } from '@template-catalogue/models/participant'
 
 defineProps<{
   initiator: Participant | null

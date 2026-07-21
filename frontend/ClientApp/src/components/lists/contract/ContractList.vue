@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, type Ref, ref, useId, watch } from 'vue'
+import { useContractPermissions } from '@contract-workflow-engine/composables/useContractPermissions'
 import Pagination from '@/components/Pagination.vue'
-import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
 import { useContractsStore } from '@/stores/contracts-store.ts'
 import { useContractStateFilterStore } from '@/stores/state-filter-store'

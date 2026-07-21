@@ -7,7 +7,7 @@ import {
   usedPlaceholderKeysInContent,
 } from '@template-repository/composables/useClauseTextChips'
 import type { DcsContentSegment } from '@/models/dcs-jsonld'
-import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
 
 const props = defineProps<{
   mode: 'create' | 'edit'

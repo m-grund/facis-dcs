@@ -1,8 +1,8 @@
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
 import type { DcsBlock, DcsDataRequirement, DcsLayoutNode, OdrlRule } from '@/models/dcs-jsonld'
-import type { MetaData, TemplateTypeValue } from '@/modules/template-repository/models/contract-template'
 import type { ContractTemplateState } from '@/types/contract-template-state'
+import type { MetaData, TemplateTypeValue } from '@template-repository/models/contract-template'
 import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 export const TEMPLATE_DATA_VERSIONS = [1] as const

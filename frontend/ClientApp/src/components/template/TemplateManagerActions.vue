@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, normalizeClass, ref, useAttrs, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
+import { TemplateType } from '@template-repository/models/contract-template'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import { useTemplatePermissions } from '@/modules/template-repository/composables/useTemplatePermissions'
-import { TemplateType } from '@/modules/template-repository/models/contract-template'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'

@@ -2,30 +2,27 @@
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, type Ref, ref, useId, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import WorkflowStageBanner from '@core/components/WorkflowStageBanner.vue'
+import { useScrollStore } from '@core/store/scroll'
+import { contractStory, toBannerActions } from '@core/workflow-story'
 import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
 import ClausesEditor from '@template-repository/components/ClausesEditor.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
-import ParticipantSelectionDialog from '@/components/ParticipantSelectionDialog.vue'
-import WorkflowStageBanner from '@/core/components/WorkflowStageBanner.vue'
-import { useScrollStore } from '@/core/store/scroll'
-import { contractStory, toBannerActions } from '@/core/workflow-story'
-import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
-import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
+import { buildContractDocument, getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import ViewContractTemplateView from '@template-repository/views/ViewContractTemplateView.vue'
+import ContractDetailsEditor from '@contract-workflow-engine/components/ContractDetailsEditor.vue'
+import { useContractDataPreprocess } from '@contract-workflow-engine/composables/useContractDataPreprocess'
 import {
   useSemanticValueVerification,
   type VerificationResult,
-} from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
-import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
-import {
-  buildContractDocument,
-  getSemanticConditionsFromTemplateData,
-} from '@/modules/template-repository/store/dcsDraftStore'
-import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
-import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
+} from '@contract-workflow-engine/composables/useSemanticValueVerification'
+import { useContractContentValuesStore } from '@contract-workflow-engine/store/contractContentValuesStore'
+import { useContractEditorUiStore } from '@contract-workflow-engine/store/contractEditorUiStore'
+import ParticipantSelectionDialog from '@/components/ParticipantSelectionDialog.vue'
 import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useContractsStore } from '@/stores/contracts-store'
@@ -34,8 +31,8 @@ import { ContractState } from '@/types/contract-state'
 import type { Contract } from '@/models/contract/contract'
 import type { ContractData } from '@/models/contract-data'
 import type { PartialContractTemplate } from '@/models/contract-template'
-import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type { ParticipantSelection } from '@/utils/participant-selection'
+import type { SemanticConditionValueSetter } from '@contract-workflow-engine/models/contract-content-values-store'
 
 const route = useRoute()
 const router = useRouter()

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useTemplatePermissions } from '@/modules/template-repository/composables/useTemplatePermissions'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { ROUTES } from '@/router/router'
 import { TemplateState } from '@/types/contract-template-state'
 import { toProperCase } from '@/utils/string'

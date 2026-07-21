@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
-import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { contractTemplateService } from '@/services/contract-template-service'
 
 const draftStore = useDcsDraftStore()

@@ -4,11 +4,11 @@ import {
   type ContractDiffRow,
   type DiffType,
   type TextDiffSegment,
-} from '@/modules/contract-workflow-engine/composables/useContractBlockDiff'
+} from '@contract-workflow-engine/composables/useContractBlockDiff'
 import {
   type ContractPlainTextBlock,
   isSectionPlainTextBlock,
-} from '@/modules/contract-workflow-engine/composables/useContractPlainTextConverter'
+} from '@contract-workflow-engine/composables/useContractPlainTextConverter'
 import DiffSectionBlock from './DiffSectionBlock.vue'
 import DiffTextBlock from './DiffTextBlock.vue'
 

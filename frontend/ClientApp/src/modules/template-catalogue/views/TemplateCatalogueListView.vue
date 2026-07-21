@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import TemplateCatalogueList from '@/modules/template-catalogue/components/catalogue-template/TemplateCatalogueList.vue'
-import { useTemplateCatalogueList } from '@/modules/template-catalogue/composables/useTemplateCatalogueList'
+import TemplateCatalogueList from '@template-catalogue/components/catalogue-template/TemplateCatalogueList.vue'
+import { useTemplateCatalogueList } from '@template-catalogue/composables/useTemplateCatalogueList'
 
 const { templates, loading, error, refresh } = useTemplateCatalogueList()
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import DiffView from '@/modules/contract-workflow-engine/components/DiffView.vue'
+import DiffView from '@contract-workflow-engine/components/DiffView.vue'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { ContractState, type ContractState as ContractStateType } from '@/types/contract-state'
 import type { ContractData } from '@/models/contract-data'

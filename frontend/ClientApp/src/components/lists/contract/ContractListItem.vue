@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
+import { useContractPermissions } from '@contract-workflow-engine/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
 import { requestContractSync } from '@/services/dcs-to-dcs-service'
 import { useContractsStore } from '@/stores/contracts-store'

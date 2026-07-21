@@ -15,15 +15,15 @@ import {
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
-import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import {
   collectDeclaredRequirements,
   fromDocumentSemanticValues,
-} from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
+} from '@contract-workflow-engine/utils/semantic-condition-values'
+import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsBlock, DcsClause, DcsLayoutNode } from '@/models/dcs-jsonld'
-import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
 import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 const DEFAULT_PLACEHOLDER_TEXT = '__________'

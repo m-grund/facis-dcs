@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import TemplateList from '@/components/lists/template/TemplateList.vue'
-import { useTemplatePermissions } from '@/modules/template-repository/composables/useTemplatePermissions'
 import { ROUTES } from '@/router/router'
 
 const { isCreator } = useTemplatePermissions()

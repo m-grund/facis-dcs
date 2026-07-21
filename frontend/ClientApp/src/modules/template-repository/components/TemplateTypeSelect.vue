@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TemplateType, type TemplateTypeValue } from '@/modules/template-repository/models/contract-template'
+import { TemplateType, type TemplateTypeValue } from '@template-repository/models/contract-template'
 
 defineProps<{
   modelValue: TemplateTypeValue

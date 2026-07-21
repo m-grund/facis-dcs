@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import PublishEntryForm from '@/modules/semantic-hub/components/PublishEntryForm.vue'
-import RegisterVersionForm from '@/modules/semantic-hub/components/RegisterVersionForm.vue'
+import PublishEntryForm from '@semantic-hub/components/PublishEntryForm.vue'
+import RegisterVersionForm from '@semantic-hub/components/RegisterVersionForm.vue'
 import {
   getSchemaVersions,
   listSchemas,

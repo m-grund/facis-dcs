@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ROUTES } from '@/router/router'
 import { toProperCase } from '@/utils/string'
-import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
+import type { TemplateResourcesItem } from '@template-catalogue/models/template-resource'
 
 const props = defineProps<{
   template: TemplateResourcesItem

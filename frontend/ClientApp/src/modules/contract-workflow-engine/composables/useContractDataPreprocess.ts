@@ -4,11 +4,11 @@ import {
   getLayoutFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
 import { buildMergedChildBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
-import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import {
   collectDeclaredRequirements,
   fromDocumentSemanticValues,
-} from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
+} from '@contract-workflow-engine/utils/semantic-condition-values'
+import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsBlock, DcsContractData, DcsLayoutNode, OdrlRule } from '@/models/dcs-jsonld'

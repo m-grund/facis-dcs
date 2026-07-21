@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import ConditionalWrapper from '@core/components/ConditionalWrapper.vue'
 import { isDcsMergedApprovedTemplate } from '@template-repository/store/dcsDraftStore'
 import {
   getBlocksFromTemplateData,
@@ -11,15 +12,14 @@ import {
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
-import ConditionalWrapper from '@/core/components/ConditionalWrapper.vue'
 import PreviewClauseBlock from './PreviewClauseBlock.vue'
 import PreviewSectionBlock from './PreviewSectionBlock.vue'
 import PreviewTextBlock from './PreviewTextBlock.vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsBlock, DcsContentSegment, DcsLayoutNode } from '@/models/dcs-jsonld'
-import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
+import type { VerificationResult } from '@contract-workflow-engine/composables/useSemanticValueVerification'
+import type { SemanticConditionValueSetter } from '@contract-workflow-engine/models/contract-content-values-store'
 import type { SemanticCondition } from '@template-repository/models/contract-template'
 import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 

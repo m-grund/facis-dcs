@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
+import { useContractDataPreprocess } from '@contract-workflow-engine/composables/useContractDataPreprocess'
+import { useContractPermissions } from '@contract-workflow-engine/composables/useContractPermissions'
+import { useContractContentValuesStore } from '@contract-workflow-engine/store/contractContentValuesStore'
 import SigningCeremonyDialog from '@/components/signing/SigningCeremonyDialog.vue'
-import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
-import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
-import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
-import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
 import { ROUTES } from '@/router/router'
 import {
   type ProvenanceEntry,

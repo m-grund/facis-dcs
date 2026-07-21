@@ -4,7 +4,7 @@ import ListSort from '@/components/lists/ListSort.vue'
 import { compareValues } from '@/utils/comparison'
 import TemplateCatalogueListItem from './TemplateCatalogueListItem.vue'
 import TemplateCatalogueListSearch from './TemplateCatalogueListSearch.vue'
-import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
+import type { TemplateResourcesItem } from '@template-catalogue/models/template-resource'
 
 const props = defineProps<{
   templates: TemplateResourcesItem[]

@@ -2,10 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
 import { resolveValueOptions, type ValueOption } from '@template-repository/utils/value-option-catalog'
-import type {
-  SemanticParameterType,
-  SemanticValueConstraint,
-} from '@/modules/template-repository/models/contract-template'
+import type { SemanticParameterType, SemanticValueConstraint } from '@template-repository/models/contract-template'
 
 const props = defineProps<{
   type: SemanticParameterType

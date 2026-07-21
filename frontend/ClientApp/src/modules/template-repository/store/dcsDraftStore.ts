@@ -4,6 +4,10 @@ import { ONTOLOGY_DOMAIN_FIELDS } from '@template-repository/utils/ontology-doma
 import { DCS_ODRL_PROFILE_IRI, DEFAULT_FIELD_CONSTRAINT_ACTION } from '@template-repository/utils/sla-ontology-catalog'
 import { isMergedBlockId, isSameTemplateDataRef } from '@template-repository/utils/template-data-ref'
 import {
+  applyInlineSemanticValues,
+  applyInlineSemanticValuesToSnapshots,
+} from '@contract-workflow-engine/utils/semantic-condition-values'
+import {
   type DcsApprovedTemplate,
   type DcsBlock,
   type DcsClause,
@@ -29,10 +33,6 @@ import {
   type OdrlRule,
   type OdrlSet,
 } from '@/models/dcs-jsonld'
-import {
-  applyInlineSemanticValues,
-  applyInlineSemanticValuesToSnapshots,
-} from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { ContractTemplate, SubTemplateSnapshot } from '@/models/contract-template'
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'

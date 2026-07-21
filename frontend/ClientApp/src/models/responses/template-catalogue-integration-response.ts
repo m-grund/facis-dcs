@@ -1,4 +1,4 @@
-import type { TemplateResource, TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
+import type { TemplateResource, TemplateResourcesItem } from '@template-catalogue/models/template-resource'
 
 export interface TemplateCatalogueRetrieveResponse {
   totalCount: number

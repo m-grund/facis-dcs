@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { useContractPermissions } from '@contract-workflow-engine/composables/useContractPermissions'
 import ContractList from '@/components/lists/contract/ContractList.vue'
-import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
 
 const { isCreator } = useContractPermissions()

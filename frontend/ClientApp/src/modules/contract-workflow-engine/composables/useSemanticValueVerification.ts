@@ -10,7 +10,7 @@ import { resolveAllowedValues } from '@template-repository/utils/value-constrain
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsBlock, DcsClause } from '@/models/dcs-jsonld'
-import type { SemanticCondition, SemanticValueConstraint } from '@/modules/template-repository/models/contract-template'
+import type { SemanticCondition, SemanticValueConstraint } from '@template-repository/models/contract-template'
 import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 export interface VerificationResult {
