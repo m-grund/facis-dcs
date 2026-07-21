@@ -96,8 +96,8 @@ onUnmounted(() => stateFilterStore.reset())
 
 <template>
   <div class="flex h-full min-h-0 flex-col">
-    <div v-if="loading" class="pl-4">Loading Templates...</div>
-    <div v-else-if="error" class="pl-4">{{ error }}</div>
+    <div v-if="loading" class="pl-4" role="status" aria-live="polite">Loading contracts...</div>
+    <div v-else-if="error" class="pl-4" role="status" aria-live="assertive">{{ error }}</div>
     <ul v-else class="list flex-1 overflow-y-auto">
       <li class="flex flex-col justify-between px-4 tracking-wide sm:flex-row">
         <ContractListSearch :contracts="contracts" class="flex-1" @search-result="applySearchResult" />

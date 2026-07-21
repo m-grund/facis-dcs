@@ -16,7 +16,7 @@ import type {
   ContractSubmitRequest,
   ContractTerminateRequest,
   ContractUpdateRequest,
-} from '@/models/requests/contract-requests'
+} from '@/models/requests/contract-request'
 import type {
   ApprovedContractTemplateRetrieveResponse,
   ContractApproveResponse,

@@ -138,10 +138,10 @@ onMounted(loadEntries)
                     {{ entry.kind }}
                   </span>
                 </span>
-                <span class="shrink-0 text-right text-xs text-base-content/60">
+                <span class="shrink-0 text-right text-xs text-base-content/90">
                   <span v-if="entry.active_version > 0" class="block">active v{{ entry.active_version }}</span>
                   <span v-else class="block text-warning">no active version</span>
-                  <span class="block opacity-70">latest v{{ entry.latest_version }}</span>
+                  <span class="block opacity-75">latest v{{ entry.latest_version }}</span>
                 </span>
               </button>
             </li>
@@ -166,13 +166,13 @@ onMounted(loadEntries)
                 {{ selected.kind }}
               </span>
             </h2>
-            <span class="text-xs text-base-content/60">{{ selected.media_type }}</span>
+            <span class="text-xs text-base-content/70">{{ selected.media_type }}</span>
           </div>
-          <div v-if="versionsLoading" class="p-4 text-sm text-base-content/60">Loading versions…</div>
+          <div v-if="versionsLoading" class="p-4 text-sm text-base-content/70">Loading versions…</div>
           <div v-else class="overflow-x-auto">
             <table class="table table-sm">
               <thead>
-                <tr>
+                <tr class="text-base-content/70">
                   <th>Version</th>
                   <th>Status</th>
                   <th>Registered by</th>
@@ -234,7 +234,7 @@ onMounted(loadEntries)
       </section>
       <section
         v-else
-        class="flex items-center justify-center rounded-lg border border-dashed border-base-300 p-8 text-sm text-base-content/50"
+        class="flex items-center justify-center rounded-lg border border-dashed border-base-300 p-8 text-sm text-base-content/70"
       >
         Select an entry to inspect its versions.
       </section>

@@ -83,7 +83,7 @@ const visibleStages = computed(() => stages.filter((stage) => canAccess(stage.ro
       <p class="mt-2 text-base-content/70">
         Templates, negotiated contracts, verifiable signatures and auditable archives — end to end.
       </p>
-      <p class="mt-1 text-sm text-base-content/50">You see the stages your roles can act on.</p>
+      <p class="mt-1 text-sm text-base-content/70">You see the stages your roles can act on.</p>
     </div>
 
     <div class="flex flex-col gap-4">
@@ -92,8 +92,8 @@ const visibleStages = computed(() => stages.filter((stage) => canAccess(stage.ro
           <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
             <div>
               <h2 class="card-title text-base">{{ stage.name }}</h2>
-              <p class="mt-1 text-sm text-base-content/70">{{ stage.description }}</p>
-              <p class="mt-2 text-xs text-base-content/50">Acts here: {{ stage.roles }}</p>
+              <p class="mt-1 text-sm text-base-content/80">{{ stage.description }}</p>
+              <p class="mt-2 text-xs text-base-content/70">Acts here: {{ stage.roles }}</p>
             </div>
             <RouterLink :to="{ name: stage.routeName }" class="btn shrink-0 btn-outline btn-sm">
               {{ stage.linkLabel }}

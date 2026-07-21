@@ -148,7 +148,7 @@ async function compliance(contract: SignatureContract) {
   <div class="p-4">
     <div v-if="loading" class="text-base-content/60" role="status" aria-live="polite">Loading approved contracts…</div>
     <div v-else-if="error" class="mb-4 alert alert-error" role="alert" aria-live="assertive">{{ error }}</div>
-    <div v-else-if="contracts.length === 0" class="text-base-content/60" role="status">
+    <div v-else-if="contracts.length === 0" class="text-base-content/70" role="status">
       Nothing awaits your signature. Contracts appear here once they are approved for signing.
     </div>
 
