@@ -431,6 +431,41 @@
   border-color: color-mix(in oklab, var(--color-base-content) 20%, #0000);
 }
 
+@theme {
+  --color-secondary-readable: #4b5563;
+  --color-info-readable: #1d4ed8;
+  --color-success-readable: #166534;
+  --color-error-readable: #b91c1c;
+  --color-warning-readable: #92400e;
+}
+
+@utility badge-soft {
+  &.badge-secondary {
+    --badge-color: var(--color-secondary-readable);
+  }
+  &.badge-success {
+    --badge-color: var(--color-success-readable);
+  }
+  &.badge-error {
+    --badge-color: var(--color-error-readable);
+  }
+  &.badge-warning {
+    --badge-color: var(--color-warning-readable);
+  }
+  &.badge-info {
+    --badge-color: var(--color-info-readable);
+  }
+}
+
+@utility alert-soft {
+  &.alert-error {
+    --alert-color: var(--color-error-readable);
+  }
+  &.alert-info {
+    --alert-color: var(--color-info-readable);
+  }
+}
+
 .select-button {
   background-color: var(--color-base-100);
   background-image:

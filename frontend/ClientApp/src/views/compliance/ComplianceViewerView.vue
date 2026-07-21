@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, useId } from 'vue'
 import {
   type SignatureAuditEntry,
   type SignatureComplianceResult,
@@ -33,6 +33,9 @@ const error = ref<string | null>(null)
 
 const search = ref('')
 const statusFilter = ref('')
+
+const searchId = useId()
+const statusFilterId = useId()
 
 const selected = ref<SignatureContract | null>(null)
 const activeTab = ref<Tab>('validation')
@@ -317,12 +320,19 @@ function exportPdf() {
       <div class="lg:col-span-1">
         <div class="mb-2 flex flex-col gap-2">
           <input
+            :id="searchId"
             v-model="search"
             type="text"
             placeholder="Search DID or name…"
+            aria-label="Search contract DID or name"
             class="input-bordered input input-sm w-full"
           />
-          <select v-model="statusFilter" class="select-bordered select w-full select-sm">
+          <select
+            :id="statusFilterId"
+            v-model="statusFilter"
+            aria-label="Select contract state"
+            class="select-bordered select w-full select-sm"
+          >
             <option value="">All statuses</option>
             <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
           </select>
@@ -341,7 +351,7 @@ function exportPdf() {
               <span class="font-medium">{{ contract.name ?? contract.did }}</span>
               <span class="flex items-center gap-2">
                 <span class="badge badge-ghost badge-xs">{{ contract.state }}</span>
-                <span class="truncate font-mono text-[10px] opacity-60">{{ contract.did }}</span>
+                <span class="truncate font-mono text-[10px] opacity-70">{{ contract.did }}</span>
               </span>
             </button>
           </li>
@@ -350,7 +360,7 @@ function exportPdf() {
 
       <!-- Tabbed dashboard for the selected contract -->
       <div class="lg:col-span-2">
-        <div v-if="!selected" class="text-base-content/60">Select a contract to inspect its signatures.</div>
+        <div v-if="!selected" class="text-base-content/70">Select a contract to inspect its signatures.</div>
         <div v-else>
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div role="tablist" class="tabs-boxed tabs">
@@ -470,7 +480,7 @@ function exportPdf() {
                 </thead>
                 <tbody>
                   <tr v-for="(sig, i) in view?.signatures ?? []" :key="i">
-                    <td class="max-w-[12rem] truncate font-mono text-xs">{{ sig.signer_did }}</td>
+                    <td class="max-w-48 truncate font-mono text-xs">{{ sig.signer_did }}</td>
                     <td>{{ sig.field_name ?? '—' }}</td>
                     <td>
                       <span class="badge badge-sm" :class="statusIndicator(sig.status).cls">
@@ -520,7 +530,7 @@ function exportPdf() {
                   </thead>
                   <tbody>
                     <tr v-for="(sig, i) in view?.signatures ?? []" :key="i">
-                      <td class="max-w-[12rem] truncate font-mono text-xs">{{ sig.signer_did }}</td>
+                      <td class="max-w-48 truncate font-mono text-xs">{{ sig.signer_did }}</td>
                       <td>
                         <span class="badge badge-sm badge-info">{{ signatureLevel(sig) }}</span>
                       </td>
@@ -529,7 +539,7 @@ function exportPdf() {
                           {{ statusIndicator(sig.status).label }}
                         </span>
                       </td>
-                      <td class="max-w-[12rem] truncate font-mono text-[10px]" :title="sig.kb_sd_hash ?? ''">
+                      <td class="max-w-48 truncate font-mono text-[10px]" :title="sig.kb_sd_hash ?? ''">
                         {{ sig.kb_sd_hash ?? '—' }}
                       </td>
                     </tr>

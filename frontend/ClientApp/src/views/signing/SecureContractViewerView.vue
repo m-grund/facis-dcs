@@ -248,7 +248,7 @@ async function validate() {
   <div class="flex h-full flex-col">
     <div class="flex items-center justify-between gap-3 border-b border-base-content/10 bg-base-100 p-4">
       <div>
-        <p class="text-xs font-black tracking-widest text-base-content/40 uppercase">Secure Contract Viewer</p>
+        <p class="text-xs font-black tracking-widest text-base-content/70 uppercase">{{ route.meta.name }}</p>
         <h2 class="truncate text-2xl font-bold">{{ contract?.name ?? 'Contract' }}</h2>
       </div>
       <button class="btn btn-outline btn-sm" @click="router.push({ name: ROUTES.SIGNING.LIST })">Back to list</button>
@@ -272,7 +272,7 @@ async function validate() {
             <div class="card-body gap-4">
               <div>
                 <h4 class="text-lg font-bold">{{ contract?.name ?? 'Untitled contract' }}</h4>
-                <p class="font-mono text-xs break-all text-base-content/50">{{ did }}</p>
+                <p class="font-mono text-xs break-all text-base-content/70">{{ did }}</p>
                 <p v-if="contract?.description" class="mt-2 text-sm whitespace-pre-line">{{ contract.description }}</p>
               </div>
 
@@ -286,9 +286,9 @@ async function validate() {
                   :sub-template-snapshots="dcsDraftStore.subTemplateSnapshots"
                 />
               </div>
-              <p v-else class="text-sm text-base-content/50 italic">This contract has no renderable clause content.</p>
+              <p v-else class="text-sm text-base-content/70 italic">This contract has no renderable clause content.</p>
 
-              <p class="text-xs text-base-content/50">
+              <p class="text-xs text-base-content/70">
                 Review the full clauses and machine-readable terms above before signing. The to-be-signed PDF with the
                 embedded PoA and signing summary is produced at the Apply Signature step.
               </p>
@@ -312,7 +312,7 @@ async function validate() {
               </p>
               <ol class="relative ml-1.5 border-l border-base-300">
                 <li v-for="entry in provenanceChain" :key="entry.label" class="mb-4 ml-4">
-                  <span class="absolute -left-[6.5px] mt-1 h-3 w-3 rounded-full border border-base-100 bg-primary" />
+                  <span class="absolute left-[-6.5px] mt-1 h-3 w-3 rounded-full border border-base-100 bg-primary" />
                   <div class="flex flex-wrap items-center gap-2">
                     <span class="badge badge-outline badge-sm">{{ provenanceStatus(entry) }}</span>
                     <span v-if="provenanceTime(entry)" class="text-xs text-base-content/50">
@@ -356,7 +356,7 @@ async function validate() {
                 <h4 class="card-title text-sm">1 · Open contract</h4>
                 <span class="badge badge-sm badge-success">Opened</span>
               </div>
-              <p class="text-xs text-base-content/60">
+              <p class="text-xs text-base-content/70">
                 Contract content loaded on the left for review. Version {{ contract?.contract_version ?? 1 }}.
               </p>
             </div>
@@ -372,12 +372,16 @@ async function validate() {
                 <h4 class="card-title text-sm">2 · Verify integrity &amp; envelope</h4>
                 <span v-if="done.verify" class="badge badge-sm badge-success">Verified</span>
               </div>
-              <p class="text-xs text-base-content/60">
+              <p class="text-xs text-base-content/70">
                 pdf-core deterministically re-renders the PDF from the contract's embedded machine-readable payload and
                 compares it to the signed document: a match proves the human-readable PDF (and its rendered payload
                 hash) agrees with the machine-readable contract, and the C2PA manifest chain is intact.
               </p>
-              <div v-if="verifyResult" class="text-xs" :class="verifyResult.match ? 'text-success' : 'text-error'">
+              <div
+                v-if="verifyResult"
+                class="text-xs"
+                :class="verifyResult.match ? 'text-success-readable' : 'text-error-readable'"
+              >
                 Human ↔ machine match: {{ verifyResult.match ? 'deterministic re-render matches ✓' : 'mismatch ✗' }} ({{
                   verifyResult.sig_count
                 }}
@@ -406,7 +410,7 @@ async function validate() {
                 <h4 class="card-title text-sm">3 · Verify your identity &amp; download the document to sign</h4>
                 <span v-if="done.apply" class="badge badge-sm badge-success">Downloaded</span>
               </div>
-              <p class="text-xs text-base-content/60">
+              <p class="text-xs text-base-content/70">
                 Present your PID in the wallet ceremony. The DCS then builds the to-be-signed PDF (with your Power of
                 Attorney and the signing summary embedded, credential {{ CREDENTIAL_TYPE }}) and downloads it to your
                 device. The DCS holds no signing key — you sign the document yourself.
@@ -446,11 +450,11 @@ async function validate() {
                 <h4 class="card-title text-sm">4 · Upload the signed document</h4>
                 <span v-if="signed" class="badge badge-sm badge-success">Uploaded</span>
               </div>
-              <p class="text-xs text-base-content/60">
+              <p class="text-xs text-base-content/70">
                 Once you have signed the downloaded PDF, upload it here. The DCS validates that you alone controlled the
                 signing key (sole control) and records the executed contract.
               </p>
-              <p v-if="!done.apply" class="text-xs text-base-content/50 italic">
+              <p v-if="!done.apply" class="text-xs text-base-content/70 italic">
                 Complete step 3 first to get the document to sign.
               </p>
               <p v-else-if="signed" class="text-xs text-success">Signed document accepted and recorded.</p>
@@ -481,7 +485,7 @@ async function validate() {
                 <h4 class="card-title text-sm">5 · Validate applied signatures</h4>
                 <span v-if="done.validate" class="badge badge-sm badge-success">Validated</span>
               </div>
-              <p class="text-xs text-base-content/60">Validate the applied signature(s) against trust policies.</p>
+              <p class="text-xs text-base-content/70">Validate the applied signature(s) against trust policies.</p>
               <ul v-if="validateResult?.findings?.length" class="list-disc pl-5 text-xs text-warning">
                 <li v-for="(f, i) in validateResult.findings" :key="i">{{ f }}</li>
               </ul>
@@ -499,7 +503,7 @@ async function validate() {
           </div>
         </div>
 
-        <p v-if="isManager && !isSigner" class="mt-4 text-xs text-base-content/50">
+        <p v-if="isManager && !isSigner" class="mt-4 text-xs text-base-content/70">
           Manager view: retrieval, verification and validation are available; signing is performed by a Signer.
         </p>
       </section>

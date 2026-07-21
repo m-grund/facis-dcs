@@ -33,10 +33,14 @@ const policyBadgeClass = (audit: TemplateAuditItem) => {
     <li v-for="audit in audits" :key="audit.id" class="list-row grid-cols-1">
       <div class="flex justify-between">
         <div>{{ new Date(audit.created_at).toLocaleString() }}</div>
-        <div v-if="isPolicyFinding(audit)" class="badge badge-outline badge-sm" :class="policyBadgeClass(audit)">
+        <div
+          v-if="isPolicyFinding(audit)"
+          class="badge badge-soft badge-sm font-medium"
+          :class="policyBadgeClass(audit)"
+        >
           {{ policyField(audit, 'severity') || 'finding' }}
         </div>
-        <div v-else class="badge badge-outline badge-sm badge-secondary">{{ toProperCase(audit.event_type) }}</div>
+        <div v-else class="badge badge-soft badge-sm badge-secondary">{{ toProperCase(audit.event_type) }}</div>
         <div class="text-xs">{{ toProperCase(audit.component) }}</div>
       </div>
       <div class="list-col-wrap">
@@ -47,8 +51,8 @@ const policyBadgeClass = (audit: TemplateAuditItem) => {
             <span v-if="policyField(audit, 'templateType')">· {{ policyField(audit, 'templateType') }}</span>
           </div>
           <div class="font-medium">{{ policyField(audit, 'title') || 'Policy finding' }}</div>
-          <div class="text-sm opacity-80">{{ policyField(audit, 'message') }}</div>
-          <div class="text-xs opacity-60">
+          <div class="text-sm opacity-85">{{ policyField(audit, 'message') }}</div>
+          <div class="text-xs opacity-70">
             {{ policyField(audit, 'ruleId') }}
             <span v-if="policyField(audit, 'fieldIri')">· {{ policyField(audit, 'fieldIri') }}</span>
             <span v-if="policyField(audit, 'requirement')">· {{ policyField(audit, 'requirement') }}</span>
@@ -64,11 +68,11 @@ const policyBadgeClass = (audit: TemplateAuditItem) => {
           <div>Submitted by: {{ audit.event_data.submitted_by }}</div>
           <div>
             Transition:
-            <span class="badge badge-outline badge-xs badge-secondary">
+            <span class="badge badge-soft badge-xs badge-secondary">
               {{ toProperCase(audit.event_data.previous_state) }}
             </span>
             →
-            <span class="badge badge-outline badge-xs badge-secondary">
+            <span class="badge badge-soft badge-xs badge-secondary">
               {{ toProperCase(audit.event_data.new_state) }}
             </span>
           </div>

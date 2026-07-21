@@ -36,6 +36,7 @@ const error = ref<string | null>(null)
 const nameId = useId()
 const kindId = useId()
 const contentId = useId()
+const sourceUrlId = useId()
 
 const canSubmit = computed(
   () => !!name.value.trim() && (source.value === 'url' ? !!sourceUrl.value.trim() : !!content.value.trim()),
@@ -99,14 +100,26 @@ async function submit() {
       </div>
     </div>
     <div role="tablist" class="tabs-boxed tabs w-fit tabs-sm">
-      <a role="tab" class="tab" :class="{ 'tab-active': source === 'inline' }" @click="source = 'inline'">
+      <a
+        role="tab"
+        class="tab"
+        :class="[source === 'inline' ? 'tab-active' : 'text-base-content/70']"
+        @click="source = 'inline'"
+      >
         Paste / upload
       </a>
-      <a role="tab" class="tab" :class="{ 'tab-active': source === 'url' }" @click="source = 'url'">From URL</a>
+      <a
+        role="tab"
+        class="tab"
+        :class="[source === 'url' ? 'tab-active' : 'text-base-content/70']"
+        @click="source = 'url'"
+      >
+        From URL
+      </a>
     </div>
 
     <div v-if="source === 'inline'" class="form-control">
-      <label :for="contentId" class="label py-1 text-base-content/70">
+      <label :for="contentId" class="label py-1 text-base-content/90">
         <span class="label-text text-xs">Content ({{ MEDIA_TYPE_BY_KIND[kind] }})</span>
         <label class="label-text-alt link cursor-pointer text-xs">
           Upload file
@@ -123,11 +136,12 @@ async function submit() {
       />
     </div>
     <div v-else class="form-control">
-      <label class="label py-1">
+      <label :for="sourceUrlId" class="label py-1 text-base-content/90">
         <span class="label-text text-xs">Source URL</span>
-        <span class="label-text-alt text-xs text-base-content/50">follows redirects · snapshotted as a version</span>
+        <span class="label-text-alt text-xs text-base-content/70">follows redirects · snapshotted as a version</span>
       </label>
       <input
+        :id="sourceUrlId"
         v-model="sourceUrl"
         type="url"
         class="input-bordered input input-sm w-full font-mono text-xs"
