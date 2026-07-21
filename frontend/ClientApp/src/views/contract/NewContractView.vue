@@ -268,7 +268,7 @@ watch(
       } catch (err: unknown) {
         console.error('Failed to load contract', err)
       }
-    } else if (!hasApprovedTemplates.value) {
+    } else {
       await contractStore.loadApprovedTemplates()
     }
   },
