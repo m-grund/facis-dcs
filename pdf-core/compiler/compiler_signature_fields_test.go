@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"testing"
 )
 
@@ -21,7 +20,7 @@ func TestRenderPDFUsesCborContentBoxForSignature(t *testing.T) {
 		FileID:          "0123456789abcdef0123456789abcdef",
 	}
 
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +167,7 @@ func TestRenderPDFIncludesAcroFormAndSigWidgets(t *testing.T) {
 		FileID:        "0123456789abcdef0123456789abcdef",
 	}
 
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +191,7 @@ func TestOutlineDestinationUsesLeftMarginX(t *testing.T) {
 		Heading: "1. Test",
 		Clauses: []clauseData{{Segments: []clauseSegment{{Type: "prose", Text: "Clause."}}}},
 	}})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}

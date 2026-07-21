@@ -72,7 +72,10 @@ export interface RegisterSchemaPayload {
   name: string
   kind: string
   media_type: string
-  content: string
+  /** Inline content; omit when source_url is given. */
+  content?: string
+  /** Fetch the schema from this URL (http/https, follows redirects) instead of inline content. */
+  source_url?: string
   activate: boolean
 }
 

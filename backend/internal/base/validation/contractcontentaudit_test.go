@@ -884,6 +884,185 @@ func hasFindingSeverity(findings []PolicyFinding, ruleID string, severity string
 	return false
 }
 
+// TestAuditContractEvaluatesLogicalConstraint proves the enforcement engine
+// evaluates ODRL logical constraints (LogicalConstraint, IM §2.6) recursively:
+// an odrl:or is satisfied when any branch holds and violated only when none do.
+func TestAuditContractEvaluatesLogicalConstraint(t *testing.T) {
+	fieldID := "urn:dcs:field:amount"
+	orConstraint := map[string]any{
+		"@type": "odrl:LogicalConstraint",
+		"odrl:or": []any{
+			map[string]any{
+				"@type":             "odrl:Constraint",
+				"odrl:leftOperand":  map[string]any{"@id": fieldID},
+				"odrl:operator":     map[string]any{"@id": "odrl:lteq"},
+				"odrl:rightOperand": float64(500),
+			},
+			map[string]any{
+				"@type":             "odrl:Constraint",
+				"odrl:leftOperand":  map[string]any{"@id": fieldID},
+				"odrl:operator":     map[string]any{"@id": "odrl:gteq"},
+				"odrl:rightOperand": float64(1000),
+			},
+		},
+	}
+	duty := func() map[string]any {
+		return map[string]any{
+			"@id":             "FACIS-LOGICAL-OR",
+			"@type":           "odrl:Duty",
+			"dcs:prose":       map[string]any{"@id": "urn:uuid:block-clause-1"},
+			"odrl:action":     map[string]any{"@id": "dcs:provideCompliantValue"},
+			"odrl:constraint": []any{orConstraint},
+		}
+	}
+
+	// 400 satisfies the first branch → the or holds → no violation.
+	ok := odrlContract(fieldID, "payment", "amount", []any{duty()}, float64(400))
+	findings, err := AuditContractContent(context.Background(), ok, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+
+	// 700 satisfies neither branch → the or is violated.
+	bad := odrlContract(fieldID, "payment", "amount", []any{duty()}, float64(700))
+	violated, err := AuditContractContent(context.Background(), bad, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.True(t, hasFindingSeverity(violated, "FACIS-LOGICAL-OR", "error"))
+}
+
+// TestAuditContractEvaluatesNestedDuty proves the enforcement engine audits a
+// Permission's nested duties (ODRL IM §2.5): the duty is recorded as a use-time
+// obligation, and its own constraints are evaluated as obligations — satisfied
+// when the value holds, flagged when it does not.
+func TestAuditContractEvaluatesNestedDuty(t *testing.T) {
+	fieldID := "urn:dcs:field:amount"
+	permission := func() map[string]any {
+		return map[string]any{
+			"@id":         "FACIS-PERMISSION-WITH-DUTY",
+			"@type":       "odrl:Permission",
+			"dcs:prose":   map[string]any{"@id": "urn:uuid:block-clause-1"},
+			"odrl:action": map[string]any{"@id": "odrl:use"},
+			"odrl:duty": []any{
+				map[string]any{
+					"@id":         "FACIS-DUTY-COMPENSATE",
+					"@type":       "odrl:Duty",
+					"odrl:action": map[string]any{"@id": "odrl:compensate"},
+					"odrl:constraint": []any{
+						map[string]any{
+							"@type":             "odrl:Constraint",
+							"odrl:leftOperand":  map[string]any{"@id": fieldID},
+							"odrl:operator":     map[string]any{"@id": "odrl:gteq"},
+							"odrl:rightOperand": float64(1000),
+						},
+					},
+				},
+			},
+		}
+	}
+
+	// 1500 ≥ 1000 → the duty obligation is met → no violation, and the
+	// permission records its duty as a use-time obligation.
+	ok := odrlContract(fieldID, "payment", "amount", []any{permission()}, float64(1500))
+	findings, err := AuditContractContent(context.Background(), ok, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+	require.True(t, hasFindingSeverity(findings, "FACIS-PERMISSION-WITH-DUTY", "info"), "duty recorded as use-time obligation")
+
+	// 500 < 1000 → the duty obligation is unmet → the duty is flagged.
+	bad := odrlContract(fieldID, "payment", "amount", []any{permission()}, float64(500))
+	violated, err := AuditContractContent(context.Background(), bad, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.True(t, hasFindingSeverity(violated, "FACIS-DUTY-COMPENSATE", "error"), "unmet duty obligation flagged")
+}
+
+// TestAuditContractEvaluatesNestedConstraintTree proves the enforcement engine
+// evaluates an arbitrarily deep constraint tree (ODRL IM §2.6): an ALL over an
+// atomic and a nested ANY holds only when the atomic and at least one branch of
+// the ANY hold.
+func TestAuditContractEvaluatesNestedConstraintTree(t *testing.T) {
+	fieldID := "urn:dcs:field:amount"
+	atomic := func(operator string, boundary float64) map[string]any {
+		return map[string]any{
+			"@type":             "odrl:Constraint",
+			"odrl:leftOperand":  map[string]any{"@id": fieldID},
+			"odrl:operator":     map[string]any{"@id": operator},
+			"odrl:rightOperand": boundary,
+		}
+	}
+	tree := map[string]any{
+		"@type": "odrl:LogicalConstraint",
+		"odrl:and": []any{
+			atomic("odrl:gteq", 100),
+			map[string]any{
+				"@type":   "odrl:LogicalConstraint",
+				"odrl:or": []any{atomic("odrl:lteq", 200), atomic("odrl:gteq", 1000)},
+			},
+		},
+	}
+	duty := func() map[string]any {
+		return map[string]any{
+			"@id":             "FACIS-TREE",
+			"@type":           "odrl:Duty",
+			"dcs:prose":       map[string]any{"@id": "urn:uuid:block-clause-1"},
+			"odrl:action":     map[string]any{"@id": "dcs:provideCompliantValue"},
+			"odrl:constraint": []any{tree},
+		}
+	}
+
+	// 150: >=100 AND (<=200 OR >=1000) -> the tree holds.
+	ok := odrlContract(fieldID, "payment", "amount", []any{duty()}, float64(150))
+	findings, err := AuditContractContent(context.Background(), ok, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+
+	// 500: >=100 holds but (500<=200 false, 500>=1000 false) -> the ANY fails,
+	// so the ALL fails.
+	bad := odrlContract(fieldID, "payment", "amount", []any{duty()}, float64(500))
+	violated, err := AuditContractContent(context.Background(), bad, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.True(t, hasFindingSeverity(violated, "FACIS-TREE", "error"), "nested tree violation flagged")
+}
+
+// TestAuditContractEnforcesIsPartOf proves the isPartOf operator — offered by
+// the clause builder — is actually enforced by the contract policy check: a
+// value in the enumerated set passes, one outside it is flagged.
+func TestAuditContractEnforcesIsPartOf(t *testing.T) {
+	fieldID := "urn:dcs:field:country"
+	duty := func() map[string]any {
+		return map[string]any{
+			"@id":         "FACIS-ISPARTOF",
+			"@type":       "odrl:Duty",
+			"dcs:prose":   map[string]any{"@id": "urn:uuid:block-clause-1"},
+			"odrl:action": map[string]any{"@id": "dcs:provideCompliantValue"},
+			"odrl:constraint": []any{
+				map[string]any{
+					"@type":             "odrl:Constraint",
+					"odrl:leftOperand":  map[string]any{"@id": fieldID},
+					"odrl:operator":     map[string]any{"@id": "odrl:isPartOf"},
+					"odrl:rightOperand": []any{"DEU", "AUT"},
+				},
+			},
+		}
+	}
+
+	ok := odrlContract(fieldID, "region", "country", []any{duty()}, "DEU")
+	findings, err := AuditContractContent(context.Background(), ok, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+
+	bad := odrlContract(fieldID, "region", "country", []any{duty()}, "ZZZ")
+	violated, err := AuditContractContent(context.Background(), bad, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+	require.True(t, hasFindingSeverity(violated, "FACIS-ISPARTOF", "error"), "value outside the isPartOf set flagged")
+}
+
 func requirePolicyFinding(t *testing.T, findings []PolicyFinding, ruleID string) PolicyFinding {
 	t.Helper()
 	for _, finding := range findings {
@@ -893,4 +1072,77 @@ func requirePolicyFinding(t *testing.T, findings []PolicyFinding, ruleID string)
 	}
 	require.Failf(t, "finding not found", "ruleID %q not found in %v", ruleID, policyFindingRuleIDs(findings))
 	return PolicyFinding{}
+}
+
+// TestAuditContractAcceptsTempoSpatialAccessPolicy proves the SRS Appendix C
+// policy audits cleanly once instantiated from the access-grant template: a
+// Permission to use bounded by an ANDed spatial and dateTime context
+// constraint whose boundaries are the negotiated region and deadline fields.
+// The context operands are accepted (never flagged "nonexistent field") and
+// deferred to use-time, and each negotiated boundary resolves to its filled
+// contract value.
+func TestAuditContractAcceptsTempoSpatialAccessPolicy(t *testing.T) {
+	countryFieldID := "urn:dcs:field:permitted-country"
+	deadlineFieldID := "urn:dcs:field:access-deadline"
+
+	permission := map[string]any{
+		"@id":         "FACIS-CONTRACT-APPENDIX-C",
+		"@type":       "odrl:Permission",
+		"dcs:prose":   map[string]any{"@id": "urn:uuid:block-clause-1"},
+		"odrl:action": map[string]any{"@id": "odrl:use"},
+		"odrl:constraint": []any{
+			map[string]any{
+				"@type":             "odrl:Constraint",
+				"odrl:leftOperand":  map[string]any{"@id": "odrl:spatial"},
+				"odrl:operator":     map[string]any{"@id": "odrl:eq"},
+				"odrl:rightOperand": map[string]any{"@id": countryFieldID},
+			},
+			map[string]any{
+				"@type":             "odrl:Constraint",
+				"odrl:leftOperand":  map[string]any{"@id": "odrl:dateTime"},
+				"odrl:operator":     map[string]any{"@id": "odrl:lteq"},
+				"odrl:rightOperand": map[string]any{"@id": deadlineFieldID},
+			},
+		},
+	}
+
+	contract := map[string]any{
+		"@id":   "urn:facis:dcs:contract:appendix-c",
+		"@type": "dcs:Contract",
+		"dcs:contractData": []any{
+			map[string]any{
+				"@id": "urn:dcs:req:access", "@type": "dcs:DataRequirement", "dcs:conditionId": "access",
+				"dcs:fields": []any{
+					map[string]any{"@id": countryFieldID, "@type": "dcs:RequirementField", "dcs:parameterName": "permittedCountry", "dcs:parameterValue": "DE"},
+					map[string]any{"@id": deadlineFieldID, "@type": "dcs:RequirementField", "dcs:parameterName": "accessDeadline", "dcs:parameterValue": "2025-05-10T23:59:59"},
+				},
+			},
+		},
+		"dcs:policies": map[string]any{
+			"@type":           "odrl:Agreement",
+			"odrl:profile":    map[string]any{"@id": "https://w3id.org/facis/dcs/ontology/v1/odrl-profile"},
+			"odrl:permission": []any{permission},
+		},
+	}
+
+	findings, err := AuditContractContent(context.Background(), contract, emptyPolicy(), ContractContentAuditMetadata{})
+	require.NoError(t, err)
+
+	for _, finding := range findings {
+		require.NotEqual(t, "error", finding.Severity, finding.Message)
+	}
+
+	var spatial, temporal *PolicyFinding
+	for i := range findings {
+		switch findings[i].Path {
+		case odrlIRI + "spatial":
+			spatial = &findings[i]
+		case odrlIRI + "dateTime":
+			temporal = &findings[i]
+		}
+	}
+	require.NotNil(t, spatial, "spatial context constraint audited")
+	require.NotNil(t, temporal, "dateTime context constraint audited")
+	require.Contains(t, fmt.Sprint(spatial.ExpectedValue), "DE", "negotiated region boundary resolved to the filled value")
+	require.Equal(t, "lte", temporal.Operator)
 }

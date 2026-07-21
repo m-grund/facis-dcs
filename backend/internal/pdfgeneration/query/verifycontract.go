@@ -57,7 +57,7 @@ func (h *VerifyContractPdfHandler) Handle(ctx context.Context, qry VerifyContrac
 
 	latestCID := pdfState.IPFSCID
 
-	if pdfState.IPFSCID != "" && isFrozenC2PAState(pdfState.C2PAState) {
+	if pdfState.IPFSCID != "" && provenance.IsFrozenC2PAState(pdfState.C2PAState) {
 		// Already PAdES-signed: never mutate this PDF's embedded attachments
 		// again, even if its lifecycle state has since moved on (see
 		// exportcontract.go's identical guard for the full explanation).

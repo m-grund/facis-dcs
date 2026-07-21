@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 )
@@ -10,7 +9,7 @@ import (
 // TestExtractManifestStore_SucceedsOnCompiledPDF verifies that a freshly
 // compiled PDF contains an extractable C2PA manifest store.
 func TestExtractManifestStore_SucceedsOnCompiledPDF(t *testing.T) {
-	pdf, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	pdf, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -31,11 +30,11 @@ func TestExtractManifestStore_SucceedsOnCompiledPDF(t *testing.T) {
 // TestExtractManifestStore_SucceedsOnUpdatedPDF verifies that an
 // incrementally-updated PDF also has an extractable manifest store.
 func TestExtractManifestStore_SucceedsOnUpdatedPDF(t *testing.T) {
-	original, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	original, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
-	updated, err := UpdatePDF(context.Background(), original, []byte(minimalPayloadAmended), time.Now())
+	updated, err := UpdatePDF(testSigningContext(), original, []byte(minimalPayloadAmended), time.Now())
 	if err != nil {
 		t.Fatalf("UpdatePDF: %v", err)
 	}

@@ -10,20 +10,23 @@ import (
 )
 
 // SigningSummary carries the fields bound into a ContractSigningSummaryCredential
-// (DCS-FR-SM-08). It records who signed, through which ceremony, and the hashes
-// the PAdES signature covers, plus the verbatim PID presentation the signer's
-// wallet produced so a verifier can re-verify it from the PDF alone.
+// (DCS-FR-SM-08). It records who signed (the signer's holder DID — pseudonymous),
+// through which ceremony, and the hashes the PAdES signature covers. The signer's
+// PID is NOT embedded: the disclosed Person Identification Data (name, birthdate,
+// address) never enters the shared PDF (eIDAS/GDPR data-minimisation). Only the
+// pseudonymous holder DID and the KB-JWT sd_hash of the presented credential are
+// bound in — enough to cryptographically tie the signature to the credential the
+// internal ceremony record holds, without leaking personal data downstream.
 type SigningSummary struct {
-	ContractID      string
-	SignerDID       string
-	CeremonyID      string
-	FieldName       string
-	ContentHash     string // SHA-256 hex of the JSON-LD contract source
-	PDFHash         string // SHA-256 hex of the base PDF bytes bound by the signature
-	CredentialType  string // e.g. "AES"
-	KBSDHash        string // KB-JWT sd_hash of the presented PID
-	PIDPresentation string // verbatim SD-JWT VC + KB-JWT compact presentation
-	SignedAt        time.Time
+	ContractID     string
+	SignerDID      string
+	CeremonyID     string
+	FieldName      string
+	ContentHash    string // SHA-256 hex of the JSON-LD contract source
+	PDFHash        string // SHA-256 hex of the base PDF bytes bound by the signature
+	CredentialType string // e.g. "AES"
+	KBSDHash       string // KB-JWT sd_hash binding the signature to the presented credential
+	SignedAt       time.Time
 	// SchemaVersion/ValidationReportHash (Phase 4, ADR-9): the Semantic Hub
 	// SHACL shapes version this contract validated against at signing time,
 	// and a stable hash of the resulting findings
@@ -37,9 +40,10 @@ type SigningSummary struct {
 }
 
 // IssueSigningSummaryVC builds and signs a ContractSigningSummaryCredential over
-// the given summary, using the same VC signer as the lifecycle credentials. The
-// PID presentation is embedded verbatim as a credentialSubject field so that it
-// survives into the signed PDF unchanged (DCS-FR-SM-08, UC-04-03).
+// the given summary, using the same VC signer as the lifecycle credentials. It
+// binds the pseudonymous holder DID and the KB-JWT sd_hash — never the PID
+// disclosures — so the signed PDF carries no personal data (DCS-FR-SM-08,
+// UC-04-03).
 func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID string, s SigningSummary) (json.RawMessage, string, error) {
 	unsignedVC := VCBinding{
 		Context: []interface{}{
@@ -55,7 +59,6 @@ func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID strin
 				"pdf_hash":                         "dcs:pdfHash",
 				"credential_type":                  "dcs:credentialType",
 				"kb_sd_hash":                       "dcs:kbSdHash",
-				"pid_presentation":                 "dcs:pidPresentation",
 				"signed_at": map[string]interface{}{
 					"@id":   "dcs:signedAt",
 					"@type": "http://www.w3.org/2001/XMLSchema#dateTime",
@@ -68,16 +71,15 @@ func IssueSigningSummaryVC(ctx context.Context, signer VCSigner, issuerDID strin
 		Issuer:    issuerDID,
 		ValidFrom: s.SignedAt.UTC().Format(time.RFC3339),
 		CredentialSubject: map[string]interface{}{
-			"id":               normalizeSubjectID(s.SignerDID),
-			"contract_id":      s.ContractID,
-			"ceremony_id":      s.CeremonyID,
-			"field_name":       s.FieldName,
-			"content_hash":     s.ContentHash,
-			"pdf_hash":         s.PDFHash,
-			"credential_type":  s.CredentialType,
-			"kb_sd_hash":       s.KBSDHash,
-			"pid_presentation": s.PIDPresentation,
-			"signed_at":        s.SignedAt.UTC().Format(time.RFC3339),
+			"id":              normalizeSubjectID(s.SignerDID),
+			"contract_id":     s.ContractID,
+			"ceremony_id":     s.CeremonyID,
+			"field_name":      s.FieldName,
+			"content_hash":    s.ContentHash,
+			"pdf_hash":        s.PDFHash,
+			"credential_type": s.CredentialType,
+			"kb_sd_hash":      s.KBSDHash,
+			"signed_at":       s.SignedAt.UTC().Format(time.RFC3339),
 		},
 	}
 	if s.ValidationReportHash != "" {

@@ -1,11 +1,14 @@
 replicaCount: 1
 
 image:
-  # No official EU-published container exists for the DSS demonstration
-  # webapp (distributed as ZIP/WAR from ec.europa.eu / esig/dss-demonstrations);
-  # this community image packages it. Pinned — never :latest.
-  repository: ninjaneers/dss
-  tag: "5.5"
+  # No official EU-published container exists for the DSS demonstration webapp
+  # (the EU ships only a Dockerfile + testing-only disclaimer, no images). This
+  # community image packages the EU dss-demo-bundle 6.2 — DSS 6.x is required
+  # because visible-signature field placement (imageParameters/fieldParameters
+  # on RemoteSignatureParameters) does NOT exist in the 5.x REST DTO. Pinned —
+  # never :latest.
+  repository: conectx/dss-demo
+  tag: "6.2.1"
   pullPolicy: IfNotPresent
 
 service:

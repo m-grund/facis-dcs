@@ -206,8 +206,8 @@ export function contractStory(state: ContractState | null | undefined): Workflow
       return story(
         'APPROVED',
         'This contract is approved for signing',
-        'Approved and locked. Contract Signers now sign it from the Signing Dashboard; once all required signatures are applied it becomes legally executed.',
-        [{ label: 'Open Signing Dashboard', routeName: 'signing.dashboard' }],
+        'Approved and locked. Contract Signers now sign it in the Secure Contract Viewer; once all required signatures are applied it becomes legally executed.',
+        [{ label: 'Open Signing', routeName: 'signing.list' }],
       )
     case 'SIGNED':
       return story(

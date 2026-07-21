@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -49,7 +48,7 @@ func TestSectionHeadingsAppearInPDF(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Second clause."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +120,7 @@ func TestPDFHasOutlineWhenSectionsPresent(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Content."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +137,7 @@ func TestPDFOutlineItemMatchesSectionHeading(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Content."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +154,7 @@ func TestStructTreeHasSectAndH1Elements(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Para."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +386,7 @@ func TestExtractDocumentModelIgnoresUnknownNamespaceTitle(t *testing.T) {
 		}
 	}`)
 
-	_, err := CompilePDF(context.Background(), payload, time.Now())
+	_, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err == nil {
 		t.Fatal("CompilePDF must return an error when dcs:metadata is absent (evil:metadata must be ignored)")
 	}
@@ -436,7 +435,7 @@ func TestH1TagInContentStream(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "Body text."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -462,7 +461,7 @@ func TestParentTreeCoversAllMCIDs(t *testing.T) {
 	for _, p := range pages {
 		totalMCIDs += len(p.Lines)
 	}
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -640,7 +639,7 @@ func TestGlossaryAppearsInOutline(t *testing.T) {
 			{Segments: []clauseSegment{{Type: "prose", Text: "A clause."}}},
 		}},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -839,7 +838,7 @@ func TestGlossaryLinkAnnotationUsesExplicitDestination(t *testing.T) {
 		FileID:        strings.Repeat("0", 64),
 		NamespaceMap:  map[string]string{},
 	}
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}

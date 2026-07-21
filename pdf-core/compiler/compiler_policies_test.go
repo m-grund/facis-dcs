@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 )
@@ -75,7 +74,7 @@ func TestCompilePDF_RendersODRLPolicies(t *testing.T) {
 		}
 	}`)
 
-	pdf, err := CompilePDF(context.Background(), payload, time.Now())
+	pdf, err := CompilePDF(testSigningContext(), payload, time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}

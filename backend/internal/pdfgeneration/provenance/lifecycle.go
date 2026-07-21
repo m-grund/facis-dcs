@@ -107,3 +107,13 @@ func MapCWEStateToC2PA(cweState string) (string, error) {
 		return "", fmt.Errorf("unsupported lifecycle state %q (allowed: DRAFT,OFFERED,NEGOTIATION,SUBMITTED,REVIEWED,APPROVED,REJECTED,WITHDRAWN,SIGNED,ACTIVE,REVOKED,REGISTERED,TERMINATED,EXPIRED,SUSPENDED,REPLACED,draft,active,amended,suspended,terminated,expired,replaced)", cweState)
 	}
 }
+
+// IsFrozenC2PAState reports whether a cached PDF's C2PA state means the artifact
+// is immutable. Every pre-signing contract-formation state maps to "draft" (see
+// MapCWEStateToC2PA), so anything past "draft" is a PAdES-signed (or
+// post-signing) PDF whose /ByteRange a re-render would destroy. Such a PDF may
+// only be served as-is or extended by an explicit incremental C2PA update — the
+// export/verify read paths and the background regenerator all gate on this.
+func IsFrozenC2PAState(c2paState string) bool {
+	return c2paState != "" && c2paState != "draft"
+}

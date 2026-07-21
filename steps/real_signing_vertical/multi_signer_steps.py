@@ -33,8 +33,11 @@ def step_given_dual_field_draft(context, name, field_one, field_two):
     retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
     assert retrieve.status_code == 200, retrieve.text
     doc = retrieve.json().get("contract_data") or {}
-    doc["signatureFields"] = [
-        {"@type": "SignatureField", "@id": f"{did}#{field}", "signatoryName": field}
+    # Declare the fields under the canonical dcs: term the DCS pipeline reads
+    # (seedSignatureFields / pdf-core), so these explicit per-signatory fields
+    # are the ones rendered into the AcroForm (/T == dcs:signatoryName).
+    doc["dcs:signatureFields"] = [
+        {"@type": "dcs:SignatureField", "@id": f"{did}#{field}", "dcs:signatoryName": field}
         for field in (field_one, field_two)
     ]
     resp = put_json(

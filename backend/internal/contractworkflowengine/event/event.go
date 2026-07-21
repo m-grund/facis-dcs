@@ -43,6 +43,26 @@ func (e RemoteActionRequestEvent) GetDID() string {
 	return e.DID
 }
 
+// PdfRegeneratedEvent is emitted after the background regenerator stored a
+// contract's PDF (ADR-13). The DCS-to-DCS synchronizer consumes it to ship the
+// PDF to the counterparty on shippable transitions.
+type PdfRegeneratedEvent struct {
+	DID        string    `json:"did"`
+	IPFSCID    string    `json:"ipfs_cid"`
+	State      string    `json:"state"`
+	OccurredAt time.Time `json:"occurred_at"`
+}
+
+// EventType implements the Event interface.
+func (e PdfRegeneratedEvent) EventType() string {
+	return eventtype.PDFRegenerated.String()
+}
+
+// GetDID implements the Event interface.
+func (e PdfRegeneratedEvent) GetDID() string {
+	return e.DID
+}
+
 // CreateEvent is emitted when a new contract is created.
 type CreateEvent struct {
 	DID          string             `json:"did"`

@@ -329,15 +329,12 @@ def step_when_ac5_setup(context):
         t_did = ContractService._create_approved_template_for_contract(context)
         creator_h = AuthService.get_headers_for_roles(["Contract Creator"], api_base=context.base_url_a)
 
-        # Frame contract: stays local to A, never offered.
+        # Frame contract: stays local to A, never offered (no counterparty).
         frame_resp = post_json(
             context,
             contract_create_url(context),
             {
                 "template_did": t_did,
-                "reviewers": [context.peer_did_a],
-                "negotiators": [context.peer_did_a],
-                "approvers": [context.peer_did_a],
             },
             headers=creator_h,
         )
@@ -345,15 +342,13 @@ def step_when_ac5_setup(context):
         frame_did = frame_resp.json().get("did")
         context.ac5_frame_did = frame_did
 
-        # Child linked to the frame, offered to B (negotiator+approver=B) so it replicates.
+        # Child linked to the frame, offered to B (counterparty=B) so it replicates.
         child_b_resp = post_json(
             context,
             contract_create_url(context),
             {
                 "template_did": t_did,
-                "reviewers": [context.peer_did_a],
-                "negotiators": [context.peer_did_b],
-                "approvers": [context.peer_did_b],
+                "counterparty": context.peer_did_b,
             },
             headers=creator_h,
         )
@@ -391,9 +386,6 @@ def step_when_ac5_setup(context):
             contract_create_url(context),
             {
                 "template_did": t_did,
-                "reviewers": [context.peer_did_a],
-                "negotiators": [context.peer_did_a],
-                "approvers": [context.peer_did_a],
             },
             headers=creator_h,
         )
@@ -425,7 +417,11 @@ def step_when_ac5_setup(context):
 )
 def step_then_ac5_isolation(context):
     manager_h_b = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_b)
-    deadline = time.monotonic() + 15
+    # Cross-instance replication is async (offer -> regen -> IPFS -> ship ->
+    # PostPdf -> extract -> re-compact -> store); allow the same generous window
+    # the peer-trust offer replication uses, since the shared cluster now also
+    # runs the DSS bundle and the child goes through create -> update -> offer.
+    deadline = time.monotonic() + 45
     dids = []
     last_resp = None
     while time.monotonic() < deadline:
@@ -442,7 +438,7 @@ def step_then_ac5_isolation(context):
         time.sleep(1)
     assert context.ac5_child_b_did in dids, (
         f"Expected the offered/replicated child {context.ac5_child_b_did} to appear in "
-        f"instance B's parent_did-filtered search results within 15s, got dids: {dids} "
+        f"instance B's parent_did-filtered search results within 45s, got dids: {dids} "
         f"(last response {last_resp.status_code if last_resp else 'n/a'})"
     )
     assert context.ac5_child_c_did not in dids, (

@@ -1,7 +1,6 @@
 package compiler
 
 import (
-	"context"
 	"bytes"
 	"regexp"
 	"testing"
@@ -31,7 +30,7 @@ func subsectionDoc() documentModel {
 // TestSubsectionHeadingAppearsInPDF verifies that a subsection heading appears
 // in the compiled PDF content streams.
 func TestSubsectionHeadingAppearsInPDF(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	pdf, err := renderPDF(testSigningContext(), subsectionDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +42,7 @@ func TestSubsectionHeadingAppearsInPDF(t *testing.T) {
 // TestSubsectionHeadingIsH2InContentStream verifies that a depth-1 subsection
 // heading is tagged /H2 in the PDF content stream.
 func TestSubsectionHeadingIsH2InContentStream(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	pdf, err := renderPDF(testSigningContext(), subsectionDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +72,7 @@ func TestSubsubsectionHeadingIsH3InContentStream(t *testing.T) {
 			},
 		},
 	})
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +112,7 @@ func TestSubsectionIndentedInLayout(t *testing.T) {
 // TestSubsectionStructTreeHasH2 verifies that the PDF structure tree contains
 // an /S /H2 element for a depth-1 subsection heading.
 func TestSubsectionStructTreeHasH2(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	pdf, err := renderPDF(testSigningContext(), subsectionDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +129,7 @@ func TestSubsectionStructTreeHasH2(t *testing.T) {
 // With 1 top-level section and 1 subsection the /Document /K must have exactly
 // 3 refs: [title, meta, topSect].
 func TestSubsectionStructTreeDocumentKidsExcludesSubsects(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	pdf, err := renderPDF(testSigningContext(), subsectionDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +149,7 @@ func TestSubsectionStructTreeDocumentKidsExcludesSubsects(t *testing.T) {
 // With 1 top-level section that has 1 clause and 1 subsection, the parent
 // /Sect's /K must have at least 3 entries: [heading, para, subsectSect].
 func TestSubsectionSectContainsChildSectRef(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	pdf, err := renderPDF(testSigningContext(), subsectionDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +173,7 @@ func TestSubsectionSectContainsChildSectRef(t *testing.T) {
 // TestSubsectionNestedInOutline verifies that the PDF outline contains an entry
 // for the subsection heading.
 func TestSubsectionNestedInOutline(t *testing.T) {
-	pdf, err := renderPDF(context.Background(), subsectionDoc())
+	pdf, err := renderPDF(testSigningContext(), subsectionDoc())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,11 +201,11 @@ func TestSubsectionDeterministic(t *testing.T) {
 			},
 		},
 	})
-	pdf1, err := renderPDF(context.Background(), doc)
+	pdf1, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	pdf2, err := renderPDF(context.Background(), doc)
+	pdf2, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +234,7 @@ func TestSubsectionDepthFirstOrder(t *testing.T) {
 		},
 	})
 	order := []string{"Parent-Section", "SubA-Section", "SubSubA-Section", "SubB-Section"}
-	_pdf, err := renderPDF(context.Background(), doc)
+	_pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +299,7 @@ func TestSubsectionFromPayload(t *testing.T) {
 		t.Fatalf("expected 1 sub-subsection, got %d", len(doc.Sections[0].Subsections[0].Subsections))
 	}
 
-	pdf, err := renderPDF(context.Background(), doc)
+	pdf, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatal(err)
 	}

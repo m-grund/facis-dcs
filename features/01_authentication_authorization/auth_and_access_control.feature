@@ -95,7 +95,6 @@ Feature: Authentication Endpoints
       | GET    | /signature/retrieve             | {}                                                        |
       | GET    | /signature/retrieve/placeholder | {}                                                        |
       | POST   | /signature/verify               | {'did':'placeholder'}                                     |
-      | POST   | /signature/apply                | {'did':'placeholder','signer_did':'placeholder','updated_at':'2024-01-01T00:00:00Z'} |
       | POST   | /signature/validate             | {'did':'placeholder'}                                     |
       | POST   | /signature/revoke               | {'did':'placeholder','signer_did':'placeholder'}          |
       | GET    | /signature/audit                | did=placeholder                                           |
@@ -116,5 +115,5 @@ Feature: Authentication Endpoints
     Then the response status is 401
 
     Examples:
-      | method | endpoint             | payload         |
-      | GET    | /peer/contracts/sync | did=placeholder |
+      | method | endpoint                   | payload         |
+      | GET    | /peer/contracts/provenance | did=placeholder |

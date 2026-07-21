@@ -67,17 +67,21 @@ def step_when_compliance_check(context, name):
 # The validate endpoint's findings list mixes defect findings with positive
 # confirmations (signingmanagement/db/pg/contractrepository.go's
 # CollectValidationFindings appends "Document integrity check passed" on
-# success; signingmanagement/query/validate.go appends the PID cross-check
-# confirmation). A healthy signature therefore reports *only* entries from
-# this confirmation set — an empty list would itself be a bug.
+# success; signingmanagement/query/validate.go appends the signer-binding
+# cross-check confirmation). A healthy signature therefore reports *only*
+# entries from this confirmation set — an empty list would itself be a bug.
 _PASSING_VALIDATION_FINDINGS = {
     "Document integrity check passed",
-    "Embedded PID presentation re-verified and cross-checked against the signature record",
+    "Embedded signer binding cross-checked against the signature record",
     # Phase 4 (ADR-9): crossCheckSHACLDrift's positive confirmation — the
     # pinned-hub-version SHACL report re-ran and matched the hash embedded
     # in the signing evidence (signingmanagement/query/validate.go).
     "SHACL validation report re-verified against the pinned hub schema version — no drift",
     "Validation passed",
+    # The EU DSS leg accepts a wallet-produced AES (integrity sound + signatory
+    # certificate present); a non-qualified dev-CA chain is expected for AES and
+    # is not a defect (signingmanagement/query/validate.go ValidAESFinding).
+    "EU DSS validation confirms a valid Advanced Electronic Signature",
 }
 
 

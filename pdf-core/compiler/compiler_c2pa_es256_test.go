@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 )
@@ -25,7 +24,7 @@ func TestCOSEProtectedHeaderDeclaresES256(t *testing.T) {
 // TestCompiledManifestDeclaresES256 checks the alg survives into a full compiled
 // PDF's embedded C2PA manifest (the AC6 second scenario's observable behaviour).
 func TestCompiledManifestDeclaresES256(t *testing.T) {
-	pdf, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	pdf, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}
@@ -45,7 +44,7 @@ func TestCompiledManifestDeclaresES256(t *testing.T) {
 // differ only in their (non-deterministic, HSM-produced) ES256 signature bytes
 // compare equal after masking — the property the /verify recompile relies on.
 func TestZeroCOSESignaturesMasksDifferingSignatures(t *testing.T) {
-	pdf, err := CompilePDF(context.Background(), []byte(minimalPayloadBase), time.Now())
+	pdf, err := CompilePDF(testSigningContext(), []byte(minimalPayloadBase), time.Now())
 	if err != nil {
 		t.Fatalf("CompilePDF: %v", err)
 	}

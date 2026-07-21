@@ -29,8 +29,9 @@ func EvaluateKPIViolation(ctx context.Context, contractDocument any, metric, val
 		return false, err
 	}
 
+	fieldIndex := expandedODRLFieldIndex(root)
 	boundFields := map[string]bool{}
-	for fieldID, info := range expandedODRLFieldIndex(root) {
+	for fieldID, info := range fieldIndex {
 		if strings.EqualFold(info.parameterName, metric) {
 			boundFields[fieldID] = true
 		}
@@ -40,29 +41,31 @@ func EvaluateKPIViolation(ctx context.Context, contractDocument any, metric, val
 	}
 
 	for _, rule := range expandedODRLPolicyRules(root) {
-		constraint, ok := expandedFirst(rule, odrlIRI+"constraint")
-		if !ok {
-			continue
-		}
-		leftOperand, ok := expandedFirst(constraint, odrlIRI+"leftOperand")
-		if !ok || !boundFields[expandedID(leftOperand)] {
-			continue
-		}
-		operatorNode, ok := expandedFirst(constraint, odrlIRI+"operator")
-		if !ok {
-			continue
-		}
-		operator := shaclLocalName(expandedID(operatorNode))
-		if operator == "" {
-			continue
-		}
-		satisfied, err := evaluateODRLConstraintOPA(ctx, operator, strings.TrimSpace(value), expandedRightOperand(constraint, operator))
-		if err != nil {
-			return false, err
-		}
 		isProhibition := expandedTypeLocalName(rule) == "Prohibition"
-		if (isProhibition && satisfied) || (!isProhibition && !satisfied) {
-			return true, nil
+		for _, rawConstraint := range expandedValues(rule, odrlIRI+"constraint") {
+			constraint, ok := rawConstraint.(map[string]any)
+			if !ok {
+				continue
+			}
+			leftOperand, ok := expandedFirst(constraint, odrlIRI+"leftOperand")
+			if !ok || !boundFields[expandedID(leftOperand)] {
+				continue
+			}
+			operatorNode, ok := expandedFirst(constraint, odrlIRI+"operator")
+			if !ok {
+				continue
+			}
+			operator := shaclLocalName(expandedID(operatorNode))
+			if operator == "" {
+				continue
+			}
+			satisfied, err := evaluateODRLConstraintOPA(ctx, operator, strings.TrimSpace(value), resolveRightOperand(constraint, operator, fieldIndex))
+			if err != nil {
+				return false, err
+			}
+			if (isProhibition && satisfied) || (!isProhibition && !satisfied) {
+				return true, nil
+			}
 		}
 	}
 	return false, nil

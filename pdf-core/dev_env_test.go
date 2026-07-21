@@ -8,12 +8,10 @@ import (
 
 func TestMain(m *testing.M) {
 	_ = loadEnvFile(".dev.env")
-	srv, err := setupTestSigning()
-	if err != nil {
+	if err := setupTestSigning(); err != nil {
 		panic("setupTestSigning: " + err.Error())
 	}
 	code := m.Run()
-	srv.Close()
 	os.Exit(code)
 }
 

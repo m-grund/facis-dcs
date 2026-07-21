@@ -1,37 +1,29 @@
 import { Parser, type Quad } from 'n3'
 import type {
   DomainFieldDefinition,
-  SemanticEntityRole,
-  SemanticEntityType,
   SemanticParameterType,
   SemanticValueConstraint,
   SemanticValueOption,
 } from '@/modules/template-repository/models/contract-template'
 
 /**
- * The SLA domain-field catalog (dcs:DomainField/dcs:ValueConstraint
- * individuals plus taxonomy value options) driving the semantic-condition
- * builder. Fetched at startup from the Semantic Hub's registered
- * "facis-sla" ontology — registering a new version in the hub changes what
- * the builder offers, no rebuild involved — and parsed with N3.
+ * The builder's pickable domain-field vocabulary, discovered at startup from
+ * every schema the Semantic Hub holds — each registered ontology's
+ * dcs:DomainField individuals and each registered shapes graph's property
+ * shapes — and parsed with N3. Registering a schema in the hub (a new ontology
+ * version, an imported Gaia-X profile) changes what the builder offers with no
+ * rebuild and no hardcoded schema name.
  */
 
-export interface OntologySelectOption<TValue extends string = string> {
-  value: TValue
-  label: string
-}
-
-export interface OntologyEntityTypeOption extends OntologySelectOption<SemanticEntityType> {
-  roleRequired: boolean
-}
-
-const RDF_TYPE = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
-const RDF_PROPERTY = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#Property'
+const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#'
+const RDF_TYPE = `${RDF}type`
+const RDF_NIL = `${RDF}nil`
 const RDFS = 'http://www.w3.org/2000/01/rdf-schema#'
 const OWL_CLASS = 'http://www.w3.org/2002/07/owl#Class'
 const SKOS = 'http://www.w3.org/2004/02/skos/core#'
 const XSD = 'http://www.w3.org/2001/XMLSchema#'
 const DCS = 'https://w3id.org/facis/dcs/ontology/v1#'
+const SH = 'http://www.w3.org/ns/shacl#'
 
 class OntologyGraph {
   private bySubject = new Map<string, Quad[]>()
@@ -77,16 +69,40 @@ class OntologyGraph {
   }
 }
 
-async function loadOntologyGraph(): Promise<OntologyGraph> {
-  // Raw fetch, deliberately not the app's http client: this module loads at
-  // import time (top-level await below), before Pinia exists — and the http
-  // client's auth interceptor needs an active Pinia. The hub's resolve
-  // routes are public.
-  const response = await fetch('/api/semantic/ontology/facis-sla', { headers: { Accept: 'application/json' } })
+interface SchemaListEntry {
+  name: string
+  kind: string
+}
+
+// Raw fetch, deliberately not the app's http client: this module loads at
+// import time (top-level await below), before Pinia exists — and the http
+// client's auth interceptor needs an active Pinia. The hub's resolve and
+// list routes are public.
+async function fetchJson<T>(route: string): Promise<T> {
+  const response = await fetch(route, { headers: { Accept: 'application/json' } })
   if (!response.ok) {
-    throw new Error(`Semantic Hub ontology facis-sla is unavailable: HTTP ${response.status}`)
+    throw new Error(`Semantic Hub route ${route} is unavailable: HTTP ${response.status}`)
   }
-  const body = (await response.json()) as { content: string }
+  return (await response.json()) as T
+}
+
+/** The hub route serving a registered schema's content, by kind. */
+function schemaContentRoute(kind: string, name: string): string | null {
+  const encoded = encodeURIComponent(name)
+  switch (kind) {
+    case 'ontology':
+      return `/api/semantic/ontology/${encoded}`
+    case 'shapes':
+      return `/api/semantic/shapes/${encoded}`
+    default:
+      return null
+  }
+}
+
+async function loadSchemaGraph(kind: string, name: string): Promise<OntologyGraph> {
+  const route = schemaContentRoute(kind, name)
+  if (!route) throw new Error(`No content route for schema kind ${kind}`)
+  const body = await fetchJson<{ content: string }>(route)
   return new OntologyGraph(new Parser().parse(body.content))
 }
 
@@ -204,51 +220,142 @@ function parseOntologyDomainFields(graph: OntologyGraph): DomainFieldDefinition[
     .sort((left, right) => left.ontologyId.localeCompare(right.ontologyId))
 }
 
-function parseOntologyEntityRoles(graph: OntologyGraph): OntologySelectOption<SemanticEntityRole>[] {
-  const constraints = parseValueConstraints(graph)
-  const allowedValues = graph
-    .subjectsOfType(RDF_PROPERTY)
-    .filter((subject) => localName(graph.first(subject, `${RDFS}range`)).endsWith('RoleCode'))
-    .map((subject) => graph.first(subject, `${DCS}hasValueConstraint`))
-    .filter(Boolean)
-    .flatMap((ref) => constraints.get(ref)?.allowedValues ?? [])
-
-  return allowedValues
-    .map((value) => ({ value: value, label: formatOntologyLabel(value) }))
-    .sort((left, right) => left.label.localeCompare(right.label))
+/** Reads an RDF collection (rdf:first/rdf:rest) into its member IRIs/literals. */
+function readRdfList(graph: OntologyGraph, head: string): string[] {
+  const members: string[] = []
+  let node = head
+  const guard = new Set<string>()
+  while (node && node !== RDF_NIL && !guard.has(node)) {
+    guard.add(node)
+    const first = graph.first(node, `${RDF}first`)
+    if (first) members.push(first)
+    node = graph.first(node, `${RDF}rest`)
+  }
+  return members
 }
 
-function parseOntologyEntityTypes(graph: OntologyGraph): OntologyEntityTypeOption[] {
-  const domainClassIRIs = new Set(
-    graph
-      .subjectsOfType(`${DCS}DomainField`)
-      .map((subject) => graph.first(subject, `${RDFS}domain`))
-      .filter(Boolean),
-  )
-  // Document-level entity classes (the ranges of properties carried by the
-  // document itself, e.g. dcs:party → dcs:CompanyParty) represent parties
-  // and require a contract role on their requirements.
-  const roleRequiredIRIs = new Set(
-    graph
-      .subjects()
-      .filter((subject) => graph.first(subject, `${DCS}documentProperty`) !== '')
-      .map((subject) => graph.first(subject, `${RDFS}range`))
-      .filter((iri) => domainClassIRIs.has(iri)),
-  )
-  const rolesExist = parseOntologyEntityRoles(graph).length > 0
-
-  return [...domainClassIRIs]
-    .map((iri) => ({
-      value: localName(iri),
-      label: graph.first(iri, `${RDFS}label`) || localName(iri),
-      roleRequired: rolesExist && roleRequiredIRIs.has(iri),
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label))
+/**
+ * A hub asset: a SHACL NodeShape's target class (an imported Gaia-X
+ * ServiceOffering/DataResource, a registered entity type) plus the fields its
+ * property shapes describe. Declaring an asset makes it an ODRL target; its
+ * properties become the fields constrained or filled for that asset.
+ */
+export interface HubAsset {
+  /** The sh:targetClass IRI — the asset type's identity. */
+  id: string
+  label: string
+  properties: DomainFieldDefinition[]
+  source?: { name: string; kind: string }
 }
 
-const graph = await loadOntologyGraph()
+/** Builds a domain field from a SHACL property shape (a node carrying sh:path). */
+function buildPropertyField(graph: OntologyGraph, propShape: string, path: string): DomainFieldDefinition {
+  const allowedValues = readRdfList(graph, graph.first(propShape, `${SH}in`)).filter(Boolean)
+  const datatype = graph.first(propShape, `${SH}datatype`)
+  const label =
+    graph.first(propShape, `${SH}name`) ||
+    graph.first(propShape, `${RDFS}label`) ||
+    formatOntologyLabel(localName(path))
+  const pattern = graph.first(propShape, `${SH}pattern`) || undefined
+  const min = graph.firstNumber(propShape, `${SH}minInclusive`)
+  const max = graph.firstNumber(propShape, `${SH}maxInclusive`)
+  const hasConstraint = allowedValues.length > 0 || pattern !== undefined || min !== undefined || max !== undefined
+  // A property with no sh:datatype and no enum is object-valued (sh:class /
+  // sh:node) — filled with a reference/identifier, carried as a string.
+  const type: SemanticParameterType = allowedValues.length ? 'enum' : parameterTypeForRange(datatype)
+  return {
+    ontologyId: path,
+    parameterName: parameterNameFor(path),
+    type,
+    label,
+    valueConstraint: hasConstraint
+      ? {
+          pattern,
+          min,
+          max,
+          allowedValues: allowedValues.length ? allowedValues : undefined,
+          valueOptions: allowedValues.map((value) => ({ value })),
+        }
+      : undefined,
+  }
+}
 
-export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] = parseOntologyDomainFields(graph)
-export const ONTOLOGY_ENTITY_TYPES: readonly OntologyEntityTypeOption[] = parseOntologyEntityTypes(graph)
-export const ONTOLOGY_ENTITY_ROLES: readonly OntologySelectOption<SemanticEntityRole>[] =
-  parseOntologyEntityRoles(graph)
+/**
+ * Extracts assets from a SHACL shapes graph: every NodeShape with a
+ * sh:targetClass becomes a pickable asset, its property shapes its fields.
+ */
+function parseShapesAssets(graph: OntologyGraph): HubAsset[] {
+  const assets: HubAsset[] = []
+  const seenClass = new Set<string>()
+  for (const nodeShape of graph.subjectsOfType(`${SH}NodeShape`)) {
+    const targetClass = graph.first(nodeShape, `${SH}targetClass`)
+    if (!targetClass || seenClass.has(targetClass)) continue
+    seenClass.add(targetClass)
+    const label =
+      graph.first(nodeShape, `${RDFS}label`) ||
+      graph.first(targetClass, `${RDFS}label`) ||
+      formatOntologyLabel(localName(targetClass))
+    const properties: DomainFieldDefinition[] = []
+    const seenPath = new Set<string>()
+    for (const propShape of graph.values(nodeShape, `${SH}property`)) {
+      const path = graph.first(propShape, `${SH}path`)
+      if (!path || seenPath.has(path)) continue
+      seenPath.add(path)
+      properties.push(buildPropertyField(graph, propShape, path))
+    }
+    assets.push({ id: targetClass, label, properties })
+  }
+  return assets
+}
+
+/**
+ * The builder's pickable vocabulary, discovered from the whole Semantic Hub:
+ * each registered ontology contributes its dcs:DomainField individuals (flat
+ * data fields); each registered shapes graph contributes its NodeShapes as
+ * assets. Registering a schema in the hub — including an imported Gaia-X
+ * profile — makes its objects pickable, with no hardcoded schema name.
+ */
+async function loadHub(): Promise<{ fields: DomainFieldDefinition[]; assets: HubAsset[] }> {
+  const inventory = await fetchJson<SchemaListEntry[]>('/api/semantic/schema/list')
+  const perSource = await Promise.all(
+    inventory
+      .filter((entry) => entry.kind === 'ontology' || entry.kind === 'shapes')
+      .map(async (entry) => {
+        const source = { name: entry.name, kind: entry.kind }
+        try {
+          const graph = await loadSchemaGraph(entry.kind, entry.name)
+          if (entry.kind === 'ontology') {
+            return {
+              fields: parseOntologyDomainFields(graph).map((field) => ({ ...field, source })),
+              assets: [] as HubAsset[],
+            }
+          }
+          return {
+            fields: [] as DomainFieldDefinition[],
+            assets: parseShapesAssets(graph).map((a) => ({ ...a, source })),
+          }
+        } catch {
+          // A single malformed schema must not blank the whole picker.
+          return { fields: [] as DomainFieldDefinition[], assets: [] as HubAsset[] }
+        }
+      }),
+  )
+
+  const bySource = (a?: { name: string }, b?: { name: string }) => (a?.name ?? '').localeCompare(b?.name ?? '')
+  const fieldsById = new Map<string, DomainFieldDefinition>()
+  for (const field of perSource.flatMap((p) => p.fields)) {
+    if (!fieldsById.has(field.ontologyId)) fieldsById.set(field.ontologyId, field)
+  }
+  const assetsById = new Map<string, HubAsset>()
+  for (const asset of perSource.flatMap((p) => p.assets)) {
+    if (!assetsById.has(asset.id)) assetsById.set(asset.id, asset)
+  }
+  return {
+    fields: [...fieldsById.values()].sort((l, r) => bySource(l.source, r.source) || l.label.localeCompare(r.label)),
+    assets: [...assetsById.values()].sort((l, r) => bySource(l.source, r.source) || l.label.localeCompare(r.label)),
+  }
+}
+
+const hub = await loadHub()
+export const ONTOLOGY_DOMAIN_FIELDS: readonly DomainFieldDefinition[] = hub.fields
+export const ONTOLOGY_ASSETS: readonly HubAsset[] = hub.assets

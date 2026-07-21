@@ -8,7 +8,6 @@ scenarios seed their preconditions directly via the test DB connection
 (context.db); each seam is documented at its point of use.
 """
 
-import base64
 import json
 import os
 
@@ -18,7 +17,6 @@ from behave import given, then, when
 from jwt.algorithms import ECAlgorithm
 
 from steps.support.api_client import (
-    c2pa_internal_sign_url,
     did_document_url,
     get_with_headers,
     post_json,
@@ -211,53 +209,9 @@ def step_then_both_instances_publish_ec_p256(context):
 
 
 # ---------------------------------------------------------------------------
-# Authenticated C2PA-signing endpoint (POST /internal/c2pa/sign) + full
-# export's COSE alg
+# Full export's COSE alg (pdf-core embeds ES256 COSE_Sign1; the DCS signs the
+# Sig_structure with the dcs-c2pa key and pdf-core embeds it — pdf-core is keyless)
 # ---------------------------------------------------------------------------
-
-
-@when(
-    "I request an ES256 C2PA signature for a COSE Sig_structure payload from the "
-    "new internal signing endpoint"
-)
-def step_when_request_c2pa_signature(context):
-    # A minimal, syntactically-plausible COSE Sig_structure ("Signature1"
-    # array, see pdf-core/compiler/compiler_c2pa.go:630-638) - the exact
-    # bytes do not matter for this scenario (the endpoint is expected to sign
-    # whatever bytes it is given), only that the response is a well-formed
-    # ES256 signature over them.
-    sig_structure = base64.b64encode(b"bdd-pki-consolidation-sig-structure-fixture").decode()
-    context.requests_response = post_json(
-        context,
-        c2pa_internal_sign_url(context),
-        {"sig_structure": sig_structure},
-        headers=getattr(context, "headers", {}),
-    )
-
-
-@then("the returned signature is a well-formed 64-byte ES256 (r||s) signature")
-def step_then_signature_is_well_formed_es256(context):
-    body = context.requests_response.json()
-    signature_b64 = body.get("signature")
-    assert signature_b64, (
-        f"Expected a 'signature' field in the C2PA signing endpoint response, got: {body}"
-    )
-    signature_bytes = base64.b64decode(signature_b64)
-    # ES256 raw JOSE/COSE signatures are exactly 64 bytes (32-byte r || 32-byte
-    # s) - distinct from the DER-encoded ASN.1 signature crypto11's
-    # crypto.Signer would return by default and from an Ed25519 signature
-    # (which happens to also be 64 bytes, but is a fundamentally different
-    # scheme - this check only confirms SHAPE, not scheme; full end-to-end
-    # scheme proof is the COSE alg check below, which
-    # inspects a real signed manifest rather than this isolated endpoint).
-    assert len(signature_bytes) == 64, (
-        f"Expected a 64-byte raw r||s ES256 signature, got {len(signature_bytes)} bytes"
-    )
-    # NOTE (open point for architect): this isolated endpoint response does
-    # not (yet) carry the public key/certificate needed to cryptographically
-    # verify this specific signature from the BDD harness. Consider having
-    # the endpoint also return the public JWK or x5chain used, so this
-    # scenario can do a full verify rather than a shape-only check.
 
 
 @then("the exported PDF's C2PA COSE_Sign1 protected header declares alg ES256(-7), not EdDSA(-8)")

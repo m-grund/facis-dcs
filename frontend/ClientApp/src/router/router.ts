@@ -29,6 +29,7 @@ import AuditView from '@/views/audit/AuditView.vue'
 import AuthSuccessView from '@/views/auth/AuthSuccessView.vue'
 import LoginView from '@/views/auth/LoginView.vue'
 import PidPresentationView from '@/views/auth/PidPresentationView.vue'
+import ComplianceViewerView from '@/views/compliance/ComplianceViewerView.vue'
 import ApproveContractView from '@/views/contract/ApproveContractView.vue'
 import ContractListView from '@/views/contract/ContractListView.vue'
 import NegotiateContractView from '@/views/contract/NegotiateContractView.vue'
@@ -37,7 +38,8 @@ import ReviewContractView from '@/views/contract/ReviewContractView.vue'
 import ViewContractView from '@/views/contract/ViewContractView.vue'
 import ContractTemplateListView from '@/views/contract-template-list/ContractTemplateListView.vue'
 import FrontPageView from '@/views/FrontPageView.vue'
-import SigningDashboardView from '@/views/signing/SigningDashboardView.vue'
+import SecureContractViewerView from '@/views/signing/SecureContractViewerView.vue'
+import SigningListView from '@/views/signing/SigningListView.vue'
 import TaskListView from '@/views/task/TaskListView.vue'
 
 const ROUTES = {
@@ -77,7 +79,11 @@ const ROUTES = {
     APPROVE: 'contracts.approve',
   },
   SIGNING: {
-    DASHBOARD: 'signing.dashboard',
+    LIST: 'signing.list',
+    VIEWER: 'signing.viewer',
+  },
+  COMPLIANCE: {
+    VIEWER: 'compliance.viewer',
   },
   SEMANTIC_HUB: {
     DASHBOARD: 'semantic_hub.dashboard',
@@ -376,15 +382,40 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/signing',
-    name: ROUTES.SIGNING.DASHBOARD,
-    component: SigningDashboardView,
+    name: ROUTES.SIGNING.LIST,
+    component: SigningListView,
     meta: {
-      name: 'Signing Dashboard',
+      name: 'Signing',
       icon: PencilSquareIcon,
       requiresAuth: true,
-      title: 'DCS - Signing Dashboard',
+      title: 'DCS - Signing',
       order: 5,
       roles: ['CONTRACT_SIGNER', 'CONTRACT_MANAGER', 'CONTRACT_OBSERVER'],
+    },
+  },
+  {
+    path: '/signing/:did',
+    name: ROUTES.SIGNING.VIEWER,
+    component: SecureContractViewerView,
+    meta: {
+      name: 'Secure Contract Viewer',
+      hideInSidebar: true,
+      requiresAuth: true,
+      title: 'DCS - Secure Contract Viewer',
+      roles: ['CONTRACT_SIGNER', 'CONTRACT_MANAGER'],
+    },
+  },
+  {
+    path: '/compliance',
+    name: ROUTES.COMPLIANCE.VIEWER,
+    component: ComplianceViewerView,
+    meta: {
+      name: 'Compliance Viewer',
+      icon: CheckCircleIcon,
+      requiresAuth: true,
+      title: 'DCS - Signature Compliance Viewer',
+      order: 6,
+      roles: ['AUDITOR', 'COMPLIANCE_OFFICER', 'CONTRACT_MANAGER'],
     },
   },
   {

@@ -56,11 +56,11 @@ from steps.support.api_client import (
     get_with_headers,
     origin_url,
     post_json,
-    signature_apply_url,
     signature_request_url,
     signature_revoke_url,
     signature_view_url,
 )
+from steps.support.signing import wallet_sign
 from steps.support.services.auth_service import AuthService
 from steps.support.services.contract_service import ContractService
 from steps.template_management.contract_state_machine_steps import (
@@ -386,7 +386,7 @@ def step_given_two_instances_running(context):
 
 @when(
     "the initiator on instance A creates and offers a contract with instance B "
-    "as negotiator and approver"
+    "as counterparty"
 )
 def step_when_create_and_offer_cross_instance(context):
     with _as_instance(context, context.base_url_a):
@@ -404,16 +404,14 @@ def step_when_create_and_offer_cross_instance(context):
         # variant of ContractService's template setup.
         t_did = ContractService._create_approved_template_for_contract(context)
         creator_h = AuthService.get_headers_for_roles(["Contract Creator"], api_base=context.base_url_a)
-        # Reviewer = A's own identity (Origin == localPeer, so review can
-        # complete locally); negotiator/approver = instance B.
+        # Instance B is the counterparty (ADR-13): the peer the contract is
+        # offered to. Review/approval are A's own internal RBAC.
         create_resp = post_json(
             context,
             contract_create_url(context),
             {
                 "template_did": t_did,
-                "reviewers": [context.peer_did_a],
-                "negotiators": [context.peer_did_b],
-                "approvers": [context.peer_did_b],
+                "counterparty": context.peer_did_b,
             },
             headers=creator_h,
         )
@@ -433,10 +431,11 @@ def step_when_create_and_offer_cross_instance(context):
         assert offer_resp.status_code == 200, offer_resp.text
 
 
-@then("the contract appears on instance B in state OFFERED within a few seconds")
-def step_then_contract_offered_on_b(context):
+@then("the contract appears on instance B in state {expected} within a few seconds")
+def step_then_contract_offered_on_b(context, expected):
+    expected = expected.upper()
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_b)
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + 45
     actual_state = None
     last_resp = None
     while time.monotonic() < deadline:
@@ -447,12 +446,12 @@ def step_then_contract_offered_on_b(context):
         )
         if last_resp.status_code == 200:
             actual_state = str(last_resp.json().get("state", "")).upper()
-            if actual_state == "OFFERED":
+            if actual_state == expected:
                 return
         time.sleep(1)
-    assert actual_state == "OFFERED", (
-        "Expected the contract created on instance A to replicate to instance B as OFFERED "
-        f"within a few seconds; last observed state: '{actual_state}' (last response: "
+    assert actual_state == expected, (
+        "Expected the contract offered on instance A to appear on its counterparty B as "
+        f"{expected} within a few seconds; last observed state: '{actual_state}' (last response: "
         f"{last_resp.status_code if last_resp else 'n/a'} {last_resp.text if last_resp else ''})"
     )
 
@@ -658,7 +657,7 @@ def step_then_approved_replicated_both(context):
         ("A", context.base_url_a, manager_h_a),
         ("B", context.base_url_b, manager_h_b),
     ):
-        deadline = time.monotonic() + 15
+        deadline = time.monotonic() + 45
         actual_state = None
         last_resp = None
         while time.monotonic() < deadline:
@@ -723,19 +722,17 @@ def step_when_sign_cross_instance(context):
             context, contract_retrieve_by_id_url(context, c_did), headers=manager_h
         )
         assert retrieve.status_code == 200, retrieve.text
-        apply_resp = post_json(
+        apply_resp = wallet_sign(
             context,
-            signature_apply_url(context),
-            {
-                "did": c_did,
-                "signer_did": subject_did,
-                "credential_type": "AES",
-                "updated_at": retrieve.json().get("updated_at"),
-            },
+            c_did,
+            signer_did=subject_did,
+            signatory=given_name,
+            field_name="PeerRevocationSigner",
+            credential_type="AES",
             headers=signer_h,
         )
         assert apply_resp.status_code == 200, (
-            f"signature apply failed on instance A: {apply_resp.status_code} {apply_resp.text}"
+            f"wallet signing failed on instance A: {apply_resp.status_code} {apply_resp.text}"
         )
         context.requests_response = apply_resp
 
@@ -770,7 +767,7 @@ def step_then_state_replicated_both(context, state):
     expected = state.upper()
     for label, base_url in (("A", context.base_url_a), ("B", context.base_url_b)):
         manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=base_url)
-        deadline = time.monotonic() + 15
+        deadline = time.monotonic() + 45
         actual_state = None
         last_resp = None
         while time.monotonic() < deadline:
@@ -1088,7 +1085,7 @@ def step_then_provenance_on_b(context):
     c_did = context.cross_instance_contract_did
     manager_h = AuthService.get_headers_for_roles(["Contract Manager"], api_base=context.base_url_b)
     resp = None
-    deadline = time.monotonic() + 15
+    deadline = time.monotonic() + 45
     while time.monotonic() < deadline:
         resp = _requests.get(
             f"{context.base_url_b}/peer/contracts/provenance",

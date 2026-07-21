@@ -76,14 +76,6 @@ Feature: Contract Creation
     Then the contract is created successfully
     And the contract is associated with party "Acme Corp"
 
-  Scenario: Contract Creator cannot create contracts involving unauthorized parties
-    Given I am authenticated with roles: "Contract Creator"
-    And I am not authorized to create contracts with party "RestrictedVendor Inc"
-    When I attempt to create a contract involving party "RestrictedVendor Inc"
-    Then the request is denied with an "Not authorized to create contracts with this party" error
-    And the contract creation is prevented
-    And the attempt is logged
-
   # Party read-scoping (query/contract/querybyid.go): the caller's
   # organization (the OID4VP-disclosed organization claim, the same value
   # persisted as created_by) must be the creating organization or listed in

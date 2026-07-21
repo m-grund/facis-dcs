@@ -340,22 +340,26 @@ func auditPolicyOperandIntegrity(policySet *templatePolicySet, rule templatePoli
 	findings := []PolicyFinding{}
 	for _, policy := range policies {
 		policyID, _ := policy["@id"].(string)
-		constraint, ok := policy["odrl:constraint"].(map[string]any)
-		if !ok {
+		constraints := policyConstraints(policy["odrl:constraint"])
+		if len(constraints) == 0 {
 			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q requires odrl:constraint", policyID), "dcs:policies.odrl:constraint", ""))
 			continue
 		}
-		leftOperand, ok := constraint["odrl:leftOperand"].(map[string]any)
-		fieldID, _ := leftOperand["@id"].(string)
-		if !ok || strings.TrimSpace(fieldID) == "" {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q requires odrl:leftOperand @id", policyID), "dcs:policies.odrl:leftOperand", ""))
-			continue
-		}
-		if !fieldIDs[fieldID] {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q references nonexistent contract data field %q", policyID, fieldID), fieldID, fieldID))
-		}
-		if _, ok := constraint["odrl:operator"].(map[string]any); !ok {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q requires odrl:operator @id", policyID), "dcs:policies.odrl:operator", ""))
+		for _, constraint := range constraints {
+			leftOperand, ok := constraint["odrl:leftOperand"].(map[string]any)
+			fieldID, _ := leftOperand["@id"].(string)
+			if !ok || strings.TrimSpace(fieldID) == "" {
+				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q requires odrl:leftOperand @id", policyID), "dcs:policies.odrl:leftOperand", ""))
+				continue
+			}
+			// A context operand (spatial, dateTime, …) is use-time access
+			// context, not a document data field.
+			if !isODRLContextOperandTerm(fieldID) && !fieldIDs[fieldID] {
+				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q references nonexistent contract data field %q", policyID, fieldID), fieldID, fieldID))
+			}
+			if _, ok := constraint["odrl:operator"].(map[string]any); !ok {
+				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("policy %q requires odrl:operator @id", policyID), "dcs:policies.odrl:operator", ""))
+			}
 		}
 	}
 	return findings

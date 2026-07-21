@@ -11,6 +11,9 @@ cleanup() {
   if [[ -f .tmp/port-forward-orce.pid ]]; then
     kill "$(cat .tmp/port-forward-orce.pid)" >/dev/null 2>&1 || true
   fi
+  if [[ -f .tmp/port-forward-dss.pid ]]; then
+    kill "$(cat .tmp/port-forward-dss.pid)" >/dev/null 2>&1 || true
+  fi
 }
 
 trap cleanup EXIT
@@ -50,10 +53,29 @@ export BDD_DCS_BASE_URL_B="${BDD_DCS_BASE_URL_B:-http://dcs-b.localhost:18080/di
 # pick a pod that has no digital-contracting-service container. Scoped by
 # instance (see HELM_RELEASE above) so this always signs through instance A's
 # own token, never instance B's, when both releases share the namespace.
-DCS_POD="$("${KUBECTL_BIN}" -n "${K8S_NAMESPACE}" get pod \
-  -l "app.kubernetes.io/component=backend,app.kubernetes.io/instance=${HELM_RELEASE}" \
-  --field-selector=status.phase=Running \
-  -o jsonpath='{.items[0].metadata.name}')"
+# Resolve a Running pod's name by label, waiting for one to appear: the one-shot
+# get can race a rollout (a rollout-restart transiently has the old pod
+# Terminating and the new one not yet phase=Running, i.e. zero Running matches),
+# and jsonpath '{.items[0]...}' errors on an empty list under `set -e`.
+wait_for_running_pod() {
+  local ns="$1" selector="$2" name deadline
+  deadline=$(( $(date +%s) + 120 ))
+  while [[ "$(date +%s)" -lt "$deadline" ]]; do
+    name="$("${KUBECTL_BIN}" -n "$ns" get pod -l "$selector" \
+      --field-selector=status.phase=Running \
+      -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+    if [[ -n "$name" ]]; then
+      echo "$name"
+      return 0
+    fi
+    sleep 3
+  done
+  echo "run_bdd_helm: timed out waiting for a Running pod matching [$selector] in namespace $ns" >&2
+  return 1
+}
+
+DCS_POD="$(wait_for_running_pod "${K8S_NAMESPACE}" \
+  "app.kubernetes.io/component=backend,app.kubernetes.io/instance=${HELM_RELEASE}")"
 export BDD_HSMSIGN_EXEC="${KUBECTL_BIN} -n ${K8S_NAMESPACE} exec ${DCS_POD} -c digital-contracting-service --"
 
 # IPFS CID-swap tamper seam (steps/support/tamper_seam.py): several
@@ -64,10 +86,8 @@ export BDD_HSMSIGN_EXEC="${KUBECTL_BIN} -n ${K8S_NAMESPACE} exec ${DCS_POD} -c d
 # a SINGLE instance shared across both BDD releases (values.bdd2.yml's
 # ipfsClient.mfsBaseURL points at "dcs-ipfs" regardless of caller instance),
 # so this is not release-scoped the way BDD_HSMSIGN_EXEC is.
-IPFS_POD="$("${KUBECTL_BIN}" -n "${K8S_NAMESPACE}" get pod \
-  -l "app.kubernetes.io/name=ipfs,app.kubernetes.io/instance=dcs" \
-  --field-selector=status.phase=Running \
-  -o jsonpath='{.items[0].metadata.name}')"
+IPFS_POD="$(wait_for_running_pod "${K8S_NAMESPACE}" \
+  "app.kubernetes.io/name=ipfs,app.kubernetes.io/instance=dcs")"
 # -i/--stdin is required (not just harmless) here: `ipfs add -` reads its
 # content from stdin, and without --stdin the API server may not have a
 # stdin stream attached before the remote command starts reading — observed
@@ -268,6 +288,36 @@ done
 export BDD_DCS_INTERNAL_ORIGIN="http://localhost:$LOCAL_FORWARD_PORT"
 echo "Port-forward on $LOCAL_FORWARD_PORT is ready"
 
+# The wallet-driven signing scenarios call the EU DSS demonstration webapp
+# (charts/dss) as the external SCA that computes getDataToSign/signDocument.
+# It is an in-cluster ClusterIP service; the harness reaches it through a
+# port-forward at the localhost:18099 default that BDD_DSS_URL points at. The
+# DSS Tomcat bundle boots slowly (readiness initialDelaySeconds 90), so allow a
+# generous availability timeout before forwarding.
+DSS_DEPLOYMENT="${HELM_RELEASE}-dss"
+DSS_SERVICE="${HELM_RELEASE}-dss"
+DSS_LOCAL_FORWARD_PORT="${DSS_LOCAL_FORWARD_PORT:-18099}"
+echo "Waiting for DSS deployment ($DSS_DEPLOYMENT) to be available"
+"$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=420s "deployment/$DSS_DEPLOYMENT"
+
+echo "Starting port-forward for DSS service ($DSS_SERVICE)"
+KUBECTL_BIN="$KUBECTL_BIN" K8S_NAMESPACE="$K8S_NAMESPACE" \
+  SERVICE_NAME="$DSS_SERVICE" PORT_MAPPING="$DSS_LOCAL_FORWARD_PORT:8080" \
+  bash "$PWD/scripts/keep_port_forward.sh" > .tmp/port-forward-dss.log 2>&1 &
+echo $! > .tmp/port-forward-dss.pid
+
+deadline=$(( $(date +%s) + 30 ))
+until nc -z 127.0.0.1 "$DSS_LOCAL_FORWARD_PORT" 2>/dev/null; do
+  if [ "$(date +%s)" -gt "$deadline" ]; then
+    echo "Timed out waiting for DSS port-forward on $DSS_LOCAL_FORWARD_PORT"
+    cat .tmp/port-forward-dss.log || true
+    exit 1
+  fi
+  sleep 1
+done
+export BDD_DSS_URL="http://localhost:$DSS_LOCAL_FORWARD_PORT"
+echo "DSS port-forward on $DSS_LOCAL_FORWARD_PORT is ready"
+
 # Archive notary and audit-log endpoints are intentionally not exposed by the
 # public ORCE ingress. Reach the release-scoped service directly and obtain the
 # configured token from the running pod rather than duplicating it here.
@@ -381,9 +431,24 @@ if [[ -n "${ARG_BDD_JUNIT:-}" ]]; then
   JUNIT_ARGS=(${ARG_BDD_JUNIT})
 fi
 
-echo "Running BDD suite via bdd-executor environment"
-cd "$PROJECT_ROOT"
-"$VENV_PATH/bin/coverage" run --append -m behave "${JUNIT_ARGS[@]}" "$FEATURES_PATH" "${EXTRA_ARGS[@]}"
+# The deployed stack + all its port-forwards (DSS 18099, ORCE, DB, instance B)
+# are live at this point and stay alive until this script exits (trap cleanup).
+# RUN_MODE selects what runs against them without tearing anything down:
+#   bdd (default) — the behave suite via the bdd-executor environment;
+#   e2e           — the Playwright suite (its own vite servers + the venv-backed
+#                   signing helpers), so the frontend E2E gets the same live
+#                   two-instance stack + DSS forward the BDD suite uses.
+if [[ "${RUN_MODE:-bdd}" == "e2e" ]]; then
+  echo "Running Playwright E2E against the deployed stack"
+  cd "$PROJECT_ROOT/frontend/ClientApp"
+  E2E_DCS_API_BASE="${BDD_PUBLIC_ORIGIN}/digital-contracting-service/api" \
+  E2E_BDD_PYTHON="$VENV_PATH/bin/python3" \
+    npm run e2e
+else
+  echo "Running BDD suite via bdd-executor environment"
+  cd "$PROJECT_ROOT"
+  "$VENV_PATH/bin/coverage" run --append -m behave "${JUNIT_ARGS[@]}" "$FEATURES_PATH" "${EXTRA_ARGS[@]}"
 
-JUNIT_COUNT=$(find "$REPORTS_JUNIT_DIR" -name "*.xml" 2>/dev/null | wc -l || true)
-echo "Generated $JUNIT_COUNT junit XML files in $REPORTS_JUNIT_DIR/"
+  JUNIT_COUNT=$(find "$REPORTS_JUNIT_DIR" -name "*.xml" 2>/dev/null | wc -l || true)
+  echo "Generated $JUNIT_COUNT junit XML files in $REPORTS_JUNIT_DIR/"
+fi

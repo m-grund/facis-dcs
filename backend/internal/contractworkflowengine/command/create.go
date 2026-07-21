@@ -28,14 +28,17 @@ import (
 )
 
 type CreateCmd struct {
-	DID         string   `json:"did"`
-	TemplateDID string   `json:"template_did"`
-	CreatedBy   string   `json:"created_by"`
-	HolderDID   string   `json:"holder_did"`
-	Reviewers   []string `json:"reviewers"`
-	Approvers   []string `json:"approvers"`
-	Negotiators []string `json:"negotiators"`
-	Parties     []string `json:"parties"`
+	DID         string `json:"did"`
+	TemplateDID string `json:"template_did"`
+	CreatedBy   string `json:"created_by"`
+	HolderDID   string `json:"holder_did"`
+	// Counterparty is the single peer DCS (a did:web) this contract is offered
+	// to and negotiated with. It drives the PDF ship target and, together with
+	// the origin, the party set the signature fields are seeded for (ADR-13).
+	// Reviewer/approver/negotiator are internal RBAC roles, isolated per
+	// instance — never peer DIDs.
+	Counterparty string   `json:"counterparty"`
+	Parties      []string `json:"parties"`
 	// OriginatorRole is the contractual role the creating organization
 	// declares for itself; it binds the origin DID to that role's party
 	// node in the contract's ODRL rules. The counterpart role stays open
@@ -54,13 +57,16 @@ type Creator struct {
 	DIDDocument identity.DIDDocument
 }
 
-func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, ntRepo db.NegotiationTaskRepo, cmd CreateCmd) error {
-	for _, reviewer := range cmd.Reviewers {
+// createTasks opens this instance's own review, negotiation, and approval
+// tasks (ADR-13): the responsible role lists hold local-RBAC holders only, so
+// each DCS creates and owns its tasks; nothing crosses the boundary.
+func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atRepo db.ApprovalTaskRepo, ntRepo db.NegotiationTaskRepo, did, createdBy string, resp db.Responsible) error {
+	for _, reviewer := range resp.Reviewers {
 		reviewTask := db.ReviewTaskData{
-			DID:       cmd.DID,
+			DID:       did,
 			Reviewer:  reviewer,
 			State:     reviewtaskstate.Open.String(),
-			CreatedBy: cmd.CreatedBy,
+			CreatedBy: createdBy,
 		}
 		_, err := rtRepo.Create(ctx, tx, reviewTask)
 		if err != nil {
@@ -68,12 +74,12 @@ func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atR
 		}
 	}
 
-	for _, negotiator := range cmd.Negotiators {
+	for _, negotiator := range resp.Negotiators {
 		negotiationTask := db.NegotiationTaskData{
-			DID:        cmd.DID,
+			DID:        did,
 			Negotiator: negotiator,
 			State:      reviewtaskstate.Open.String(),
-			CreatedBy:  cmd.CreatedBy,
+			CreatedBy:  createdBy,
 		}
 		_, err := ntRepo.Create(ctx, tx, negotiationTask)
 		if err != nil {
@@ -81,10 +87,10 @@ func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atR
 		}
 	}
 
-	for _, approver := range cmd.Approvers {
+	for _, approver := range resp.Approvers {
 		data := db.ApprovalTaskData{
-			DID:       cmd.DID,
-			CreatedBy: cmd.CreatedBy,
+			DID:       did,
+			CreatedBy: createdBy,
 			Approver:  approver,
 			State:     reviewtaskstate.Open.String(),
 		}
@@ -100,18 +106,6 @@ func createTasks(ctx context.Context, tx *sqlx.Tx, rtRepo db.ReviewTaskRepo, atR
 // Handle has no entry in contractstate.Transitions: creation establishes the
 // initial DRAFT state, it is not a transition from a prior state.
 func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
-
-	if len(cmd.Reviewers) == 0 {
-		return errors.New("no reviewers provided")
-	}
-
-	if len(cmd.Negotiators) == 0 {
-		return errors.New("no negotiators provided")
-	}
-
-	if len(cmd.Approvers) == 0 {
-		return errors.New("no approvers provided")
-	}
 
 	tx, err := h.DB.BeginTxx(ctx, nil)
 	if err != nil {
@@ -159,14 +153,16 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		}
 	}
 
-	// Reviewers/Approvers/Negotiators are peer DIDs (other DCS instances), not
-	// individual users — task ownership is peer-scoped. Origin below marks
-	// this node as the single writer for this contract (see package doc).
+	// Reviewer/approver/negotiator are this instance's own internal RBAC roles
+	// (the origin's local users handle them); the counterparty is the single
+	// peer the contract is offered to. Origin + Counterparty are the two
+	// parties (ADR-13).
 	resp := db.Responsible{
-		Creator:     localPeer,
-		Reviewers:   cmd.Reviewers,
-		Approvers:   cmd.Approvers,
-		Negotiators: cmd.Negotiators,
+		Creator:      localPeer,
+		Reviewers:    []string{localPeer},
+		Approvers:    []string{localPeer},
+		Negotiators:  []string{localPeer},
+		Counterparty: cmd.Counterparty,
 	}
 
 	data := db.Contract{
@@ -186,7 +182,7 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		return fmt.Errorf("could not create contract: %w", err)
 	}
 
-	err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd)
+	err = createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd.DID, cmd.CreatedBy, resp)
 	if err != nil {
 		return err
 	}

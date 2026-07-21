@@ -90,6 +90,8 @@ export interface DomainFieldDefinition {
   domain?: string
   domainLabel?: string
   valueConstraint?: SemanticValueConstraint
+  /** The Semantic Hub schema this field was discovered in (name + kind), for grouping in the picker. */
+  source?: { name: string; kind: string }
 }
 
 // ---- MetaData ----

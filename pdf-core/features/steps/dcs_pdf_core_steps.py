@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 from datetime import datetime, timezone
@@ -16,7 +17,7 @@ import tempfile
 import cbor2
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, rsa, utils
 from cryptography.x509.oid import NameOID
 from pyhanko.pdf_utils import generic
 from pyhanko.pdf_utils.font.api import FontEngine, FontEngineFactory, ShapeResult
@@ -51,28 +52,65 @@ def _save_artifact(context, pdf_bytes, suffix):
     _validate_pdf_artifact(Path(path))
 
 
-def _request(context, method, path, body=None, content_type=None):
-    data = None if body is None else body.encode("utf-8") if isinstance(body, str) else body
-    request = urllib.request.Request(
-        f"{context.server_url}{path}",
-        data=data,
-        method=method,
+def sign_sig_structure(context, sig_structure):
+    """Sign one COSE Sig_structure with the harness key (ES256 → 64-byte r||s),
+    matching the DCS backend's dcs-c2pa signing. Deterministic (RFC 6979) so
+    repeated compilations stay byte-identical, preserving pdf-core's determinism
+    guarantee under test."""
+    der = context.c2pa_private_key.sign(
+        sig_structure, ec.ECDSA(hashes.SHA256(), deterministic_signing=True)
     )
+    r, s = utils.decode_dss_signature(der)
+    return r.to_bytes(32, "big") + s.to_bytes(32, "big")
+
+
+def _raw_request(context, method, path, data, content_type):
+    request = urllib.request.Request(f"{context.server_url}{path}", data=data, method=method)
     if content_type:
         request.add_header("Content-Type", content_type)
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            context.last_response = {
+            return {
                 "status": response.status,
                 "content_type": response.headers.get("Content-Type", ""),
                 "body": response.read(),
             }
     except urllib.error.HTTPError as error:
-        context.last_response = {
+        return {
             "status": error.code,
             "content_type": error.headers.get("Content-Type", ""),
             "body": error.read(),
         }
+
+
+def _embed_if_prepared(context, response):
+    """When a /render or /render/amendment call returns pdf-core's prepare
+    envelope ({pdf_base64, c2pa_sig_structures}), sign each C2PA Sig_structure and
+    post the signatures to the stateless /c2pa/embed, returning the finished signed
+    PDF response. Any other response passes through unchanged, so error responses
+    and genuine JSON endpoints (/verify, /version, /ontology) are untouched."""
+    if response["status"] != 200 or not response["content_type"].startswith("application/json"):
+        return response
+    try:
+        payload = json.loads(response["body"].decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return response
+    if not isinstance(payload, dict) or "pdf_base64" not in payload or "c2pa_sig_structures" not in payload:
+        return response
+    signatures = [
+        base64.b64encode(sign_sig_structure(context, base64.b64decode(s))).decode("ascii")
+        for s in payload["c2pa_sig_structures"]
+    ]
+    embed_body = json.dumps(
+        {"pdf_base64": payload["pdf_base64"], "c2pa_signatures": signatures}
+    ).encode("utf-8")
+    return _raw_request(context, "POST", "/c2pa/embed", embed_body, "application/json")
+
+
+def _request(context, method, path, body=None, content_type=None):
+    data = None if body is None else body.encode("utf-8") if isinstance(body, str) else body
+    response = _raw_request(context, method, path, data, content_type)
+    context.last_response = _embed_if_prepared(context, response)
 
     if context.last_response["content_type"].startswith("application/json"):
         context.last_json_response = json.loads(context.last_response["body"].decode("utf-8"))
@@ -242,7 +280,7 @@ def step_equivalent_semantic_payload_flavor(context):
 @given("I compile the payload through /download")
 @when("I compile the payload through /download")
 def step_compile_once(context):
-    _request(context, "POST", "/download", context.payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.payload_text, "application/ld+json")
     context.compiled_pdf = context.last_response["body"]
     if context.last_response["status"] == 200:
         _save_artifact(context, context.compiled_pdf, "")
@@ -250,9 +288,9 @@ def step_compile_once(context):
 
 @when("I compile the payload twice through /download")
 def step_compile_twice(context):
-    _request(context, "POST", "/download", context.payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.payload_text, "application/ld+json")
     context.first_pdf = context.last_response["body"]
-    _request(context, "POST", "/download", context.payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.payload_text, "application/ld+json")
     context.second_pdf = context.last_response["body"]
     _save_artifact(context, context.first_pdf, "_run1")
     _save_artifact(context, context.second_pdf, "_run2")
@@ -260,11 +298,11 @@ def step_compile_twice(context):
 
 @when("I compile both payload flavors through /download")
 def step_compile_both_payload_flavors(context):
-    _request(context, "POST", "/download", context.payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.payload_text, "application/ld+json")
     assert context.last_response["status"] == 200, context.last_response
     context.first_pdf = context.last_response["body"]
 
-    _request(context, "POST", "/download", context.equivalent_payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.equivalent_payload_text, "application/ld+json")
     assert context.last_response["status"] == 200, context.last_response
     context.second_pdf = context.last_response["body"]
 
@@ -879,7 +917,7 @@ def step_update_with_amended_payload(context):
     body, content_type = _build_multipart_body(
         context.compiled_pdf, context.amended_payload_text
     )
-    _request(context, "POST", "/update", body, content_type)
+    _request(context, "POST", "/render/amendment", body, content_type)
     if context.last_response["status"] == 200:
         context.amended_pdf = context.last_response["body"]
         _save_artifact(context, context.amended_pdf, "_amended")
@@ -890,7 +928,7 @@ def step_update_with_same_payload(context):
     body, content_type = _build_multipart_body(
         context.compiled_pdf, context.payload_text
     )
-    _request(context, "POST", "/update", body, content_type)
+    _request(context, "POST", "/render/amendment", body, content_type)
 
 
 @then("the amended PDF is longer than the original")
@@ -910,7 +948,7 @@ def step_amended_embeds_new_payload(context):
 
     # /update embeds the canonicalized payload form. Validate against the same
     # canonical form produced by /download for this amended payload.
-    _request(context, "POST", "/download", context.amended_payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.amended_payload_text, "application/ld+json")
     assert context.last_response["status"] == 200, context.last_response
     expected_pdf = context.last_response["body"]
     expected = _extract_embedded_stream_by_filespec_name(expected_pdf, "contract.jsonld")
@@ -931,7 +969,7 @@ def step_update_signed_pdf_with_amended_payload(context):
     body, content_type = _build_multipart_body(
         context.signed_pdf, context.amended_payload_text
     )
-    _request(context, "POST", "/update", body, content_type)
+    _request(context, "POST", "/render/amendment", body, content_type)
     if context.last_response["status"] == 200:
         context.amended_pdf = context.last_response["body"]
         _save_artifact(context, context.amended_pdf, "_amended")
@@ -942,7 +980,7 @@ def step_update_amended_pdf_with_second_amended_payload(context):
     body, content_type = _build_multipart_body(
         context.amended_pdf, context.amended_payload_text
     )
-    _request(context, "POST", "/update", body, content_type)
+    _request(context, "POST", "/render/amendment", body, content_type)
     if context.last_response["status"] == 200:
         context.amended_pdf = context.last_response["body"]
         _save_artifact(context, context.amended_pdf, "_amended2")
@@ -1514,7 +1552,7 @@ def step_claimed_embeds_original_payload(context):
 
     # /claim embeds the canonicalized payload form. Validate against the same
     # canonical form produced by /download for the original payload.
-    _request(context, "POST", "/download", context.payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.payload_text, "application/ld+json")
     assert context.last_response["status"] == 200, context.last_response
     expected_pdf = context.last_response["body"]
     expected = _extract_embedded_stream_by_filespec_name(expected_pdf, "contract.jsonld")
@@ -1576,7 +1614,7 @@ def step_extract_and_recompile(context, stage):
     """Extract the embedded contract.jsonld from the named PDF stage and recompile it."""
     pdf = _get_stage_pdf(context, stage)
     extracted = _extract_embedded_stream_by_filespec_name(pdf, "contract.jsonld")
-    _request(context, "POST", "/download", extracted, "application/ld+json")
+    _request(context, "POST", "/render", extracted, "application/ld+json")
     assert context.last_response["status"] == 200, (
         f"recompile from {stage} PDF embedded JSON-LD failed "
         f"(HTTP {context.last_response['status']}): "
@@ -1588,7 +1626,7 @@ def step_extract_and_recompile(context, stage):
 @then('the recompiled PDF page content matches a fresh compile of the original payload')
 def step_recompiled_matches_fresh_original(context):
     """Re-rendering from embedded JSON-LD must give identical page content to a fresh compile."""
-    _request(context, "POST", "/download", context.payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.payload_text, "application/ld+json")
     assert context.last_response["status"] == 200
     fresh = context.last_response["body"]
     fresh_blocks = _extract_bt_et_content(fresh)
@@ -1606,7 +1644,7 @@ def step_recompiled_matches_fresh_original(context):
 @then('the recompiled PDF page content matches a fresh compile of the amended payload')
 def step_recompiled_matches_fresh_amended(context):
     """Re-rendering from embedded JSON-LD must give identical page content to a fresh compile of the amendment."""
-    _request(context, "POST", "/download", context.amended_payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.amended_payload_text, "application/ld+json")
     assert context.last_response["status"] == 200
     fresh = context.last_response["body"]
     fresh_blocks = _extract_bt_et_content(fresh)
@@ -1624,7 +1662,7 @@ def step_recompiled_matches_fresh_amended(context):
 @then('a fresh compile of the amended payload has different page content from the compiled PDF')
 def step_amended_content_differs_from_original(context):
     """Sanity check: the amended payload must render differently from the original."""
-    _request(context, "POST", "/download", context.amended_payload_text, "application/ld+json")
+    _request(context, "POST", "/render", context.amended_payload_text, "application/ld+json")
     assert context.last_response["status"] == 200
     fresh_amended = context.last_response["body"]
     amended_blocks = _extract_bt_et_content(fresh_amended)
@@ -1814,7 +1852,7 @@ def step_tampered_c2pa_hash_mismatch(context):
 def step_amend_without_manifest_url(context):
     payload_text = context.text.strip().replace("http://127.0.0.1:8080", context.server_url)
     body, content_type = _build_multipart_body(context.compiled_pdf, payload_text)
-    _request(context, "POST", "/update", body, content_type)
+    _request(context, "POST", "/render/amendment", body, content_type)
     if context.last_response["status"] == 200:
         context.updated_pdf = context.last_response["body"]
         _save_artifact(context, context.updated_pdf, "_updated_no_manifest_url")
@@ -1840,7 +1878,7 @@ def step_amend_with_manifest_url(context, manifest_url):
     body, content_type = _build_multipart_body(
         context.compiled_pdf, payload_text, manifest_url=resolved_manifest_url
     )
-    _request(context, "POST", "/update", body, content_type)
+    _request(context, "POST", "/render/amendment", body, content_type)
     if context.last_response["status"] == 200:
         context.updated_pdf = context.last_response["body"]
         _save_artifact(context, context.updated_pdf, "_updated_with_manifest_url")

@@ -239,43 +239,12 @@ func auditExpandedODRLPolicies(ctx context.Context, root map[string]any, rules [
 	return findings, nil
 }
 
-func auditExpandedODRLRule(ctx context.Context, root map[string]any, rule map[string]any, fieldIndex map[string]odrlFieldInfo) ([]PolicyFinding, error) {
+func auditExpandedODRLRule(ctx context.Context, _ map[string]any, rule map[string]any, fieldIndex map[string]odrlFieldInfo) ([]PolicyFinding, error) {
 	ruleID, _ := rule["@id"].(string)
 	if ruleID == "" {
 		ruleID = "FACIS-CONTRACT-ODRL-POLICY"
 	}
 	policyType := expandedTypeLocalName(rule)
-
-	constraint, ok := expandedFirst(rule, odrlIRI+"constraint")
-	if !ok {
-		return nil, nil
-	}
-	leftOperand, ok := expandedFirst(constraint, odrlIRI+"leftOperand")
-	if !ok {
-		return nil, nil
-	}
-	fieldID, _ := leftOperand["@id"].(string)
-	if fieldID == "" {
-		return nil, nil
-	}
-	operatorNode, ok := expandedFirst(constraint, odrlIRI+"operator")
-	if !ok {
-		return nil, nil
-	}
-	operator := shaclLocalName(expandedID(operatorNode))
-	if operator == "" {
-		return nil, nil
-	}
-	rightOperand := expandedRightOperand(constraint, operator)
-
-	fieldInfo, ok := fieldIndex[fieldID]
-	if !ok {
-		finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, fieldID), fieldID, "dcs:RequirementField")
-		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-		return []PolicyFinding{finding}, nil
-	}
-	actualValue, hasValue := fieldInfo.value, fieldInfo.hasValue
-
 	isProhibition := policyType == "Prohibition"
 	isPermission := policyType == "Permission"
 	severity := "error"
@@ -283,50 +252,368 @@ func auditExpandedODRLRule(ctx context.Context, root map[string]any, rule map[st
 		severity = "info"
 	}
 
-	if !hasValue {
-		if isProhibition || isPermission {
-			finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q: value not present", ruleID), fieldID, "")
-			applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-			return []PolicyFinding{finding}, nil
-		}
-		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q: required value not provided", ruleID), fieldID, "")
-		applyODRLPolicyDetails(&finding, fieldID, operator, nil, false, rightOperand)
-		return []PolicyFinding{finding}, nil
-	}
-
-	satisfied, err := evaluateODRLConstraintOPA(ctx, operator, actualValue, rightOperand)
+	findings, err := auditConstraintBearingNode(ctx, ruleID, rule, fieldIndex, isProhibition, isPermission, severity)
 	if err != nil {
-		return nil, fmt.Errorf("evaluate ODRL policy %q: %w", ruleID, err)
+		return nil, err
 	}
-	violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
 
-	if violated {
-		finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q violated: value %v does not satisfy %s", ruleID, actualValue, operator), fieldID, "")
-		applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
-		return []PolicyFinding{finding}, nil
+	// A permission's duties (ODRL IM §2.5) are obligations the assignee must
+	// fulfil to exercise it. The obligated action is performed at use-time; the
+	// audit records it and evaluates the duty's own constraints as obligations.
+	dutyFindings, err := auditExpandedODRLDutyNodes(ctx, ruleID, expandedNodes(rule, odrlIRI+"duty"), fieldIndex)
+	if err != nil {
+		return nil, err
 	}
-	finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q satisfied", ruleID), fieldID, "")
-	applyODRLPolicyDetails(&finding, fieldID, operator, actualValue, true, rightOperand)
-	return []PolicyFinding{finding}, nil
+	return append(findings, dutyFindings...), nil
 }
 
-// expandedRightOperand converts the constraint's right operand to plain Go
-// values. Set operators always receive a list — expansion erases the
-// distinction between a one-element set and a scalar.
-func expandedRightOperand(constraint map[string]any, operator string) any {
+// auditConstraintBearingNode audits the ODRL constraints carried by a rule or
+// duty node (a conjunction, ODRL IM §2.5): each is evaluated, and any violated
+// data-field constraint fails the node. isProhibition/isPermission set the
+// violation semantics (a prohibition is violated when satisfied; an obligation
+// when not); a duty is audited as an obligation.
+func auditConstraintBearingNode(ctx context.Context, ruleID string, node map[string]any, fieldIndex map[string]odrlFieldInfo, isProhibition, isPermission bool, severity string) ([]PolicyFinding, error) {
+	findings := []PolicyFinding{}
+	for _, rawConstraint := range expandedValues(node, odrlIRI+"constraint") {
+		constraint, ok := rawConstraint.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		// A logical constraint (odrl:and/or/xone/andSequence) is a tree of
+		// nested constraints — evaluate it recursively rather than as an atomic
+		// leaf. When its outcome depends on use-time context it is deferred.
+		if logicalOp, _, isLogical := constraintLogical(constraint); isLogical {
+			satisfied, resolvable, err := evaluateConstraintNode(ctx, constraint, fieldIndex)
+			if err != nil {
+				return nil, fmt.Errorf("evaluate ODRL policy %q logical constraint: %w", ruleID, err)
+			}
+			if !resolvable {
+				findings = append(findings, contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q %s-constraint is enforced at use-time", ruleID, logicalOp), odrlIRI+logicalOp, ""))
+				continue
+			}
+			violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
+			sev := "info"
+			msg := fmt.Sprintf("ODRL policy %q logical (%s) constraint satisfied", ruleID, logicalOp)
+			if violated {
+				sev = severity
+				msg = fmt.Sprintf("ODRL policy %q logical (%s) constraint violated", ruleID, logicalOp)
+			}
+			findings = append(findings, contractFinding(ruleID, ruleID, sev, msg, odrlIRI+logicalOp, ""))
+			continue
+		}
+
+		leftOperand, ok := expandedFirst(constraint, odrlIRI+"leftOperand")
+		if !ok {
+			continue
+		}
+		operandID, _ := leftOperand["@id"].(string)
+		if operandID == "" {
+			continue
+		}
+		operatorNode, ok := expandedFirst(constraint, odrlIRI+"operator")
+		if !ok {
+			continue
+		}
+		operator := shaclLocalName(expandedID(operatorNode))
+		if operator == "" {
+			continue
+		}
+		rightOperand := resolveRightOperand(constraint, operator, fieldIndex)
+
+		// ODRL context operands (spatial, dateTime, purpose, …) are evaluated
+		// at use-time by the execution environment against the access context
+		// it reports; the contract audit only records that they apply.
+		if isODRLContextOperand(operandID) {
+			finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q constraint on %s is enforced at use-time", ruleID, shaclLocalName(operandID)), operandID, "")
+			applyODRLPolicyDetails(&finding, operandID, operator, nil, false, rightOperand)
+			findings = append(findings, finding)
+			continue
+		}
+
+		fieldInfo, ok := fieldIndex[operandID]
+		if !ok {
+			finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, operandID), operandID, "dcs:RequirementField")
+			applyODRLPolicyDetails(&finding, operandID, operator, nil, false, rightOperand)
+			findings = append(findings, finding)
+			continue
+		}
+		actualValue, hasValue := fieldInfo.value, fieldInfo.hasValue
+
+		if !hasValue {
+			if isProhibition || isPermission {
+				finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q: value not present", ruleID), operandID, "")
+				applyODRLPolicyDetails(&finding, operandID, operator, nil, false, rightOperand)
+				findings = append(findings, finding)
+				continue
+			}
+			finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q: required value not provided", ruleID), operandID, "")
+			applyODRLPolicyDetails(&finding, operandID, operator, nil, false, rightOperand)
+			findings = append(findings, finding)
+			continue
+		}
+
+		satisfied, err := evaluateODRLConstraintOPA(ctx, operator, actualValue, rightOperand)
+		if err != nil {
+			return nil, fmt.Errorf("evaluate ODRL policy %q: %w", ruleID, err)
+		}
+		violated := (isProhibition && satisfied) || (!isProhibition && !isPermission && !satisfied)
+		if violated {
+			finding := contractFinding(ruleID, ruleID, severity, fmt.Sprintf("ODRL policy %q violated: value %v does not satisfy %s", ruleID, actualValue, operator), operandID, "")
+			applyODRLPolicyDetails(&finding, operandID, operator, actualValue, true, rightOperand)
+			findings = append(findings, finding)
+			continue
+		}
+		finding := contractFinding(ruleID, ruleID, "info", fmt.Sprintf("ODRL policy %q satisfied", ruleID), operandID, "")
+		applyODRLPolicyDetails(&finding, operandID, operator, actualValue, true, rightOperand)
+		findings = append(findings, finding)
+	}
+	return findings, nil
+}
+
+// auditExpandedODRLDutyNodes audits a permission's duties (ODRL IM §2.5). Each
+// duty records the obligated action (fulfilled at use-time) and has its own
+// constraints evaluated as obligations; its consequence — a duty triggered
+// when the duty is not fulfilled — is audited the same way, recursively.
+func auditExpandedODRLDutyNodes(ctx context.Context, ownerID string, duties []map[string]any, fieldIndex map[string]odrlFieldInfo) ([]PolicyFinding, error) {
+	findings := []PolicyFinding{}
+	for _, duty := range duties {
+		dutyID, _ := duty["@id"].(string)
+		if dutyID == "" {
+			dutyID = ownerID
+		}
+		findings = append(findings, contractFinding(ownerID, ownerID, "info",
+			fmt.Sprintf("ODRL policy %q duty (%s) is fulfilled at use-time", ownerID, dutyActionLabel(duty)), odrlIRI+"duty", ""))
+
+		constraintFindings, err := auditConstraintBearingNode(ctx, dutyID, duty, fieldIndex, false, false, "error")
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, constraintFindings...)
+
+		consequenceFindings, err := auditExpandedODRLDutyNodes(ctx, dutyID, expandedNodes(duty, odrlIRI+"consequence"), fieldIndex)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, consequenceFindings...)
+	}
+	return findings, nil
+}
+
+// expandedNodes returns a property's value nodes as maps, unwrapping an @list
+// container (ODRL duty/consequence are plain sets, but a producer may serialize
+// them as an ordered list).
+func expandedNodes(node map[string]any, property string) []map[string]any {
+	out := []map[string]any{}
+	for _, raw := range expandedValues(node, property) {
+		item, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if list, ok := item["@list"].([]any); ok {
+			for _, li := range list {
+				if child, ok := li.(map[string]any); ok {
+					out = append(out, child)
+				}
+			}
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+// dutyActionLabel joins the local names of a duty's action(s) for a finding.
+func dutyActionLabel(duty map[string]any) string {
+	names := []string{}
+	for _, raw := range expandedValues(duty, odrlIRI+"action") {
+		if id := expandedID(raw); id != "" {
+			names = append(names, shaclLocalName(id))
+		}
+	}
+	if len(names) == 0 {
+		return "action"
+	}
+	return strings.Join(names, ", ")
+}
+
+// odrlContextOperandIRIs is the full ODRL 2.2 core Left Operand vocabulary. A
+// context operand names access/use context the enforcer reports at use-time
+// (not a document data field), so the contract-time audit records that the
+// constraint applies and defers its verdict rather than resolving it.
+var odrlContextOperandIRIs = map[string]bool{
+	odrlIRI + "absolutePosition":         true,
+	odrlIRI + "absoluteSpatialPosition":  true,
+	odrlIRI + "absoluteTemporalPosition": true,
+	odrlIRI + "absoluteSize":             true,
+	odrlIRI + "count":                    true,
+	odrlIRI + "dateTime":                 true,
+	odrlIRI + "delayPeriod":              true,
+	odrlIRI + "deliveryChannel":          true,
+	odrlIRI + "elapsedTime":              true,
+	odrlIRI + "event":                    true,
+	odrlIRI + "fileFormat":               true,
+	odrlIRI + "industry":                 true,
+	odrlIRI + "language":                 true,
+	odrlIRI + "media":                    true,
+	odrlIRI + "meteredTime":              true,
+	odrlIRI + "payAmount":                true,
+	odrlIRI + "percentage":               true,
+	odrlIRI + "product":                  true,
+	odrlIRI + "purpose":                  true,
+	odrlIRI + "recipient":                true,
+	odrlIRI + "relativePosition":         true,
+	odrlIRI + "relativeSpatialPosition":  true,
+	odrlIRI + "relativeTemporalPosition": true,
+	odrlIRI + "relativeSize":             true,
+	odrlIRI + "resolution":               true,
+	odrlIRI + "spatial":                  true,
+	odrlIRI + "spatialCoordinates":       true,
+	odrlIRI + "systemDevice":             true,
+	odrlIRI + "timeInterval":             true,
+	odrlIRI + "unitOfCount":              true,
+	odrlIRI + "version":                  true,
+	odrlIRI + "virtualLocation":          true,
+}
+
+// isODRLContextOperand reports whether a left operand is an ODRL context
+// operand — access context reported at use-time, not a document data field.
+func isODRLContextOperand(iri string) bool {
+	return odrlContextOperandIRIs[iri]
+}
+
+// resolveRightOperand converts a constraint's right operand to plain Go
+// values. A boundary that references a requirement field — a value agreed at
+// negotiation — resolves to that field's filled value; set operators always
+// receive a list, as expansion erases the one-element-set/scalar distinction.
+func resolveRightOperand(constraint map[string]any, operator string, fieldIndex map[string]odrlFieldInfo) any {
 	values := expandedValues(constraint, odrlIRI+"rightOperand")
-	switch normalizePolicyOperator(operator) {
-	case "in", "notIn":
-		return expandedLiterals(values)
+	resolve := func(v any) any {
+		if obj, ok := v.(map[string]any); ok {
+			if id, ok := obj["@id"].(string); ok {
+				if info, found := fieldIndex[id]; found && info.hasValue {
+					return info.value
+				}
+			}
+		}
+		return expandedLiteral(v)
+	}
+	if op := normalizePolicyOperator(operator); op == "in" || op == "notIn" {
+		return mapAny(values, resolve)
 	}
 	switch len(values) {
 	case 0:
 		return nil
 	case 1:
-		return expandedLiteral(values[0])
+		return resolve(values[0])
 	default:
-		return expandedLiterals(values)
+		return mapAny(values, resolve)
 	}
+}
+
+func mapAny(values []any, fn func(any) any) []any {
+	out := make([]any, 0, len(values))
+	for _, v := range values {
+		out = append(out, fn(v))
+	}
+	return out
+}
+
+// odrlLogicalOperators are the ODRL LogicalConstraint operators (IM §2.6):
+// each takes a list of operand constraints, atomic or logical (recursive).
+var odrlLogicalOperators = []string{"and", "or", "xone", "andSequence"}
+
+// constraintLogical reports whether a constraint node is a LogicalConstraint,
+// returning its operator local name and child constraint nodes. The children
+// arrive as an @list (an ordered ODRL operand list) or a bare set.
+func constraintLogical(node map[string]any) (string, []map[string]any, bool) {
+	for _, op := range odrlLogicalOperators {
+		children := []map[string]any{}
+		for _, raw := range expandedValues(node, odrlIRI+op) {
+			item, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			if list, ok := item["@list"].([]any); ok {
+				for _, li := range list {
+					if child, ok := li.(map[string]any); ok {
+						children = append(children, child)
+					}
+				}
+				continue
+			}
+			children = append(children, item)
+		}
+		if len(children) > 0 {
+			return op, children, true
+		}
+	}
+	return "", nil, false
+}
+
+// evaluateConstraintNode evaluates an atomic or logical ODRL constraint tree
+// against the document's inline field values. resolvable is false when the
+// outcome depends on use-time context (spatial/dateTime/…) or a value not yet
+// provided, so the audit defers rather than decides.
+func evaluateConstraintNode(ctx context.Context, node map[string]any, fieldIndex map[string]odrlFieldInfo) (satisfied bool, resolvable bool, err error) {
+	if op, children, isLogical := constraintLogical(node); isLogical {
+		results := make([]bool, 0, len(children))
+		for _, child := range children {
+			childSatisfied, childResolvable, err := evaluateConstraintNode(ctx, child, fieldIndex)
+			if err != nil {
+				return false, false, err
+			}
+			if !childResolvable {
+				// The whole tree defers if any operand needs use-time context.
+				return false, false, nil
+			}
+			results = append(results, childSatisfied)
+		}
+		switch op {
+		case "or":
+			for _, r := range results {
+				if r {
+					return true, true, nil
+				}
+			}
+			return false, true, nil
+		case "xone":
+			satisfiedCount := 0
+			for _, r := range results {
+				if r {
+					satisfiedCount++
+				}
+			}
+			return satisfiedCount == 1, true, nil
+		default: // and, andSequence
+			for _, r := range results {
+				if !r {
+					return false, true, nil
+				}
+			}
+			return true, true, nil
+		}
+	}
+
+	leftOperand, ok := expandedFirst(node, odrlIRI+"leftOperand")
+	if !ok {
+		return false, false, nil
+	}
+	operandID, _ := leftOperand["@id"].(string)
+	if isODRLContextOperand(operandID) {
+		return false, false, nil // use-time context — deferred
+	}
+	operatorNode, ok := expandedFirst(node, odrlIRI+"operator")
+	if !ok {
+		return false, false, nil
+	}
+	operator := shaclLocalName(expandedID(operatorNode))
+	info, ok := fieldIndex[operandID]
+	if !ok || !info.hasValue {
+		return false, false, nil // no value yet — deferred
+	}
+	satisfied, err = evaluateODRLConstraintOPA(ctx, operator, info.value, resolveRightOperand(node, operator, fieldIndex))
+	return satisfied, true, err
 }
 
 // expandExternalODRLRules expands rule nodes supplied by an audit policy

@@ -2,7 +2,6 @@ package compiler
 
 import (
 	"bytes"
-	"context"
 	"testing"
 )
 
@@ -56,7 +55,7 @@ func TestExtractDocumentModelWithBareUUIDIDs(t *testing.T) {
 		t.Fatalf("expected prose segment %q, got %q", "fdsfsdfds", prose[0])
 	}
 
-	pdfBytes, err := renderPDF(context.Background(), doc)
+	pdfBytes, err := renderPDF(testSigningContext(), doc)
 	if err != nil {
 		t.Fatalf("renderPDF: %v", err)
 	}

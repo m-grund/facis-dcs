@@ -1,0 +1,192 @@
+import {
+  isAtomicConstraint,
+  type JsonLdReference,
+  type JsonLdTypedValue,
+  type OdrlConstraint,
+  type OdrlConstraintNode,
+  type OdrlLogicalConstraint,
+} from '@/models/dcs-jsonld'
+
+/**
+ * The editor's recursive model of an ODRL constraint (ODRL IM §2.5/§2.6). A
+ * node is either an atomic Constraint (leftOperand/operator/rightOperand) or a
+ * logical group (a combinator over child nodes, themselves atomic or logical —
+ * an arbitrarily deep tree). The rule and every duty share this model, so the
+ * full ODRL constraint grammar is authorable everywhere a constraint is.
+ */
+
+/** How a group's child constraints combine (ODRL LogicalConstraint IM §2.6). */
+export const CONSTRAINT_COMBINATORS = [
+  { op: 'and', label: 'ALL must hold' },
+  { op: 'or', label: 'ANY may hold' },
+  { op: 'xone', label: 'EXACTLY ONE must hold' },
+  { op: 'andSequence', label: 'ALL, in sequence' },
+] as const
+export type ConstraintCombinator = (typeof CONSTRAINT_COMBINATORS)[number]['op']
+
+export interface AtomicDraft {
+  kind: 'atomic'
+  leftOperand: string
+  operator: string
+  /** '' = a fixed literal boundary (use `value`); otherwise a field @id whose
+   *  value is agreed during contract negotiation. */
+  rightSource: string
+  value: string
+}
+
+export interface GroupDraft {
+  kind: 'group'
+  combine: ConstraintCombinator
+  children: ConstraintNodeDraft[]
+}
+
+export type ConstraintNodeDraft = AtomicDraft | GroupDraft
+
+export function isGroupDraft(node: ConstraintNodeDraft): node is GroupDraft {
+  return node.kind === 'group'
+}
+
+export function newAtomic(leftOperand: string, operator: string): AtomicDraft {
+  return { kind: 'atomic', leftOperand, operator, rightSource: '', value: '' }
+}
+
+export function newGroup(): GroupDraft {
+  return { kind: 'group', combine: 'and', children: [] }
+}
+
+function typed(value: string): JsonLdTypedValue {
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return { '@value': value, '@type': 'xsd:dateTime' }
+  const isNumber = value !== '' && !Number.isNaN(Number(value))
+  return { '@value': value, '@type': isNumber ? 'xsd:decimal' : 'xsd:string' }
+}
+
+function literalRightOperand(value: string, operator: string): JsonLdTypedValue | JsonLdTypedValue[] | undefined {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  if (operator === 'odrl:isAnyOf' || operator === 'odrl:isNoneOf' || operator === 'odrl:isAllOf') {
+    return trimmed.split(',').map((part) => typed(part.trim()))
+  }
+  return typed(trimmed)
+}
+
+function buildAtomic(atomic: AtomicDraft): OdrlConstraint {
+  const constraint: OdrlConstraint = {
+    '@type': 'odrl:Constraint',
+    'odrl:leftOperand': { '@id': atomic.leftOperand },
+    'odrl:operator': { '@id': atomic.operator },
+  }
+  const right: JsonLdTypedValue | JsonLdTypedValue[] | JsonLdReference | undefined = atomic.rightSource
+    ? { '@id': atomic.rightSource }
+    : literalRightOperand(atomic.value, atomic.operator)
+  if (right !== undefined) constraint['odrl:rightOperand'] = right
+  return constraint
+}
+
+function logicalConstraint(combine: ConstraintCombinator, nodes: OdrlConstraintNode[]): OdrlLogicalConstraint {
+  const list = { '@list': nodes }
+  switch (combine) {
+    case 'or':
+      return { '@type': 'odrl:LogicalConstraint', 'odrl:or': list }
+    case 'xone':
+      return { '@type': 'odrl:LogicalConstraint', 'odrl:xone': list }
+    case 'andSequence':
+      return { '@type': 'odrl:LogicalConstraint', 'odrl:andSequence': list }
+    default:
+      return { '@type': 'odrl:LogicalConstraint', 'odrl:and': list }
+  }
+}
+
+/** Builds one node; a group of a single child collapses to that child, and an
+ *  empty (or all-empty) node is dropped (returns undefined). */
+function buildNode(node: ConstraintNodeDraft): OdrlConstraintNode | undefined {
+  if (node.kind === 'atomic') {
+    return node.leftOperand ? buildAtomic(node) : undefined
+  }
+  const children = node.children.map(buildNode).filter((n): n is OdrlConstraintNode => n !== undefined)
+  if (!children.length) return undefined
+  const [only] = children
+  if (children.length === 1 && only) return only
+  return logicalConstraint(node.combine, children)
+}
+
+/**
+ * Composes a rule's (or duty's) odrl:constraint value from the root group: an
+ * ALL root is a plain conjunction array (which may itself contain nested
+ * logical nodes, ODRL IM §2.5); any other combinator over more than one node
+ * wraps a single LogicalConstraint (IM §2.6).
+ */
+export function composeConstraintTree(root: GroupDraft): OdrlConstraintNode[] | undefined {
+  const children = root.children.map(buildNode).filter((n): n is OdrlConstraintNode => n !== undefined)
+  if (!children.length) return undefined
+  if (root.combine === 'and' || children.length === 1) return children
+  return [logicalConstraint(root.combine, children)]
+}
+
+function readAtomic(constraint: OdrlConstraint): AtomicDraft {
+  const right = constraint['odrl:rightOperand']
+  if (right && '@id' in right) {
+    return {
+      kind: 'atomic',
+      leftOperand: constraint['odrl:leftOperand']['@id'],
+      operator: constraint['odrl:operator']['@id'],
+      rightSource: right['@id'],
+      value: '',
+    }
+  }
+  const value = Array.isArray(right) ? right.map((r) => r['@value']).join(', ') : (right?.['@value'] ?? '')
+  return {
+    kind: 'atomic',
+    leftOperand: constraint['odrl:leftOperand']['@id'],
+    operator: constraint['odrl:operator']['@id'],
+    rightSource: '',
+    value,
+  }
+}
+
+function logicalList(node: OdrlLogicalConstraint, op: ConstraintCombinator): OdrlConstraintNode[] | undefined {
+  switch (op) {
+    case 'or':
+      return node['odrl:or']?.['@list']
+    case 'xone':
+      return node['odrl:xone']?.['@list']
+    case 'andSequence':
+      return node['odrl:andSequence']?.['@list']
+    default:
+      return node['odrl:and']?.['@list']
+  }
+}
+
+function parseNode(node: OdrlConstraintNode): ConstraintNodeDraft | undefined {
+  if (isAtomicConstraint(node)) return readAtomic(node)
+  return parseLogical(node)
+}
+
+function parseLogical(node: OdrlLogicalConstraint): GroupDraft | undefined {
+  for (const { op } of CONSTRAINT_COMBINATORS) {
+    const list = logicalList(node, op)
+    if (list) {
+      return {
+        kind: 'group',
+        combine: op,
+        children: list.map(parseNode).filter((n): n is ConstraintNodeDraft => n !== undefined),
+      }
+    }
+  }
+  return undefined
+}
+
+/** Reads a rule's (or duty's) odrl:constraint back into the editor's root
+ *  group: a single LogicalConstraint surfaces its combinator and subtree; a
+ *  plain list is an ALL conjunction whose members may themselves be logical. */
+export function parseConstraintTree(nodes: OdrlConstraintNode[]): GroupDraft {
+  const [first] = nodes
+  if (nodes.length === 1 && first && !isAtomicConstraint(first)) {
+    const group = parseLogical(first)
+    if (group) return group
+  }
+  return {
+    kind: 'group',
+    combine: 'and',
+    children: nodes.map(parseNode).filter((n): n is ConstraintNodeDraft => n !== undefined),
+  }
+}

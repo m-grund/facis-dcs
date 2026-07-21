@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -8,34 +9,42 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/json"
 	"math/big"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"time"
 )
 
-// testC2PASigner is the ECDSA P-256 key the test signing server uses in place of
-// the backend's PKCS#11 dcs-c2pa key. Its self-signed certificate is the x5chain
-// the compiler embeds during tests.
+// testC2PASigner is the ECDSA P-256 key that stands in for the backend's PKCS#11
+// dcs-c2pa key under test. Its self-signed certificate is the x5chain the
+// compiler embeds; pdf-core itself holds no key, so tests inject an in-process
+// Signer via testSigningContext rather than reaching a signing endpoint.
 var testC2PASigner *ecdsa.PrivateKey
 
+// testDeterministicSigner is the in-process Signer tests inject: it signs the
+// captured COSE Sig_structure with testC2PASigner exactly as the DCS backend
+// would with its dcs-c2pa key. Signing is deterministic (RFC 6979-style nonce)
+// so repeated compilations of the same payload are byte-identical, preserving
+// pdf-core's determinism guarantee under test.
+type testDeterministicSigner struct{}
+
+func (testDeterministicSigner) Sign(_ context.Context, data []byte) ([]byte, error) {
+	return deterministicES256(testC2PASigner, data), nil
+}
+
+// testSigningContext returns a context carrying the in-process test signer, as
+// the DCS backend's prepare/embed flow supplies a real signer in production.
+func testSigningContext() context.Context {
+	return WithSigner(context.Background(), testDeterministicSigner{})
+}
+
 // startTestSigningServer generates a P-256 key + self-signed leaf, writes the
-// leaf as an x5chain PEM into dir, starts an HTTP server that mirrors the
-// backend's POST /internal/c2pa/sign (ES256 over the posted Sig_structure), and
-// points the pdf-core signing env at it. It returns the server so callers can
-// close it.
-//
-// Signing is deterministic (RFC 6979-style nonce) so repeated compilations of
-// the same payload produce byte-identical PDFs, preserving pdf-core's
-// determinism guarantee under test. Production uses a real HSM whose ES256 is
-// randomized; ZeroCOSESignatures makes the verification path tolerate that.
-func startTestSigningServer(dir string) (*httptest.Server, error) {
+// leaf as an x5chain PEM into dir, and sets testC2PASigner. pdf-core embeds the
+// x5chain but never signs; tests sign in-process via testSigningContext.
+func startTestSigningServer(dir string) error {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	testC2PASigner = key
 
@@ -50,35 +59,15 @@ func startTestSigningServer(dir string) (*httptest.Server, error) {
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, key.Public(), key)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	chainPath := filepath.Join(dir, "x5chain.pem")
 	if err := os.WriteFile(chainPath, certPEM(der), 0o644); err != nil {
-		return nil, err
+		return err
 	}
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req struct {
-			SigStructure string `json:"sig_structure"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		sigStructure, err := base64.StdEncoding.DecodeString(req.SigStructure)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		sig := deterministicES256(key, sigStructure)
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"signature": base64.StdEncoding.EncodeToString(sig),
-		})
-	}))
-
-	_ = os.Setenv(envSigningEndpoint, srv.URL)
 	_ = os.Setenv(envX5ChainPEMFile, chainPath)
-	return srv, nil
+	return nil
 }
 
 func certPEM(der []byte) []byte {
@@ -160,12 +149,13 @@ func rfc6979Nonce(n, d *big.Int, hash []byte) *big.Int {
 	return new(big.Int).Mod(new(big.Int).SetBytes(sum[:]), n)
 }
 
-// setupTestSigning is invoked from TestMain to make signing available to every
-// test that compiles a PDF. It fails the process hard if setup fails.
-func setupTestSigning() (*httptest.Server, error) {
+// setupTestSigning is invoked from TestMain to make signing material (the
+// x5chain cert + the in-process test key) available to every test that compiles
+// a PDF. It fails the process hard if setup fails.
+func setupTestSigning() error {
 	dir, err := os.MkdirTemp("", "dcs-c2pa-test")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	return startTestSigningServer(dir)
 }
