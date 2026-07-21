@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { TemplateType, type TemplateTypeValue } from '@template-repository/models/contract-template'
-import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { TemplateType, type TemplateTypeValue } from '@template-repository/models/contract-template'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import CatalogueTemplateDetailsInfo from '@/modules/template-catalogue/components/catalogue-template/CatalogueTemplateDetailsInfo.vue'

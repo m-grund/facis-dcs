@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, ref, watch } from 'vue'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
@@ -15,8 +17,6 @@ import {
   getSemanticConditionsFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 

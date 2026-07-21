@@ -9,9 +9,9 @@ import {
   Square3Stack3DIcon,
   SquaresPlusIcon,
 } from '@heroicons/vue/20/solid'
-import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
 import { nextTick } from 'vue'
 import { createRouter, createWebHistory, type RouteRecordRaw, START_LOCATION } from 'vue-router'
+import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
 import { getUIBasePath } from '@/config'
 import { useScrollStore } from '@/core/store/scroll'
 import { OID4VP_STATE_KEY } from '@/hydra-login-guard'

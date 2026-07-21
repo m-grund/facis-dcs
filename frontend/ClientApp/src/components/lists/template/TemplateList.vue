@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, type Ref, ref, useId, watch } from 'vue'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import Pagination from '@/components/Pagination.vue'
 import { ROUTES } from '@/router/router'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store.ts'

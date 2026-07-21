@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import { formatNumberInput, normalizeNumberInput } from '@template-repository/utils/number-format'
 import { resolveValueOptions, type ValueOption } from '@template-repository/utils/value-option-catalog'
-import { computed, ref, watch } from 'vue'
 import type {
   SemanticParameterType,
   SemanticValueConstraint,

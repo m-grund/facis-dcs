@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { usePageStore } from '@core/store/page'
 import { storeToRefs } from 'pinia'
 import { onMounted, useTemplateRef } from 'vue'
 import { RouterView } from 'vue-router'
+import { usePageStore } from '@core/store/page'
 import PageNavBar from '@/core/layouts/page/PageNavBar.vue'
 import PageSidebar from '@/core/layouts/page/PageSidebar.vue'
 import { useScrollStore } from '@/core/store/scroll'

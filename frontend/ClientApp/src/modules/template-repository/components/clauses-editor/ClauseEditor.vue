@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, ref } from 'vue'
 import ClauseTextEditor from '@template-repository/components/clauses-editor/ClauseTextEditor.vue'
 import OdrlRuleBuilder from '@template-repository/components/clauses-editor/OdrlRuleBuilder.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
@@ -7,8 +9,6 @@ import {
   ONTOLOGY_ASSETS,
   ONTOLOGY_DOMAIN_FIELDS,
 } from '@template-repository/utils/ontology-domain-fields'
-import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
 import type { DcsContentSegment, OdrlRule } from '@/models/dcs-jsonld'
 import type { DomainFieldDefinition, SemanticCondition } from '@template-repository/models/contract-template'
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { isDcsMergedApprovedTemplate } from '@template-repository/store/dcsDraftStore'
 import {
   getBlocksFromTemplateData,
@@ -10,7 +11,6 @@ import {
   isMergedBlockId,
   isSameTemplateDataRef,
 } from '@template-repository/utils/template-data-ref'
-import { computed } from 'vue'
 import ConditionalWrapper from '@/core/components/ConditionalWrapper.vue'
 import PreviewClauseBlock from './PreviewClauseBlock.vue'
 import PreviewSectionBlock from './PreviewSectionBlock.vue'

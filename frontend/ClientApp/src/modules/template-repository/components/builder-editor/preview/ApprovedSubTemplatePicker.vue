@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import {
   getBlocksFromTemplateData,
   getLayoutFromTemplateData,
   getSemanticConditionsFromTemplateData,
 } from '@template-repository/store/dcsDraftStore'
-import { ref } from 'vue'
 import type { SubTemplateSnapshot } from '@/models/contract-template'
 
 const props = withDefaults(

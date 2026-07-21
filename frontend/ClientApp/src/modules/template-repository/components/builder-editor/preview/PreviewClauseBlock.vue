@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   isNewline,
   isPlaceholder,
@@ -6,7 +7,6 @@ import {
   parseSegmentsFromContent,
 } from '@template-repository/composables/useClauseTextChips'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
-import { computed } from 'vue'
 import { PREVIEW_NEWLINE_SPAN_CLASS } from './preview-classes'
 import PreviewParamInput from './PreviewParamInput.vue'
 import PreviewTextBlock from './PreviewTextBlock.vue'
