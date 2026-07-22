@@ -15,6 +15,7 @@ import (
 
 	signaturemanagement "digital-contracting-service/gen/signature_management"
 	"digital-contracting-service/internal/auth"
+	"digital-contracting-service/internal/auth/oid4vp"
 	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/base"
 	"digital-contracting-service/internal/base/conf"
@@ -81,6 +82,18 @@ type signatureManagementsrvc struct {
 	// PublicAPIBase is the externally-resolvable API base the request object's
 	// request_uri, document_locations, and response_uri are built from.
 	PublicAPIBase string
+	// PIDDCQLQuery is the DCQL query for the PID credential a pending signing
+	// ceremony's request object asks the wallet to present. Same value the auth
+	// service loads from OID4VP_PID_DCQL_QUERY for the PID login flow.
+	PIDDCQLQuery any
+	// DCQLQuery is the DCQL query for the PoA credential merged into that same
+	// ceremony request object alongside PIDDCQLQuery. Same value the auth service
+	// loads from OID4VP_DCQL_QUERY for login.
+	DCQLQuery any
+	// Trust is the issuer trust configuration used to verify PID and PoA
+	// presentations at the ceremony callback. Same trust anchors the auth login
+	// and PID-verify flows use.
+	Trust *oid4vp.TrustConfig
 	auth.JWTAuthenticator
 }
 
@@ -88,7 +101,8 @@ func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db
 	auditTrailReader base.AuditTrailReader, vcSigner provenance.VCSigner, issuerDID string,
 	ipfsClient *ipfs.APIClient, pdfCore *pdfcore.Client, archiveRepo cwedb.ContractRepo, archiveNotary cwecommand.ArchiveNotary,
 	archiveTSA *tsa.APIClient, vcIssuer provenance.VCIssuer,
-	requestSigner oid4vprequest.Signer, oid4vpClientID, publicAPIBase string) signaturemanagement.Service {
+	requestSigner oid4vprequest.Signer, oid4vpClientID, publicAPIBase string,
+	pidDCQLQuery, dcqlQuery any, trust *oid4vp.TrustConfig) signaturemanagement.Service {
 
 	return &signatureManagementsrvc{
 		JWTAuthenticator: jwtAuth,
@@ -107,6 +121,9 @@ func NewSignatureManagement(db *sqlx.DB, jwtAuth auth.JWTAuthenticator, cRepo db
 		RequestSigner:    requestSigner,
 		OID4VPClientID:   oid4vpClientID,
 		PublicAPIBase:    publicAPIBase,
+		PIDDCQLQuery:     pidDCQLQuery,
+		DCQLQuery:        dcqlQuery,
+		Trust:            trust,
 	}
 }
 

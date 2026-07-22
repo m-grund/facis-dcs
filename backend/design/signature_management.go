@@ -705,6 +705,8 @@ var _ = Service("SignatureManagement", func() {
 
 		Payload(func() {
 			Attribute("ceremony_id", String, "Identifier of the ceremony whose signing request object is served")
+			Attribute("wallet_nonce", String, "Wallet-provided nonce echoed in the authorization request object when request_uri_method=post")
+			Attribute("wallet_metadata", String, "Wallet metadata JSON submitted with request_uri_method=post")
 			Required("ceremony_id")
 		})
 
@@ -713,6 +715,7 @@ var _ = Service("SignatureManagement", func() {
 		Error("internal_error", ErrorResult, "Internal server error")
 
 		HTTP(func() {
+			POST("/signature/request/{ceremony_id}/object")
 			GET("/signature/request/{ceremony_id}/object")
 			SkipResponseBodyEncodeDecode()
 			Response(StatusOK, func() {

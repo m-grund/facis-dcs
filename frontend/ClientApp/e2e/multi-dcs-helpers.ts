@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, BrowserContext, Page } from '@playwright/test'
+import { applySession, type DcsRole, expect, mintSession } from './dcs-test'
 import {
   E2E_API_BASE,
   E2E_API_BASE_B,
@@ -11,11 +11,11 @@ import {
   E2E_FRONTEND_B_ORIGIN,
   E2E_STATUSLIST_URL,
 } from '../playwright.config'
-import { applySession, type DcsRole, expect, mintSession } from './dcs-test'
+import type { Browser, BrowserContext, Page } from '@playwright/test'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '../../..')
-const python = process.env.E2E_BDD_PYTHON || path.join(homedir(), '.dcs-bdd-venv', 'bin', 'python3')
+const python = process.env.E2E_BDD_PYTHON ?? path.join(homedir(), '.dcs-bdd-venv', 'bin', 'python3')
 
 /**
  * Where the vertical persists every hop's PDF and its embedded JSON-LD for human
@@ -75,7 +75,7 @@ export async function openInstanceB(browser: Browser): Promise<Instance> {
  * Signs an APPROVED contract on a given instance through that instance's Secure
  * Contract Viewer, exactly as a real signer would (ADR-12): open from the
  * signing list, verify, run the wallet PID+PoA ceremony (the wallet leg arrives
- * over the wallet's own webhook channel against this instance's API base),
+ * over OpenID4VP direct_post against this instance's API base),
  * download the to-be-signed PDF, sign it externally with the test wallet's key
  * via the DSS SCA, upload it, and confirm SIGNED. The signature field is the
  * signing party's own DCS DID slot; the wallet discovers it from the PDF.
@@ -129,38 +129,21 @@ export async function signOnInstance(inst: Instance, contractDid: string, signat
     ceremonyResponse.ok(),
     `start signing ceremony on ${inst.origin}: HTTP ${ceremonyResponse.status()} ${await ceremonyResponse.text().catch(() => '')}`,
   ).toBeTruthy()
-  const ceremony = (await ceremonyResponse.json()) as { ceremony_id: string }
+  const ceremony = (await ceremonyResponse.json()) as { ceremony_id: string; wallet_uri: string }
   expect(ceremony.ceremony_id).toBeTruthy()
+  expect(ceremony.wallet_uri).toBeTruthy()
 
-  execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.ceremony_id], {
+  execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.wallet_uri], {
     cwd: repoRoot,
     env: { ...process.env, STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL, BDD_DCS_BASE_URL: inst.apiBase },
     stdio: 'pipe',
   })
 
-  // The viewer only fetches the to-be-signed PDF once its poll sees the ceremony
-  // verified; a rejected ceremony makes applySignature return silently, with no
-  // error and no request. Assert the wallet leg landed so that failure reports
-  // the actual ceremony status instead of stalling on a missing response.
-  const token = await inst.page.evaluate(() => window.localStorage.getItem('access_token'))
-  await expect
-    .poll(
-      async () => {
-        const r = await inst.page.request.get(
-          `${inst.apiBase}/signature/request/${encodeURIComponent(ceremony.ceremony_id)}`,
-          { headers: { Authorization: `Bearer ${token}` }, timeout: 30_000 },
-        )
-        if (!r.ok()) return `HTTP ${r.status()}`
-        return ((await r.json()) as { status?: string }).status ?? 'unknown'
-      },
-      { timeout: 90_000, message: `signing ceremony on ${inst.origin} never reached "verified"` },
-    )
-    .toBe('verified')
-
   const preparedPath = path.join(tmpdir(), `prepared-${ceremony.ceremony_id}.pdf`)
-  const prepared = await preparedResponse.catch((e: Error) => {
+  const prepared = await preparedResponse.catch((e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e)
     throw new Error(
-      `${e.message}\nviewer signature calls:\n  ${viewerCalls.join('\n  ') || '(none)'}\nviewer console errors:\n  ${viewerErrors.join('\n  ') || '(none)'}`,
+      `${msg}\nviewer signature calls:\n  ${viewerCalls.join('\n  ') || '(none)'}\nviewer console errors:\n  ${viewerErrors.join('\n  ') || '(none)'}`,
     )
   })
   expect(
@@ -700,6 +683,35 @@ export async function createContractViaUi(inst: Instance, templateName: string, 
   const contractDid = String(((await resp.json()) as { did?: string }).did ?? '')
   expect(contractDid).toBeTruthy()
   return contractDid
+}
+
+/**
+ * Fills the contract's Payment Amount through the real edit UI and saves it via
+ * "Update" — Contract Generation ends with a filled-out contract (SRS §2.2.2),
+ * and command/offer.go's closedness gate rejects offering a draft whose
+ * required placeholder is still unfilled, so the originator must propose its
+ * opening amount before the draft may leave the instance.
+ */
+export async function fillContractAmountOn(inst: Instance, contractDid: string, value: string): Promise<void> {
+  await inst.gotoAs('Contract Creator', `/ui/contracts/edit/${contractDid}`)
+  await inst.page
+    .getByRole('tab', { name: /content/i })
+    .or(inst.page.getByText('Contract Content', { exact: true }))
+    .first()
+    .click()
+  const amount = inst.page
+    .getByRole('spinbutton', { name: /amount/i })
+    .or(inst.page.getByRole('textbox', { name: /amount/i }))
+    .first()
+  await expect(amount).toBeVisible({ timeout: 30_000 })
+  await amount.fill(value)
+  await amount.blur()
+  const updated = inst.page.waitForResponse(
+    (r) => r.url().includes('/contract/update') && r.request().method() === 'PUT',
+  )
+  await inst.page.getByRole('button', { name: 'Update', exact: true }).click()
+  const resp = await updated
+  expect(resp.ok(), `contract update ${resp.status()}: ${await resp.text()}`).toBeTruthy()
 }
 
 /**

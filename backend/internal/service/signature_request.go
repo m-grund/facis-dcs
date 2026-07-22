@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -14,14 +15,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"goa.design/clue/log"
 
 	signaturemanagement "digital-contracting-service/gen/signature_management"
+	"digital-contracting-service/internal/auth/oid4vp"
 	oid4vprequest "digital-contracting-service/internal/auth/oid4vp/request"
 	"digital-contracting-service/internal/base/conf"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/middleware"
 	"digital-contracting-service/internal/signingmanagement/command"
 	db "digital-contracting-service/internal/signingmanagement/db"
+	"digital-contracting-service/internal/signingmanagement/pidverify"
 )
 
 // signingRequestTTL is how long a published OID4VP signing request stays valid
@@ -135,16 +139,46 @@ func (s *signatureManagementsrvc) PublishSignatureRequest(ctx context.Context, r
 	}, nil
 }
 
-// SignatureRequestObject serves the signed OID4VP Document-Retrieval request
-// object (JAR) the wallet fetches by reference — built from the ceremony's stored
-// digest, nonce, and expiry, exactly like authSvc.PresentationRequest serves the
-// login/PID JAR.
+// SignatureRequestObject serves the signed OpenID4VP request object (JAR) the
+// wallet fetches by reference. While the ceremony is pending the JAR requests
+// PID and PoA; after the document is prepared it is a Document-Retrieval JAR
+// (ADR-12).
 func (s *signatureManagementsrvc) SignatureRequestObject(ctx context.Context, p *signaturemanagement.SignatureRequestObjectPayload) (io.ReadCloser, error) {
-	ceremony, err := s.loadPublishedCeremony(ctx, p.CeremonyID)
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	ceremony, err := s.getCeremony(ctx, p.CeremonyID)
+	if err != nil {
+		return nil, err
+	}
+	if ceremony == nil {
+		return nil, signaturemanagement.MakeNotFound(fmt.Errorf("ceremony %s not found", p.CeremonyID))
+	}
+
+	if ceremony.PreparedPDFSHA256 != nil && ceremony.RequestNonce != nil && ceremony.RequestExpiresAt != nil && ceremony.SignerDID != nil {
+		published, err := s.loadPublishedCeremony(ctx, p.CeremonyID)
+		if err != nil {
+			return nil, err
+		}
+		return s.buildDocumentRetrievalJAR(published)
+	}
+
+	pending, err := s.loadPendingCeremony(ctx, p.CeremonyID)
 	if err != nil {
 		return nil, err
 	}
 
+	walletNonce := ""
+	if p.WalletNonce != nil {
+		walletNonce = strings.TrimSpace(*p.WalletNonce)
+	}
+
+	return s.buildIdentityPresentationJAR(ctx, pending, walletNonce)
+}
+
+// buildDocumentRetrievalJAR builds the published-ceremony JAR that asks the
+// wallet to fetch and sign the prepared PDF (ADR-12).
+func (s *signatureManagementsrvc) buildDocumentRetrievalJAR(ceremony *db.SignatureCeremony) (io.ReadCloser, error) {
 	digestBytes, decErr := hex.DecodeString(*ceremony.PreparedPDFSHA256)
 	if decErr != nil {
 		return nil, signaturemanagement.MakeInternalError(fmt.Errorf("decode prepared document digest: %w", decErr))
@@ -174,6 +208,35 @@ func (s *signatureManagementsrvc) SignatureRequestObject(ctx context.Context, p 
 	return io.NopCloser(bytes.NewReader([]byte(jwt))), nil
 }
 
+// buildIdentityPresentationJAR builds the pending-ceremony JAR that asks the
+// wallet for PID and PoA presentations.
+func (s *signatureManagementsrvc) buildIdentityPresentationJAR(ctx context.Context, ceremony *db.SignatureCeremony, walletNonce string) (io.ReadCloser, error) {
+	if s.RequestSigner == nil || s.PublicAPIBase == "" || s.PIDDCQLQuery == nil || s.DCQLQuery == nil {
+		log.Printf(ctx, "SignatureRequestObject: OpenID4VP request signing is not configured")
+		return nil, signaturemanagement.MakeInternalError(fmt.Errorf("could not build the authorization request"))
+	}
+
+	dcqlQuery, err := mergeSigningCeremonyDCQL(s.PIDDCQLQuery, s.DCQLQuery)
+	if err != nil {
+		return nil, signaturemanagement.MakeInternalError(fmt.Errorf("could not build the authorization request"))
+	}
+
+	jwt, err := oid4vprequest.BuildJWT(s.RequestSigner, oid4vprequest.Params{
+		ClientID:    pidverify.Audience,
+		ResponseURI: s.signatureRequestURL(ceremony.ID, "callback"),
+		State:       ceremony.ID,
+		Nonce:       ceremony.Nonce,
+		WalletNonce: walletNonce,
+		ExpiresAt:   ceremony.ExpiresAt,
+		DCQLQuery:   dcqlQuery,
+	})
+	if err != nil {
+		log.Printf(ctx, "SignatureRequestObject: build JAR failed: %v", err)
+		return nil, signaturemanagement.MakeInternalError(fmt.Errorf("could not build the authorization request"))
+	}
+	return io.NopCloser(bytes.NewReader([]byte(jwt))), nil
+}
+
 // SignatureRequestDocument serves the stored to-be-signed PDF the wallet fetches
 // from the request object's document_locations.
 func (s *signatureManagementsrvc) SignatureRequestDocument(ctx context.Context, p *signaturemanagement.SignatureRequestDocumentPayload) (io.ReadCloser, error) {
@@ -187,12 +250,9 @@ func (s *signatureManagementsrvc) SignatureRequestDocument(ctx context.Context, 
 	return io.NopCloser(bytes.NewReader(ceremony.PreparedPDF)), nil
 }
 
-// SignatureRequestCallback accepts the wallet's signed document at the request
-// object's response_uri and finalizes the contract, reusing the exact validate +
-// finalize path /signature/submit uses (Applier.SubmitSignature): the DSS
-// sole-control gate then Applier.finalize. The publishing signer's participant
-// context, captured at publish, is replayed so the JWT-less callback attributes
-// the signature correctly. The published request is single-use.
+// SignatureRequestCallback is the OpenID4VP response_uri for a ceremony. While
+// pending it accepts a direct_post vp_token with PID and PoA; after publish it
+// accepts the signed document (ADR-12).
 func (s *signatureManagementsrvc) SignatureRequestCallback(ctx context.Context, p *signaturemanagement.SignatureRequestCallbackPayload, body io.ReadCloser) (res *signaturemanagement.SMSignatureRequestCallbackResponse, err error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -202,8 +262,16 @@ func (s *signatureManagementsrvc) SignatureRequestCallback(ctx context.Context, 
 		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("parse direct_post body: %w", err))
 	}
 	if walletErr := strings.TrimSpace(form.Get("error")); walletErr != "" {
-		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("wallet reported a signing error: %s", walletErr))
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("wallet reported an error: %s", walletErr))
 	}
+	if state := strings.TrimSpace(form.Get("state")); state != "" && state != p.CeremonyID {
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("callback state %q does not match ceremony %s", state, p.CeremonyID))
+	}
+
+	if vpToken := strings.TrimSpace(form.Get("vp_token")); vpToken != "" {
+		return s.ceremonyPresentationDirectPost(ctx, p.CeremonyID, vpToken)
+	}
+
 	signedDocs := formList(form, "documentWithSignature")
 	if len(signedDocs) == 0 {
 		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("no documentWithSignature was posted"))
@@ -211,9 +279,6 @@ func (s *signatureManagementsrvc) SignatureRequestCallback(ctx context.Context, 
 	signedPDF, decErr := base64.StdEncoding.DecodeString(strings.TrimSpace(signedDocs[0]))
 	if decErr != nil {
 		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("decode signed document: %w", decErr))
-	}
-	if state := strings.TrimSpace(form.Get("state")); state != "" && state != p.CeremonyID {
-		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("callback state %q does not match ceremony %s", state, p.CeremonyID))
 	}
 
 	ceremony, err := s.loadPublishedCeremony(ctx, p.CeremonyID)
@@ -295,6 +360,70 @@ func (s *signatureManagementsrvc) SignatureRequestCallback(ctx context.Context, 
 	}, nil
 }
 
+func (s *signatureManagementsrvc) ceremonyPresentationDirectPost(ctx context.Context, ceremonyID, vpToken string) (*signaturemanagement.SMSignatureRequestCallbackResponse, error) {
+	ceremony, err := s.loadPendingCeremony(ctx, ceremonyID)
+	if err != nil {
+		return nil, err
+	}
+
+	presCtx := oid4vp.PresentationContext{
+		Nonce:    ceremony.Nonce,
+		ClientID: pidverify.Audience,
+	}
+
+	pidPresentation, err := extractSinglePresentation(vpToken, oid4vp.PIDCredentialQueryID)
+	if err != nil {
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("invalid vp_token: %w", err))
+	}
+
+	poaPresentation, err := extractSinglePresentation(vpToken, oid4vp.PoACredentialQueryID)
+	if err != nil {
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("%w: no Power of Attorney credential was presented at signing", command.ErrPoAUnauthorized))
+	}
+
+	verifiedPoA, err := oid4vp.NewVerifier(s.Trust).Verify(poaPresentation, presCtx)
+	if err != nil {
+		log.Printf(ctx, "SignatureRequestCallback: Verify PoA failed for ceremony %s: %v", ceremonyID, err)
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("vp verification failed: PoA: %w", err))
+	}
+
+	verifiedPID, err := oid4vp.NewVerifier(s.Trust).VerifyPID(pidPresentation, presCtx)
+	if err != nil {
+		log.Printf(ctx, "SignatureRequestCallback: VerifyPID failed for ceremony %s: %v", ceremonyID, err)
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("vp verification failed: PID: %w", err))
+	}
+
+	var pidClaims any
+	if len(verifiedPID.RawClaims) > 0 {
+		_ = json.Unmarshal(verifiedPID.RawClaims, &pidClaims)
+	}
+
+	handler := command.WebhookHandler{DB: s.DB, CeremonyRepo: s.CeremonyRepo}
+	verified, err := handler.CompletePresentation(ctx, command.WebhookCmd{
+		CeremonyID:      ceremonyID,
+		VpToken:         pidPresentation,
+		PidClaims:       pidClaims,
+		PoAOrganization: strings.TrimSpace(verifiedPoA.ParticipantDID),
+		PoARoles:        verifiedPoA.Roles,
+	})
+
+	if err != nil {
+		switch {
+		case errors.Is(err, command.ErrPoAUnauthorized):
+			return nil, signaturemanagement.MakeBadRequest(err)
+		case errors.Is(err, command.ErrCeremonyNotFound):
+			return nil, signaturemanagement.MakeNotFound(err)
+		default:
+			return nil, signaturemanagement.MakeInternalError(err)
+		}
+	}
+
+	return &signaturemanagement.SMSignatureRequestCallbackResponse{
+		CeremonyID: verified.ID,
+		Status:     verified.Status,
+	}, nil
+}
+
 // getCeremony reads a ceremony by id in a short read transaction.
 func (s *signatureManagementsrvc) getCeremony(ctx context.Context, id string) (*db.SignatureCeremony, error) {
 	tx, err := s.DB.BeginTxx(ctx, nil)
@@ -306,6 +435,29 @@ func (s *signatureManagementsrvc) getCeremony(ctx context.Context, id string) (*
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(err)
 	}
+	return ceremony, nil
+}
+
+// loadPendingCeremony resolves a pending ceremony that has not yet been
+// published as a document-retrieval signing request.
+func (s *signatureManagementsrvc) loadPendingCeremony(ctx context.Context, id string) (*db.SignatureCeremony, error) {
+	ceremony, err := s.getCeremony(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if ceremony == nil {
+		return nil, signaturemanagement.MakeNotFound(fmt.Errorf("ceremony %s not found", id))
+	}
+
+	if ceremony.Status != db.CeremonyPending {
+		return nil, signaturemanagement.MakeNotFound(fmt.Errorf("ceremony %s not found", id))
+	}
+
+	if !time.Now().UTC().Before(ceremony.ExpiresAt) {
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("ceremony expired"))
+	}
+
 	return ceremony, nil
 }
 
@@ -364,4 +516,72 @@ func formList(form url.Values, name string) []string {
 		return indexed
 	}
 	return form[name]
+}
+
+func mergeSigningCeremonyDCQL(parts ...any) (any, error) {
+	var credentials []any
+	var ids []string
+
+	for _, part := range parts {
+		creds, err := credentialsFromDCQL(part)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, cred := range creds {
+			entry, ok := cred.(map[string]any)
+			if !ok {
+				continue
+			}
+
+			id, _ := entry["id"].(string)
+			id = strings.TrimSpace(id)
+
+			if id == "" {
+				continue
+			}
+
+			ids = append(ids, id)
+			credentials = append(credentials, cred)
+		}
+	}
+
+	if len(credentials) == 0 {
+		return nil, fmt.Errorf("no credentials")
+	}
+
+	out := map[string]any{"credentials": credentials}
+
+	if len(ids) > 1 {
+		option := make([]any, len(ids))
+
+		for i, id := range ids {
+			option[i] = id
+		}
+
+		out["credential_sets"] = []any{
+			map[string]any{"options": []any{option}},
+		}
+	}
+
+	return out, nil
+}
+
+func credentialsFromDCQL(dcqlQuery any) ([]any, error) {
+	query, ok := dcqlQuery.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("dcql query must be a JSON object")
+	}
+
+	rawCredentials, ok := query["credentials"]
+	if !ok {
+		return nil, fmt.Errorf("missing credentials")
+	}
+
+	credentials, ok := rawCredentials.([]any)
+	if !ok || len(credentials) == 0 {
+		return nil, fmt.Errorf("credentials must be a non-empty array")
+	}
+
+	return credentials, nil
 }

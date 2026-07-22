@@ -28,6 +28,25 @@ Feature: Contract state machine refactor — Offer, Withdraw, and the extended t
     Then get http 200:Success code
     And the contract "Offer Draft Contract" is in state "OFFERED"
 
+  # SRS 1.2 defines an offer as "a clear and definite proposal", and SRS 2.2.2
+  # requires Contract Generation to end with a filled-out contract "ready to
+  # be sent to the Responder" — so the offer transmission enforces contract
+  # closedness (backend/internal/contractworkflowengine/command/offer.go
+  # validateOfferReady): a draft still carrying an unresolved required
+  # placeholder is rejected with a client error and stays in DRAFT until the
+  # placeholder is filled.
+  @SRS-1.2 @SRS-2.2.2 @SRS-2.2.6 @UC-03
+  Scenario: Offering a draft with an unresolved required placeholder is rejected until the draft is filled out
+    Given I am authenticated with roles: "Contract Creator"
+    And contract "Open Placeholder Contract" is a draft with an unfilled required placeholder
+    When the initiator offers contract "Open Placeholder Contract"
+    Then I receive error "contract is not closed"
+    And the contract "Open Placeholder Contract" is in state "DRAFT"
+    When the initiator fills the required placeholder of contract "Open Placeholder Contract" with "20000"
+    And the initiator offers contract "Open Placeholder Contract"
+    Then get http 200:Success code
+    And the contract "Open Placeholder Contract" is in state "OFFERED"
+
   @SRS-1.2 @SRS-2.2.6 @UC-03
   Scenario Outline: Initiator withdraws a contract from a pre-approval state
     Given I am authenticated with roles: "Contract Creator"

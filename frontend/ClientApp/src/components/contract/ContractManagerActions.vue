@@ -7,6 +7,7 @@ import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { ContractState } from '@/types/contract-state'
 import type { Contract } from '@/models/contract/contract'
+import type { DcsPlaceholder } from '@/models/dcs-jsonld'
 
 defineOptions({
   inheritAttrs: false,
@@ -43,6 +44,26 @@ const canOffer = computed(() => {
   return isCreator.value && props.contract.state === ContractState.draft
 })
 
+// Required placeholders still missing a filled dcs:value — the completeness
+// the backend's offer gate (command/offer.go validateOfferReady, SRS §1.2
+// definite proposal / §2.2.2 filled-out contract) rejects; checked here too so
+// the action is disabled with a reason instead of failing on click. The
+// backend stays authoritative.
+const unfilledRequired = computed<DcsPlaceholder[]>(() => {
+  const placeholders = props.contract.contract_data?.['dcs:contractData'] ?? []
+  return placeholders.filter((placeholder) => {
+    if (!placeholder['dcs:required']) return false
+    const value = placeholder['dcs:value']
+    return value === undefined || value === null || String(value).trim() === ''
+  })
+})
+
+const offerBlockedReason = computed(() => {
+  if (unfilledRequired.value.length === 0) return ''
+  const labels = unfilledRequired.value.map((placeholder) => placeholder['dcs:label'] || placeholder['@id'])
+  return `Fill the required field(s) before offering to the counterparty: ${labels.join(', ')}`
+})
+
 const canTerminate = computed(() => {
   return isManager.value && props.contract.state !== ContractState.terminated
 })
@@ -55,6 +76,7 @@ const offering = ref(false)
 
 const offer = async () => {
   if (!isCreator.value || props.contract.state !== ContractState.draft) return
+  if (offerBlockedReason.value) return
   offering.value = true
   try {
     await contractWorkflowService.offer({
@@ -115,7 +137,13 @@ const terminate = async () => {
 </script>
 
 <template>
-  <button v-if="canOffer" :class="[filteredClass, 'btn-primary']" :disabled="offering" @click="offer">
+  <button
+    v-if="canOffer"
+    :class="[filteredClass, 'btn-primary']"
+    :disabled="offering || offerBlockedReason !== ''"
+    :title="offerBlockedReason || undefined"
+    @click="offer"
+  >
     {{ offering ? 'Offering…' : 'Offer to counterparty' }}
   </button>
   <button v-if="canDeploy" :class="[filteredClass, 'btn-primary']" :disabled="deploying" @click="deploy">

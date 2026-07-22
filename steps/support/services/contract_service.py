@@ -132,7 +132,7 @@ class ContractService:
         }
 
     @staticmethod
-    def _create_approved_template_for_contract(context):
+    def _create_approved_template_for_contract(context, template_data=None):
         creator_h = AuthService.get_headers_for_roles(["Template Creator"])
         create_resp = post_json(
             context,
@@ -141,7 +141,8 @@ class ContractService:
                 "template_type": TemplateService.CONTRACT_TEMPLATE_TYPE,
                 "name": "BDD Contract Source Template",
                 "description": "BDD template for contract workflows",
-                "template_data": TemplateService.canonical_document_data("BDD Contract Source Template"),
+                "template_data": template_data
+                or TemplateService.canonical_document_data("BDD Contract Source Template"),
             },
             headers=creator_h,
         )
@@ -209,8 +210,8 @@ class ContractService:
 
 
     @staticmethod
-    def _create_contract_in_draft(context, contract_name: str):
-        t_did = ContractService._create_approved_template_for_contract(context)
+    def _create_contract_in_draft(context, contract_name: str, template_data=None):
+        t_did = ContractService._create_approved_template_for_contract(context, template_data=template_data)
         creator_h = AuthService.get_headers_for_roles(["Contract Creator"])
         peer_did = ContractService._local_peer_did(context)
         create_payload = {
