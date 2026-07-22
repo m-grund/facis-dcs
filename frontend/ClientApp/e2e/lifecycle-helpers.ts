@@ -510,6 +510,10 @@ export async function signApprovedContractViaViewer(page: Page, loginAs: LoginAs
   expect(ceremony.ceremony_id).toBeTruthy()
   expect(ceremony.wallet_uri).toBeTruthy()
 
+  const ceremonyStart = ceremonyResponse.request().postDataJSON() as { field_name?: string }
+  const signField = ceremonyStart.field_name?.trim() ?? ''
+  expect(signField, 'ceremony start must bind a signature field_name').toBeTruthy()
+
   execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.wallet_uri], {
     cwd: repoRoot,
     env: { ...process.env, STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL, BDD_DCS_BASE_URL: E2E_API_BASE },
@@ -531,7 +535,7 @@ export async function signApprovedContractViaViewer(page: Page, loginAs: LoginAs
   // No E2E_SIGN_FIELD: the wallet discovers the pre-placed field from the PDF.
   execFileSync(python, [path.join(here, 'sign_prepared_pdf.py'), preparedPath, signedPath], {
     cwd: repoRoot,
-    env: { ...process.env, DSS_URL: E2E_DSS_URL, E2E_SIGNATORY: 'E2E Vertical Signer' },
+    env: { ...process.env, DSS_URL: E2E_DSS_URL, E2E_SIGNATORY: 'E2E Vertical Signer', E2E_SIGN_FIELD: signField },
     stdio: 'pipe',
   })
 
