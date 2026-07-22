@@ -50,13 +50,19 @@ type DocRetrievalParams struct {
 }
 
 // BuildDocumentRetrievalJWT creates the signed request object (JAR) a wallet
-// consumes to sign the DCS's prepared documents, matching the EUDI
-// walletdriven-signer reference's generate_request_object exactly so a real
-// EUDI wallet can consume it: response_type "sign_response",
+// consumes to sign the DCS's prepared documents. Its claim set matches the EUDI
+// walletdriven-signer reference's generate_request_object: response_type
+// "sign_response",
 // client_id_scheme "x509_san_dns", response_mode "direct_post", and the
-// camelCase documentDigests/documentLocations/hashAlgorithmOID members. The
-// signer's x5c chain (bound to a DNS-named certificate) authenticates the
-// request against client_id.
+// camelCase documentDigests/documentLocations/hashAlgorithmOID members.
+//
+// It is NOT yet consumable by a real EUDI wallet. The reference wallet asserts
+// three things this request does not satisfy: client_id_scheme "x509_san_dns"
+// requires an x5c chain in the JAR header, which we do not attach; client_id
+// must be a DNS name; and it must equal the response_uri host. Ours is the
+// Hydra client id. Verified against eudi-lib-jvm-rqes-csc-kt — either attach
+// x5c with a DNS-named client_id, or declare the pre-registered scheme
+// honestly.
 func BuildDocumentRetrievalJWT(signer Signer, params DocRetrievalParams) (string, error) {
 	if signer == nil {
 		return "", fmt.Errorf("request signer is not configured")

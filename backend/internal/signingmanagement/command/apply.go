@@ -78,7 +78,10 @@ type ApplyCmd struct {
 // SignatureValidator validates an externally-produced signature and reports the
 // signer identity, AdES level, and signing time (dss.Client satisfies it). The
 // DCS uses it to accept a signature the signatory produced — never one it made
-// itself — proving sole control (ADR-12, DCS-FR-SM-16/-18).
+// itself (ADR-12, DCS-FR-SM-16/-18). That is what sole control requires of US:
+// we hold no signing key. It does not by itself prove the signatory controlled
+// theirs — that depends on their wallet, and is emphatically untrue of the
+// development testWallet, whose keys are shared files.
 type SignatureValidator interface {
 	ValidatePDF(ctx context.Context, pdf []byte, name string) (*dss.Report, error)
 }

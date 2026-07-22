@@ -250,8 +250,10 @@ func (s *signatureManagementsrvc) SignatureRequestCallback(ctx context.Context, 
 	}
 
 	// The signature field is the participating party (org DID); the natural person
-	// who signs is proved separately — AssertValidAES requires the wallet's cert to
-	// carry the person from the ceremony's verified PID, decoupled from the field.
+	// who signs is established separately, by the ceremony's verified PID. It is
+	// NOT established by the signing certificate: AssertValidAES checks that the
+	// signature is a valid AES and nothing more — no PID-to-certificate identifier
+	// binding is standardised (see apply.go's SubmitSignature).
 	applier := s.newApplier()
 	if err := applier.SubmitSignature(ctx, command.SubmitSignatureCmd{
 		ApplyCmd: command.ApplyCmd{
