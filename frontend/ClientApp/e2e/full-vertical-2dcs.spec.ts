@@ -9,6 +9,7 @@ import {
   counterOffer,
   createContractViaUi,
   deployContract,
+  fillContractAmountOn,
   instanceA,
   manifestChainLength,
   offerToCounterparty,
@@ -114,6 +115,11 @@ test('full two-instance negotiation vertical (A <-> B)', async ({ page, context,
   await test.step('Stage 4 [DCS-FR-CWE-16, ADR-13]: A creates a contract with B as counterparty', async () => {
     const bDidWeb = await resolveDidWeb(b)
     contractDid = await createContractViaUi(a, contractTemplateName, bDidWeb)
+    // SRS §2.2.2: Contract Generation ends with a filled-out contract ready to
+    // be sent — the offer gate (command/offer.go validateOfferReady) rejects an
+    // unfilled draft, so A proposes its opening amount before Stage 5's offer.
+    // The Stage 6 ping-pong then negotiates it 20000 -> 10000 -> 15000.
+    await fillContractAmountOn(a, contractDid, '20000')
   })
 
   // ---- Stage 5 [SRS §2.2 lifecycle offered→accepted→executed; DCS-NFR-BR-08

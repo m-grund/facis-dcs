@@ -413,6 +413,70 @@ def step_given_contract_reached_state(context, name, state):
     )
 
 
+@given('contract "{name}" is a draft with an unfilled required placeholder')
+def step_given_draft_with_open_placeholder(context, name):
+    """A DRAFT contract derived from a template whose clause carries an inline,
+    required dcs:Placeholder without a dcs:value — the document is not closed
+    (validation.ValidateContractClosed: "prose placeholder binds to unfilled
+    field"), which is exactly what the offer gate rejects. Placeholder @ids are
+    urn:uuid:* on the template; contract creation rebases them onto the
+    contract DID (documentdata.go rebaseIDText), placeholder node and prose
+    reference alike, so closedness still pairs them up."""
+    from steps.support.services.template_service import TemplateService  # noqa: PLC0415
+
+    field_id = "urn:uuid:field-payment-amount"
+    template_data = TemplateService.canonical_document_data("BDD Open Placeholder Template")
+    template_data["@context"]["xsd"] = "http://www.w3.org/2001/XMLSchema#"
+    template_data["dcs:contractData"] = [
+        {
+            "@id": field_id,
+            "@type": "dcs:Placeholder",
+            "dcs:label": "Payment Amount",
+            "dcs:datatype": "xsd:decimal",
+            "dcs:required": True,
+        }
+    ]
+    clause = template_data["dcs:documentStructure"]["dcs:blocks"]["@list"][0]
+    clause["dcs:content"] = {
+        "@list": ["The provider invoices ", {"@id": field_id}, " per period."]
+    }
+    ContractService._create_contract_in_draft(context, name, template_data=template_data)
+
+
+@when('the initiator fills the required placeholder of contract "{name}" with "{value}"')
+def step_when_fill_required_placeholder(context, name, value):
+    from steps.support.api_client import contract_update_url, put_json  # noqa: PLC0415
+
+    did, _ = ContractService._contract_data(context, name)
+    headers = _seed_headers(context, name)
+    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
+    assert retrieve.status_code == 200, retrieve.text
+    body = retrieve.json()
+    contract_data = body.get("contract_data")
+    assert contract_data, f"contract '{name}' has no contract_data: {body}"
+
+    filled = 0
+    for placeholder in contract_data.get("dcs:contractData") or []:
+        if placeholder.get("dcs:required") and not placeholder.get("dcs:value"):
+            placeholder["dcs:value"] = float(value) if "." in value else int(value)
+            filled += 1
+    assert filled, (
+        f"contract '{name}' has no unfilled required placeholder to fill: "
+        f"{contract_data.get('dcs:contractData')}"
+    )
+
+    resp = put_json(
+        context,
+        contract_update_url(context),
+        {"did": did, "updated_at": body.get("updated_at"), "contract_data": contract_data},
+        headers=headers,
+    )
+    assert resp.status_code == 200, (
+        f"Filling the required placeholder of '{name}' failed: {resp.status_code} {resp.text}"
+    )
+    ContractService._refresh_contract(context, name)
+
+
 @given('contract "{name}" has an expiry date in the past')
 def step_given_expiry_date_in_past(context, name):
     """Test-only seam for the "Expired" C2PA lifecycle banner

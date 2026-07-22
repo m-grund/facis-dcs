@@ -8,10 +8,12 @@ import (
 	"log"
 	"time"
 
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/base/datatype/componenttype"
 	"digital-contracting-service/internal/base/datatype/userrole"
 	"digital-contracting-service/internal/base/event"
 	"digital-contracting-service/internal/base/identity"
+	"digital-contracting-service/internal/base/validation"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 	contractevents "digital-contracting-service/internal/contractworkflowengine/event"
@@ -82,6 +84,14 @@ func (h *Offerer) Handle(ctx context.Context, cmd OfferCmd) error {
 		return err
 	}
 
+	contract, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.DID)
+	if err != nil {
+		return fmt.Errorf("could not read contract data: %w", err)
+	}
+	if err := validateOfferReady(ctx, contract.ContractData); err != nil {
+		return err
+	}
+
 	err = h.CRepo.UpdateState(ctx, tx, cmd.DID, contractstate.Offered.String())
 	if err != nil {
 		return fmt.Errorf("could not update contract state: %w", err)
@@ -101,4 +111,25 @@ func (h *Offerer) Handle(ctx context.Context, cmd OfferCmd) error {
 	}
 
 	return tx.Commit()
+}
+
+// validateOfferReady gates the offer on the same content checks submission
+// runs, plus contract closedness: the offer is the first transmission to the
+// counterparty, and SRS 2.2.2 requires the filled-out contract to be ready to
+// be sent — an offer must be a definite proposal (SRS 1.2), so a draft still
+// carrying unresolved placeholders must not leave the instance.
+func validateOfferReady(ctx context.Context, contractData *datatype.JSON) error {
+	if contractData == nil {
+		return fmt.Errorf("%w: contract has no contract data", validation.ErrContractNotClosed)
+	}
+	if err := validation.ValidateContractSemantics(contractData); err != nil {
+		return fmt.Errorf("contract semantic validation failed: %w", err)
+	}
+	if err := validation.ValidateContractClosed(*contractData); err != nil {
+		return err
+	}
+	if err := validation.RequireHubConformance(ctx, contractData); err != nil {
+		return fmt.Errorf("contract offer blocked: %w", err)
+	}
+	return nil
 }

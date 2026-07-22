@@ -703,6 +703,35 @@ export async function createContractViaUi(inst: Instance, templateName: string, 
 }
 
 /**
+ * Fills the contract's Payment Amount through the real edit UI and saves it via
+ * "Update" — Contract Generation ends with a filled-out contract (SRS §2.2.2),
+ * and command/offer.go's closedness gate rejects offering a draft whose
+ * required placeholder is still unfilled, so the originator must propose its
+ * opening amount before the draft may leave the instance.
+ */
+export async function fillContractAmountOn(inst: Instance, contractDid: string, value: string): Promise<void> {
+  await inst.gotoAs('Contract Creator', `/ui/contracts/edit/${contractDid}`)
+  await inst.page
+    .getByRole('tab', { name: /content/i })
+    .or(inst.page.getByText('Contract Content', { exact: true }))
+    .first()
+    .click()
+  const amount = inst.page
+    .getByRole('spinbutton', { name: /amount/i })
+    .or(inst.page.getByRole('textbox', { name: /amount/i }))
+    .first()
+  await expect(amount).toBeVisible({ timeout: 30_000 })
+  await amount.fill(value)
+  await amount.blur()
+  const updated = inst.page.waitForResponse(
+    (r) => r.url().includes('/contract/update') && r.request().method() === 'PUT',
+  )
+  await inst.page.getByRole('button', { name: 'Update', exact: true }).click()
+  const resp = await updated
+  expect(resp.ok(), `contract update ${resp.status()}: ${await resp.text()}`).toBeTruthy()
+}
+
+/**
  * Makes a non-trivial counter-offer on the instance's Negotiate view: edits a
  * requirement value in the contract editor (producing a change request) and
  * submits it, which regenerates the PDF and re-ships it to the counterparty.
