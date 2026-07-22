@@ -1,9 +1,10 @@
-"""Steps for the party-private negotiation draft (SRS §3.1.1 Contract
+"""Steps for the party-scoped negotiation draft (SRS §3.1.1 Contract
 Negotiation UI "Save draft" control): a negotiator stages a change request
-privately (PUT /contract/negotiation_draft), retrieves and discards it, and
-proposing via POST /contract/negotiate consumes it. Drafts never create
-negotiation change-request rows, never move the contract state, and are
-scoped to their author — another user's retrieve comes back empty.
+(PUT /contract/negotiation_draft), retrieves and discards it, and proposing
+via POST /contract/negotiate consumes it. Drafts never create negotiation
+change-request rows and never move the contract state; they are keyed by the
+party's participant ID, so same-party colleagues share the staged position
+while nothing reaches the counterparty until proposed.
 """
 
 import requests as _requests
@@ -97,13 +98,20 @@ def step_then_draft_is_empty(context, name):
     )
 
 
-@then('the negotiation draft for contract "{name}" is not visible to a user with roles "{roles}"')
-def step_then_draft_not_visible_to_other_user(context, name, roles):
+@then(
+    'a same-party user with roles "{roles}" sees the negotiation draft for contract "{name}" '
+    'with the staged name "{staged_name}"'
+)
+def step_then_same_party_user_sees_draft(context, roles, name, staged_name):
+    """Drafts are party-scoped (saved_by = participant ID / ext.iss): a
+    colleague of the same party — a different user, same organization —
+    retrieves the party's staged position."""
     other_headers = AuthService.get_headers_for_roles([r.strip() for r in roles.split(",")])
     resp = _get_draft(context, name, other_headers)
     assert resp.status_code == 200, f"draft retrieve failed: {resp.status_code} {resp.text}"
-    assert not resp.json().get("change_request"), (
-        f"Draft leaked to another user ({roles}): {resp.text}"
+    change_request = resp.json().get("change_request") or {}
+    assert change_request.get("name") == staged_name, (
+        f"Expected the same-party user ({roles}) to see the staged name '{staged_name}', got: {resp.text}"
     )
 
 

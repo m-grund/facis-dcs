@@ -15,11 +15,12 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// SaveNegotiationDraftCmd carries a party-private staged change request (SRS
+// SaveNegotiationDraftCmd carries a party-scoped staged change request (SRS
 // §3.1.1 Contract Negotiation UI "Save draft"). Saving a draft changes no
-// contract state, bumps no version, and emits no event — it is not visible to
-// anyone but its author and never leaves the instance until proposed via the
-// negotiate command.
+// contract state, bumps no version, and emits no event — SavedBy is the
+// party's participant ID, so any authorized negotiator of the same party
+// continues the party's staged position, and nothing leaves the instance
+// until proposed via the negotiate command.
 type SaveNegotiationDraftCmd struct {
 	DID           string             `json:"did"`
 	SavedBy       string             `json:"saved_by"`

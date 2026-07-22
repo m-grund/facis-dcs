@@ -388,7 +388,7 @@ var ContractNegotiationResponse = Type("ContractNegotiationResponse", func() {
 })
 
 var ContractNegotiationDraftSaveRequest = Type("ContractNegotiationDraftSaveRequest", func() {
-	Description("Save (upsert) the caller's private negotiation draft for a contract")
+	Description("Save (upsert) the calling party's negotiation draft for a contract")
 
 	Token("token", String, "JWT token")
 
@@ -399,7 +399,7 @@ var ContractNegotiationDraftSaveRequest = Type("ContractNegotiationDraftSaveRequ
 })
 
 var ContractNegotiationDraftRetrieveRequest = Type("ContractNegotiationDraftRetrieveRequest", func() {
-	Description("Retrieve the caller's private negotiation draft for a contract")
+	Description("Retrieve the calling party's negotiation draft for a contract")
 
 	Token("token", String, "JWT token")
 
@@ -409,7 +409,7 @@ var ContractNegotiationDraftRetrieveRequest = Type("ContractNegotiationDraftRetr
 })
 
 var ContractNegotiationDraftResponse = Type("ContractNegotiationDraftResponse", func() {
-	Description("The caller's private negotiation draft; change_request is absent when no draft is stored")
+	Description("The calling party's negotiation draft; change_request is absent when no draft is stored")
 
 	Attribute("did", String, "Decentralized Identifier of the contract")
 	Attribute("change_request", Any, "The staged change request, if a draft exists")
@@ -828,13 +828,13 @@ var _ = Service("ContractWorkflowEngine", func() {
 	})
 
 	// SRS §3.1.1 Contract Negotiation UI lists "Save draft" among its controls,
-	// distinct from "Propose change": a negotiator stages modifications
-	// privately and proposes them later. Drafts are party-private — stored per
-	// (contract, author), never replicated to the peer, never part of the
-	// negotiation audit trail; proposing (POST /contract/negotiate) or
-	// discarding deletes them.
+	// distinct from "Propose change": a negotiator stages modifications and
+	// proposes them later. Drafts are party-scoped — stored per (contract,
+	// party), shared by the party's authorized negotiators, never replicated
+	// to the peer, never part of the negotiation audit trail; proposing
+	// (POST /contract/negotiate) or discarding deletes them.
 	Method("save_negotiation_draft", func() {
-		Description("save (upsert) the caller's private staged change request for a contract in negotiation; it is not visible to any other user and not transmitted to the counterparty until proposed.")
+		Description("save (upsert) the calling party's staged change request for a contract in negotiation; it is shared among this party's authorized negotiators and not transmitted to the counterparty until proposed.")
 		Meta("dcs:requirements", "DCS-IR-CWE-03")
 		Meta("dcs:cwe:components", "Contract Versioning")
 		Meta("dcs:ui", "Contract Negotiation")
@@ -863,7 +863,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 	})
 
 	Method("retrieve_negotiation_draft", func() {
-		Description("retrieve the caller's private staged change request for a contract; change_request is absent when no draft is stored.")
+		Description("retrieve the calling party's staged change request for a contract; change_request is absent when no draft is stored.")
 		Meta("dcs:requirements", "DCS-IR-CWE-03")
 		Meta("dcs:cwe:components", "Contract Versioning")
 		Meta("dcs:ui", "Contract Negotiation")
@@ -893,7 +893,7 @@ var _ = Service("ContractWorkflowEngine", func() {
 	})
 
 	Method("delete_negotiation_draft", func() {
-		Description("discard the caller's private staged change request for a contract.")
+		Description("discard the calling party's staged change request for a contract.")
 		Meta("dcs:requirements", "DCS-IR-CWE-03")
 		Meta("dcs:cwe:components", "Contract Versioning")
 		Meta("dcs:ui", "Contract Negotiation")

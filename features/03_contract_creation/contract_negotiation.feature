@@ -134,14 +134,18 @@ Feature: Contract Negotiation
     And the negotiation draft for contract "Staged Draft Contract" is empty
     And the contract "Staged Draft Contract" has a recorded negotiation change request renaming it to "Staged Rename"
 
+  # Drafts are PARTY-scoped (saved_by = participant ID): a colleague of the
+  # same party continues the party's staged position — the SRS's negotiation
+  # security model is party-based ("only authorized parties can propose or
+  # accept changes"), and nothing reaches the counterparty until proposed.
   @DCS-IR-CWE-03 @clean_db
-  Scenario: A negotiation draft is private to its author and can be discarded
+  Scenario: A negotiation draft is shared within the party and can be discarded
     Given I am authenticated with roles: "Contract Creator"
-    And contract "Private Draft Contract" has reached contract state "NEGOTIATION"
-    When the negotiator saves a negotiation draft for contract "Private Draft Contract" renaming it to "Only Mine"
+    And contract "Party Draft Contract" has reached contract state "NEGOTIATION"
+    When the negotiator saves a negotiation draft for contract "Party Draft Contract" renaming it to "Party Position"
     Then get http 200:Success code
-    And the negotiation draft for contract "Private Draft Contract" is not visible to a user with roles "Contract Reviewer"
-    When the negotiator discards the negotiation draft for contract "Private Draft Contract"
+    And a same-party user with roles "Contract Reviewer" sees the negotiation draft for contract "Party Draft Contract" with the staged name "Party Position"
+    When the negotiator discards the negotiation draft for contract "Party Draft Contract"
     Then get http 200:Success code
-    And the negotiation draft for contract "Private Draft Contract" is empty
-    And the contract "Private Draft Contract" has no recorded negotiation change requests
+    And the negotiation draft for contract "Party Draft Contract" is empty
+    And the contract "Party Draft Contract" has no recorded negotiation change requests

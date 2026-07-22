@@ -804,6 +804,9 @@ func (s *contractWorkflowEnginesrvc) SaveNegotiationDraft(ctx context.Context, r
 		CRepo: s.CRepo,
 		NRepo: s.NRepo,
 	}
+	// Drafts are scoped to the PARTY (participant ID): any authorized
+	// negotiator of the same party continues the party's staged position;
+	// nothing reaches the counterparty until proposed.
 	err = handler.Handle(ctx, command.SaveNegotiationDraftCmd{
 		DID:           req.Did,
 		SavedBy:       middleware.GetParticipantID(ctx),
