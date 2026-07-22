@@ -5,6 +5,8 @@ import type {
   ContractCreateRequest,
   ContractDeployRequest,
   ContractHistoryRetrieveRequest,
+  ContractNegotiationDraftRetrieveRequest,
+  ContractNegotiationDraftSaveRequest,
   ContractNegotiationRequest,
   ContractNegotiationRespondRequest,
   ContractOfferRequest,
@@ -25,6 +27,7 @@ import type {
   ContractCreateResponse,
   ContractDeployResponse,
   ContractHistoryResponse,
+  ContractNegotiationDraftResponse,
   ContractNegotiationRespondResponse,
   ContractNegotiationResponse,
   ContractOfferResponse,
@@ -59,6 +62,22 @@ export const contractWorkflowService: ContractWorkflowService = {
 
   async negotiate(request: ContractNegotiationRequest) {
     return http.post<ContractNegotiationResponse>('/contract/negotiate', request).then((res) => res.data)
+  },
+
+  async saveNegotiationDraft(request: ContractNegotiationDraftSaveRequest) {
+    return http.put<ContractNegotiationDraftResponse>('/contract/negotiation_draft', request).then((res) => res.data)
+  },
+
+  async retrieveNegotiationDraft(request: ContractNegotiationDraftRetrieveRequest) {
+    return http
+      .get<ContractNegotiationDraftResponse>(`/contract/negotiation_draft/${request.did}`)
+      .then((res) => res.data)
+  },
+
+  async deleteNegotiationDraft(request: ContractNegotiationDraftRetrieveRequest) {
+    return http
+      .delete<ContractNegotiationDraftResponse>(`/contract/negotiation_draft/${request.did}`)
+      .then((res) => res.data)
   },
 
   async respond(request: ContractNegotiationRespondRequest) {

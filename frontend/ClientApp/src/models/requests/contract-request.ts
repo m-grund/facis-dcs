@@ -67,6 +67,15 @@ export interface ContractNegotiationRequest {
   change_request: ContractChangeRequest
 }
 
+export interface ContractNegotiationDraftSaveRequest {
+  did: string
+  change_request: ContractChangeRequest
+}
+
+export interface ContractNegotiationDraftRetrieveRequest {
+  did: string
+}
+
 export interface ContractNegotiationRespondRequest {
   id: string
   did: string

@@ -49,8 +49,22 @@ type NegotiationDecisionData struct {
 	RejectionReason *string `db:"rejection_reason"`
 }
 
+// NegotiationDraftData is a party-private staged change request (SRS §3.1.1
+// Contract Negotiation UI "Save draft"): one row per (contract, author),
+// never replicated to the peer.
+type NegotiationDraftData struct {
+	ContractDID   string         `db:"contract_did"`
+	SavedBy       string         `db:"saved_by"`
+	ChangeRequest *datatype.JSON `db:"change_request"`
+	UpdatedAt     time.Time      `db:"updated_at"`
+}
+
 type NegotiationRepo interface {
 	Create(ctx context.Context, tx *sqlx.Tx, data NegotiationCreateData, negotiators []string) (*time.Time, error)
+	UpsertDraft(ctx context.Context, tx *sqlx.Tx, contractDID string, savedBy string, changeRequest *datatype.JSON) error
+	// ReadDraft returns nil when the author has no stored draft for the contract.
+	ReadDraft(ctx context.Context, tx *sqlx.Tx, contractDID string, savedBy string) (*NegotiationDraftData, error)
+	DeleteDraft(ctx context.Context, tx *sqlx.Tx, contractDID string, savedBy string) error
 	Accept(ctx context.Context, tx *sqlx.Tx, id string, acceptedBy string) error
 	Reject(ctx context.Context, tx *sqlx.Tx, id string, rejectedBy string, rejectionReason *string) error
 	ReadAllByContractDID(ctx context.Context, tx *sqlx.Tx, did string) ([]NegotiationData, error)

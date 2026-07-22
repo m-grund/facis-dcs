@@ -8,6 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
+	"digital-contracting-service/internal/base/datatype"
 	"digital-contracting-service/internal/contractworkflowengine/db"
 )
 
@@ -45,6 +46,43 @@ func (r PostgresNegotiationRepo) Create(ctx context.Context, tx *sqlx.Tx, data d
 	}
 
 	return &result.CreatedAt, nil
+}
+
+func (r PostgresNegotiationRepo) UpsertDraft(ctx context.Context, tx *sqlx.Tx, contractDID string, savedBy string, changeRequest *datatype.JSON) error {
+	statement := `
+        INSERT INTO contract_negotiation_drafts (contract_did, saved_by, change_request)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (contract_did, saved_by)
+        DO UPDATE SET change_request = EXCLUDED.change_request, updated_at = CURRENT_TIMESTAMP
+    `
+	_, err := tx.ExecContext(ctx, statement, contractDID, savedBy, changeRequest)
+	return err
+}
+
+func (r PostgresNegotiationRepo) ReadDraft(ctx context.Context, tx *sqlx.Tx, contractDID string, savedBy string) (*db.NegotiationDraftData, error) {
+	statement := `
+        SELECT contract_did, saved_by, change_request, updated_at
+        FROM contract_negotiation_drafts
+        WHERE contract_did = $1 AND saved_by = $2
+    `
+	var draft db.NegotiationDraftData
+	err := tx.GetContext(ctx, &draft, statement, contractDID, savedBy)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &draft, nil
+}
+
+func (r PostgresNegotiationRepo) DeleteDraft(ctx context.Context, tx *sqlx.Tx, contractDID string, savedBy string) error {
+	statement := `
+        DELETE FROM contract_negotiation_drafts
+        WHERE contract_did = $1 AND saved_by = $2
+    `
+	_, err := tx.ExecContext(ctx, statement, contractDID, savedBy)
+	return err
 }
 
 func (r PostgresNegotiationRepo) Accept(ctx context.Context, tx *sqlx.Tx, id string, acceptedBy string) error {

@@ -114,3 +114,38 @@ Feature: Contract Negotiation
     Then the request is denied with a "Conflict of interest - cannot approve own proposal" error
     And another authorized reviewer must approve
     And the restriction is logged
+
+  # SRS §3.1.1 Contract Negotiation UI lists "Save draft" among its controls,
+  # distinct from "Propose change": a negotiator stages modifications privately
+  # and proposes them later. A draft creates no negotiation change-request row,
+  # moves no contract state, and is consumed when its author proposes it
+  # (command/negotiate.go clears the author's draft row).
+  @DCS-IR-CWE-03 @clean_db
+  Scenario: A negotiator saves a private draft and proposes it later
+    Given I am authenticated with roles: "Contract Creator"
+    And contract "Staged Draft Contract" has reached contract state "NEGOTIATION"
+    When the negotiator saves a negotiation draft for contract "Staged Draft Contract" renaming it to "Staged Rename"
+    Then get http 200:Success code
+    And the negotiation draft for contract "Staged Draft Contract" contains the staged name "Staged Rename"
+    And the contract "Staged Draft Contract" has no recorded negotiation change requests
+    And the contract "Staged Draft Contract" is in state "NEGOTIATION"
+    When the negotiator proposes the staged draft for contract "Staged Draft Contract"
+    Then get http 200:Success code
+    And the negotiation draft for contract "Staged Draft Contract" is empty
+    And the contract "Staged Draft Contract" has a recorded negotiation change request renaming it to "Staged Rename"
+
+  # Drafts are PARTY-scoped (saved_by = participant ID): a colleague of the
+  # same party continues the party's staged position — the SRS's negotiation
+  # security model is party-based ("only authorized parties can propose or
+  # accept changes"), and nothing reaches the counterparty until proposed.
+  @DCS-IR-CWE-03 @clean_db
+  Scenario: A negotiation draft is shared within the party and can be discarded
+    Given I am authenticated with roles: "Contract Creator"
+    And contract "Party Draft Contract" has reached contract state "NEGOTIATION"
+    When the negotiator saves a negotiation draft for contract "Party Draft Contract" renaming it to "Party Position"
+    Then get http 200:Success code
+    And a same-party user with roles "Contract Reviewer" sees the negotiation draft for contract "Party Draft Contract" with the staged name "Party Position"
+    When the negotiator discards the negotiation draft for contract "Party Draft Contract"
+    Then get http 200:Success code
+    And the negotiation draft for contract "Party Draft Contract" is empty
+    And the contract "Party Draft Contract" has no recorded negotiation change requests

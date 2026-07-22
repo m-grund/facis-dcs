@@ -144,6 +144,7 @@ const loadContract = async () => {
       contract.value = await contractWorkflowService.retrieveById({ did: id })
       editedContract.value = !!contract.value ? { ...contract.value } : null
       applyContractDataToDraft(contract.value?.contract_data)
+      await restoreNegotiationDraft()
     }
   } catch (err: unknown) {
     console.error('Failed to load contract', err)
@@ -171,39 +172,109 @@ watch(
   { deep: true },
 )
 
+function buildChangeRequest(): ContractChangeRequest {
+  const changeRequest: ContractChangeRequest = {}
+  if (!editedContract.value) return changeRequest
+  if (changedName.value) {
+    changeRequest.name = editedContract.value.name
+  }
+  if (changedDescription.value) {
+    changeRequest.description = editedContract.value.description
+  }
+  if (changeExpNoticePeriod.value) {
+    changeRequest.exp_notice_period = editedContract.value.exp_notice_period
+  }
+  if (changeExpPolicy.value) {
+    changeRequest.exp_policy = editedContract.value.exp_policy
+  }
+  if (changedContractData.value) {
+    changeRequest.contract_data = buildCurrentContractData()
+  }
+  return changeRequest
+}
+
 const negotiateContractChange = async () => {
   if (!contract.value || !editedContract.value || !issuer.value) return
   isSubmitting.value = true
   try {
-    const changeRequest: ContractChangeRequest = {}
-    if (changedName.value) {
-      changeRequest.name = editedContract.value.name
-    }
-    if (changedDescription.value) {
-      changeRequest.description = editedContract.value.description
-    }
-    if (changeExpNoticePeriod.value) {
-      changeRequest.exp_notice_period = editedContract.value.exp_notice_period
-    }
-    if (changeExpPolicy.value) {
-      changeRequest.exp_policy = editedContract.value.exp_policy
-    }
-    if (changedContractData.value) {
-      changeRequest.contract_data = buildCurrentContractData()
-    }
     const response = await contractWorkflowService.negotiate({
       did: contract.value?.did,
       updated_at: contract.value?.updated_at,
       negotiated_by: issuer.value,
-      change_request: changeRequest,
+      change_request: buildChangeRequest(),
     })
     if (response.did) {
+      // Proposing consumed the server-side draft (SRS §3.1.1 "Save draft" vs
+      // "Propose change") — loadContract re-checks and finds none.
       await loadContract()
     }
   } catch (err) {
     console.error('Failed to submit change request', err)
   } finally {
     isSubmitting.value = false
+  }
+}
+
+// SRS §3.1.1 Contract Negotiation UI "Save draft": stage the current
+// modifications privately (per contract + author, server-side) without
+// proposing them; restored into the editor on the next visit.
+const draftSaved = ref(false)
+const isSavingDraft = ref(false)
+
+const saveNegotiationDraft = async () => {
+  if (!contract.value || !hasChangeRequest.value) return
+  isSavingDraft.value = true
+  try {
+    await contractWorkflowService.saveNegotiationDraft({
+      did: contract.value.did,
+      change_request: buildChangeRequest(),
+    })
+    draftSaved.value = true
+    errorStore.add('Negotiation draft saved. It stays private until you propose it.', 'info')
+  } catch (err) {
+    console.error('Failed to save negotiation draft', err)
+  } finally {
+    isSavingDraft.value = false
+  }
+}
+
+const discardNegotiationDraft = async () => {
+  if (!contract.value) return
+  isSavingDraft.value = true
+  try {
+    await contractWorkflowService.deleteNegotiationDraft({ did: contract.value.did })
+    draftSaved.value = false
+    await loadContract()
+  } catch (err) {
+    console.error('Failed to discard negotiation draft', err)
+  } finally {
+    isSavingDraft.value = false
+  }
+}
+
+async function restoreNegotiationDraft() {
+  if (!contract.value || !editedContract.value) return
+  try {
+    const response = await contractWorkflowService.retrieveNegotiationDraft({ did: contract.value.did })
+    const changeRequest = response?.change_request
+    if (!changeRequest) {
+      draftSaved.value = false
+      return
+    }
+    draftSaved.value = true
+    if (changeRequest.name !== undefined) editedContract.value.name = changeRequest.name
+    if (changeRequest.description !== undefined) editedContract.value.description = changeRequest.description
+    if (changeRequest.exp_notice_period !== undefined)
+      editedContract.value.exp_notice_period = changeRequest.exp_notice_period
+    if (changeRequest.exp_policy !== undefined) editedContract.value.exp_policy = changeRequest.exp_policy
+    if (changeRequest.contract_data) {
+      // Same mechanism the negotiation compare view uses to overlay a change
+      // request's values onto the editor.
+      const draftValues = fromDocumentSemanticValues(collectDeclaredRequirements(changeRequest.contract_data))
+      draftValues.forEach((value) => contractContentValuesStore.setSemanticConditionValue(value))
+    }
+  } catch (err) {
+    console.error('Failed to restore negotiation draft', err)
   }
 }
 
@@ -540,6 +611,25 @@ const exportPDF = async () => {
              return silently, so the click looks like it did nothing. -->
         <button class="btn btn-outline md:w-32" :disabled="exporting || !contract" @click="exportPDF">
           Export PDF
+        </button>
+        <button
+          v-if="contract?.state === ContractState.negotiation || contract?.state === ContractState.offered"
+          class="btn btn-outline md:w-36"
+          :disabled="isSavingDraft || isSubmitting || !hasChangeRequest || !!compareChangesData"
+          @click="saveNegotiationDraft"
+        >
+          <span v-if="isSavingDraft" class="loading loading-sm loading-spinner"></span>
+          Save draft
+        </button>
+        <button
+          v-if="
+            draftSaved && (contract?.state === ContractState.negotiation || contract?.state === ContractState.offered)
+          "
+          class="btn btn-outline md:w-36"
+          :disabled="isSavingDraft || isSubmitting"
+          @click="discardNegotiationDraft"
+        >
+          Discard draft
         </button>
         <button
           v-if="contract?.state === ContractState.negotiation || contract?.state === ContractState.offered"

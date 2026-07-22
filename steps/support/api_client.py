@@ -39,6 +39,15 @@ def contract_negotiate_url(context) -> str:
     return f"{context.base_url}/contract/negotiate"
 
 
+def contract_negotiation_draft_url(context, did: str = None) -> str:
+    """PUT saves to the bare path; GET/DELETE address the caller's draft by
+    contract DID (backend/design/contract_workflow_engine.go
+    save_negotiation_draft / retrieve_negotiation_draft /
+    delete_negotiation_draft)."""
+    base = f"{context.base_url}/contract/negotiation_draft"
+    return f"{base}/{did}" if did else base
+
+
 def contract_review_url(context) -> str:
     return f"{context.base_url}/contract/review"
 
