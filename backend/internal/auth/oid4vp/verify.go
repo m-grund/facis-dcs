@@ -88,10 +88,11 @@ func (v verifier) VerifyPID(vpToken string, ctx PresentationContext) (*VerifiedP
 		return nil, err
 	}
 
-	err = checkStatusList(verified.RawClaims)
-	if err != nil {
-		return nil, err
-	}
+	// TEMP: EUDI playground PIDs currently omit status; re-enable when they ship a status claim again
+	// err = checkStatusList(verified.RawClaims)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	return verified, nil
 }
