@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,12 +19,20 @@ from jwcrypto import jwe, jwk
 
 from dcs_wallet.credential import CREDENTIAL_EXT, decode_jwt_payload, load_credential_claims
 from dcs_wallet.presentation import build_vp_token
-from dcs_wallet.sdjwt import split_sd_jwt
+from dcs_wallet.sdjwt import merge_disclosed_claims, split_sd_jwt
 
 DCS_REQUEST_URI_MARKERS = (
     "/auth/pid/presentation/request/",
     "/auth/presentation/request/",
 )
+
+SIGNING_CEREMONY_REQUEST_RE = re.compile(
+    r"/signature/request/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.I,
+)
+
+PID_VCT_VALUES = {"urn:eudi:pid:de:1", "urn:eudi:eaa:loyalty-card:1"}
+POA_VCT = "urn:dcs:poa:v1"
 
 WALLET_VP_FORMATS_SUPPORTED = {
     "dc+sd-jwt": {
@@ -74,6 +83,8 @@ def _request_uri_marker(path: str) -> str | None:
     for marker in DCS_REQUEST_URI_MARKERS:
         if marker in path:
             return marker
+    if SIGNING_CEREMONY_REQUEST_RE.search(path):
+        return "/signature/request/"
     return None
 
 
@@ -220,7 +231,7 @@ def _parse_credential_query(entry: dict[str, Any]) -> CredentialQuery:
     )
 
 
-def resolve_dcql_credential_query(dcql_query: object) -> CredentialQuery:
+def resolve_dcql_credential_queries(dcql_query: object) -> list[CredentialQuery]:
     if not isinstance(dcql_query, dict):
         raise ValueError("dcql_query must be an object")
 
@@ -244,13 +255,16 @@ def resolve_dcql_credential_query(dcql_query: object) -> CredentialQuery:
             for option in options:
                 if not isinstance(option, list):
                     continue
+                queries: list[CredentialQuery] = []
                 for query_id in option:
                     entry = by_id.get(str(query_id))
                     if entry is None:
                         continue
                     parsed = _parse_credential_query(entry)
                     if parsed.format == "dc+sd-jwt":
-                        return parsed
+                        queries.append(parsed)
+                if queries:
+                    return queries
         raise ValueError("no supported dc+sd-jwt credential query in credential_sets")
 
     if len(credentials) != 1:
@@ -263,7 +277,11 @@ def resolve_dcql_credential_query(dcql_query: object) -> CredentialQuery:
     parsed = _parse_credential_query(entry)
     if parsed.format != "dc+sd-jwt":
         raise ValueError(f"unsupported dcql credential format: {parsed.format!r}")
-    return parsed
+    return [parsed]
+
+
+def resolve_dcql_credential_query(dcql_query: object) -> CredentialQuery:
+    return resolve_dcql_credential_queries(dcql_query)[0]
 
 
 def _credentials_dir() -> Path:
@@ -302,7 +320,7 @@ def resolve_credential_name(
             continue
         entries.append((stem, claims))
 
-    if "urn:dcs:poa:v1" in vct_values:
+    if POA_VCT in vct_values:
         # Keep DCS role test credentials near the top for faster login testing.
         entries.sort(key=lambda item: (0 if item[0].startswith("test") else 1, item[0]))
 
@@ -313,15 +331,26 @@ def resolve_credential_name(
         log("wallet", "using only available credential", credential=entries[0][0])
         return entries[0][0]
 
-    print("\nSelect credential to present:")
+    if any(v in PID_VCT_VALUES for v in vct_values):
+        print("\nSelect PID credential to present:")
+    elif POA_VCT in vct_values:
+        print("\nSelect PoA credential to present:")
+    else:
+        print("\nSelect credential to present:")
     for index, (stem, claims) in enumerate(entries, start=1):
         roles_raw = claims.get("roles") or []
         roles = [r for r in roles_raw if isinstance(r, str)]
-        if "urn:dcs:poa:v1" in vct_values:
+        if POA_VCT in vct_values:
             org = str(claims.get("organization") or claims.get("organization_name") or "?")
             print(f"  [{index}] {stem}")
             print(f"      organization: {org}")
             print(f"      roles ({len(roles)}): {', '.join(roles) if roles else '(none)'}")
+            continue
+        if any(v in PID_VCT_VALUES for v in vct_values):
+            given = str(claims.get("given_name") or "?")
+            family = str(claims.get("family_name") or "?")
+            print(f"  [{index}] {stem}")
+            print(f"      name: {given} {family}")
             continue
         label = claims.get("vct") or claims.get("organization") or stem
         print(f"  [{index}] {stem} ({label})")
@@ -482,6 +511,15 @@ def log_vp_token(vp_token: str, *, query_id: str, credential: str, aud: str, non
     print(f"issuer          : {issuer_claims.get('iss', '?')}")
     print(f"holder (sub)    : {issuer_claims.get('sub', '?')}")
     print(f"vct             : {issuer_claims.get('vct', '?')}")
+    disclosed = merge_disclosed_claims(issuer_claims, disclosures)
+    org = disclosed.get("organization")
+    if org:
+        print(f"organization    : {org}")
+    roles = disclosed.get("roles")
+    if isinstance(roles, list) and roles:
+        role_labels = [str(role) for role in roles if isinstance(role, str)]
+        if role_labels:
+            print(f"roles           : {', '.join(role_labels)}")
     print(f"KB aud          : {kb_claims.get('aud', aud)}")
     print(f"KB nonce        : {kb_claims.get('nonce', nonce)}")
     print()
@@ -523,7 +561,7 @@ def run_presentation_flow(
         return 1
 
     try:
-        query = resolve_dcql_credential_query(req_obj.get("dcql_query"))
+        queries = resolve_dcql_credential_queries(req_obj.get("dcql_query"))
     except ValueError as exc:
         log("fetch", "FAILED", error=str(exc))
         return 1
@@ -531,29 +569,32 @@ def run_presentation_flow(
     log(
         "fetch-ok",
         "request object verified",
-        query_id=query.query_id,
+        query_ids=[q.query_id for q in queries],
         response_mode=response_mode,
         nonce_prefix=nonce[:12],
     )
 
-    chosen = resolve_credential_name(credential_name, vct_values=query.vct_values, log=log)
-    if not chosen:
-        return 1
+    vp_token_obj: dict[str, list[str]] = {}
+    for query in queries:
+        chosen = resolve_credential_name(credential_name, vct_values=query.vct_values, log=log)
+        if not chosen:
+            return 1
 
-    try:
-        vp_token = build_vp_token(
-            credential_name=chosen,
-            nonce=nonce,
-            client_id=client_id,
-            requested_claim_paths=query.claim_paths,
-            top_level_sd_only=ctx.finish_dcs_session,
-        )
-    except Exception as exc:
-        log("present", "FAILED to build VP", error=str(exc))
-        return 1
+        try:
+            vp_token = build_vp_token(
+                credential_name=chosen,
+                nonce=nonce,
+                client_id=client_id,
+                requested_claim_paths=query.claim_paths,
+            )
+        except Exception as exc:
+            log("present", "FAILED to build VP", error=str(exc))
+            return 1
 
-    log_vp_token(vp_token, query_id=query.query_id, credential=chosen, aud=client_id, nonce=nonce)
-    vp_token_object = json.dumps({query.query_id: [vp_token]}, separators=(",", ":"))
+        log_vp_token(vp_token, query_id=query.query_id, credential=chosen, aud=client_id, nonce=nonce)
+        vp_token_obj[query.query_id] = [vp_token]
+
+    vp_token_object = json.dumps(vp_token_obj, separators=(",", ":"))
 
     try:
         redirect_uri = submit_presentation(

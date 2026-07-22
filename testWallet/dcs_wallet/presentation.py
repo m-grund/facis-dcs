@@ -22,6 +22,12 @@ from dcs_wallet.sdjwt import (
 VP_FORMAT = "dc+sd-jwt"
 _REQUIRED_EC_PUBLIC_FIELDS = ("kty", "crv", "x", "y")
 
+_DEFAULT_DISCLOSURE_CLAIMS_BY_VCT: dict[str, list[str]] = {
+    "urn:eudi:pid:de:1": ["given_name", "family_name", "birthdate", "status"],
+    "urn:eudi:eaa:loyalty-card:1": ["given_name", "family_name", "birthdate", "status"],
+    "urn:dcs:poa:v1": ["organization", "roles"],
+}
+
 
 def load_jwk(filename: str) -> dict[str, Any]:
     from pathlib import Path
@@ -93,15 +99,11 @@ def _top_level_sd_disclosures(disclosures: list[str], *, issuer_payload: dict[st
     return selected if selected else disclosures
 
 
-def _filter_disclosures_by_requested_claims(disclosures: list[str], requested_claim_paths: list[list[str]] | None) -> list[str]:
-    if not requested_claim_paths:
+def _filter_disclosures_by_claim_names(disclosures: list[str], claim_names: list[str]) -> list[str]:
+    if not claim_names:
         return disclosures
-    requested_top_level = {
-        str(path[0]).strip()
-        for path in requested_claim_paths
-        if isinstance(path, list) and path and str(path[0]).strip()
-    }
-    if not requested_top_level:
+    requested = {name.strip() for name in claim_names if name.strip()}
+    if not requested:
         return disclosures
 
     filtered: list[str] = []
@@ -113,9 +115,38 @@ def _filter_disclosures_by_requested_claims(disclosures: list[str], requested_cl
         if len(decoded) != 3:
             continue
         claim_name = decoded[1]
-        if isinstance(claim_name, str) and claim_name in requested_top_level:
+        if isinstance(claim_name, str) and claim_name in requested:
             filtered.append(disclosure)
     return filtered if filtered else disclosures
+
+
+def _filter_disclosures_by_requested_claims(disclosures: list[str], requested_claim_paths: list[list[str]] | None) -> list[str]:
+    if not requested_claim_paths:
+        return disclosures
+    requested_top_level = [
+        str(path[0]).strip()
+        for path in requested_claim_paths
+        if isinstance(path, list) and path and str(path[0]).strip()
+    ]
+    return _filter_disclosures_by_claim_names(disclosures, requested_top_level)
+
+
+def _select_disclosures(
+    disclosures: list[str],
+    *,
+    issuer_payload: dict[str, Any],
+    sd_alg: str,
+    requested_claim_paths: list[list[str]] | None,
+) -> list[str]:
+    disclosures = _top_level_sd_disclosures(disclosures, issuer_payload=issuer_payload, sd_alg=sd_alg)
+    if requested_claim_paths:
+        return _filter_disclosures_by_requested_claims(disclosures, requested_claim_paths)
+
+    vct = str(issuer_payload.get("vct") or "")
+    default_claims = _DEFAULT_DISCLOSURE_CLAIMS_BY_VCT.get(vct)
+    if default_claims:
+        return _filter_disclosures_by_claim_names(disclosures, default_claims)
+    return disclosures
 
 
 def build_vp_token(
@@ -124,16 +155,18 @@ def build_vp_token(
     nonce: str,
     client_id: str = "",
     requested_claim_paths: list[list[str]] | None = None,
-    top_level_sd_only: bool = False,
 ) -> str:
     """Attach a fresh KB-JWT (aud/nonce from the OpenID4VP request) to a stored credential."""
     raw_credential = load_credential_sd_jwt(credential_name)
     issuer_jwt, disclosures, _stored_kb = split_sd_jwt(raw_credential)
     issuer_payload = decode_jwt_payload(issuer_jwt)
     sd_alg = str(issuer_payload.get("_sd_alg") or DEFAULT_SD_ALG)
-    if top_level_sd_only:
-        disclosures = _top_level_sd_disclosures(disclosures, issuer_payload=issuer_payload, sd_alg=sd_alg)
-    disclosures = _filter_disclosures_by_requested_claims(disclosures, requested_claim_paths)
+    disclosures = _select_disclosures(
+        disclosures,
+        issuer_payload=issuer_payload,
+        sd_alg=sd_alg,
+        requested_claim_paths=requested_claim_paths,
+    )
 
     credential_claims = load_credential_claims(credential_name)
     wallet_jwk = load_jwk("wallet.jwk")

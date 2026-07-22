@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -50,6 +51,17 @@ type StartCeremonyHandler struct {
 	CeremonyRepo db.CeremonyRepo
 }
 
+func buildCeremonyWalletURI(baseURL, ceremonyID string) string {
+	requestURI := strings.TrimRight(baseURL, "/") + "/signature/request/" + url.PathEscape(ceremonyID) + "/object"
+
+	q := url.Values{}
+	q.Set("client_id", ceremonyAudience)
+	q.Set("request_uri", requestURI)
+	q.Set("request_uri_method", "post")
+
+	return "openid4vp://?" + q.Encode()
+}
+
 func (h *StartCeremonyHandler) Handle(ctx context.Context, cmd StartCeremonyCmd) (*db.SignatureCeremony, error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
@@ -63,8 +75,7 @@ func (h *StartCeremonyHandler) Handle(ctx context.Context, cmd StartCeremonyCmd)
 	now := time.Now().UTC()
 	id := uuid.NewString()
 	nonce := uuid.NewString()
-	walletURI := fmt.Sprintf("openid4vp://?client_id=%s&request_uri=%s/signature/request/%s&nonce=%s",
-		ceremonyAudience, strings.TrimRight(cmd.BaseURL, "/"), id, nonce)
+	walletURI := buildCeremonyWalletURI(cmd.BaseURL, id)
 	expiresAt := now.Add(ceremonyTTL)
 
 	ceremony := db.SignatureCeremony{
@@ -121,7 +132,10 @@ func (h *WebhookHandler) Handle(ctx context.Context, cmd WebhookCmd) (*db.Signat
 	if strings.TrimSpace(cmd.Secret) == "" || cmd.Secret != WebhookSecret() {
 		return nil, ErrWebhookUnauthorized
 	}
+	return h.CompletePresentation(ctx, cmd)
+}
 
+func (h *WebhookHandler) CompletePresentation(ctx context.Context, cmd WebhookCmd) (*db.SignatureCeremony, error) {
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 

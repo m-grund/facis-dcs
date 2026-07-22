@@ -83,6 +83,27 @@ class PresentationTest(unittest.TestCase):
 
         self.assertEqual(disclosed_claim_names, ["organization"])
 
+    def test_playground_pid_discloses_only_default_identity_claims(self) -> None:
+        from pathlib import Path
+
+        cred_path = Path(__file__).resolve().parent.parent / "credentials" / "alicewilliams.pid.jwt"
+        if not cred_path.is_file():
+            self.skipTest("alicewilliams.pid.jwt not present")
+
+        vp = build_vp_token(
+            credential_name="alicewilliams.pid",
+            nonce="unit-test-nonce",
+            client_id="unit-test-aud",
+        )
+        _issuer_jwt, disclosures, _kb_jwt = split_sd_jwt(vp)
+        disclosed_claim_names = []
+        for disclosure in disclosures:
+            value = decode_disclosure(disclosure)
+            self.assertEqual(len(value), 3)
+            disclosed_claim_names.append(value[1])
+
+        self.assertEqual(disclosed_claim_names, ["given_name", "family_name", "birthdate"])
+
 
 if __name__ == "__main__":
     unittest.main()

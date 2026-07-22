@@ -1,9 +1,9 @@
 // Package pidverify re-verifies a PID SD-JWT VC + KB-JWT presentation for a
-// signing ceremony (UC-04-02, UC-04-03). It proves the presentation is
-// internally consistent: the holder binding key (cnf.jwk) signs the KB-JWT, the
+// signing ceremony UC-04-02, UC-04-03. It proves the presentation is
+// internally consistent: the holder binding key cnf.jwk signs the KB-JWT, the
 // KB-JWT carries the correct sd_hash for the disclosed credential, its audience
-// is the ceremony audience, and the credential subject equals the did:jwk of the
-// holder key.
+// is the ceremony audience, and the signer DID is credential sub when present
+// and matching did:jwk of cnf.jwk, otherwise that did:jwk derived from cnf.
 package pidverify
 
 import (
@@ -19,8 +19,9 @@ import (
 // PID presentation for a signing ceremony.
 const Audience = "dcs-signature-ceremony"
 
-// Verify validates the presentation and returns the signer DID (credential
-// subject) and the KB-JWT sd_hash.
+// Verify validates the presentation and returns the signer DID and the KB-JWT
+// sd_hash. Signer DID is credential sub when present, otherwise did:jwk from
+// cnf.jwk.
 func Verify(vpToken string) (signerDID, sdHash string, err error) {
 	presentation, err := sdjwt.ParsePresentation(vpToken)
 	if err != nil {
@@ -36,16 +37,17 @@ func Verify(vpToken string) (signerDID, sdHash string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	sub, _ := issuerClaims["sub"].(string)
-	sub = strings.TrimSpace(sub)
-	if sub == "" {
-		return "", "", fmt.Errorf("credential missing sub")
-	}
+
 	expectedSub, err := sdjwt.DIDJWKFromPublicJWK(cnfJWK)
 	if err != nil {
 		return "", "", fmt.Errorf("credential cnf.jwk: %w", err)
 	}
-	if sub != expectedSub {
+
+	sub, _ := issuerClaims["sub"].(string)
+	sub = strings.TrimSpace(sub)
+	if sub == "" {
+		sub = expectedSub
+	} else if sub != expectedSub {
 		return "", "", fmt.Errorf("credential sub does not match cnf.jwk holder binding")
 	}
 

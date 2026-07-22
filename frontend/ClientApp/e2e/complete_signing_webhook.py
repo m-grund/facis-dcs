@@ -1,18 +1,21 @@
-"""Wallet leg of the signing ceremony: builds the PID SD-JWT VC + KB-JWT
-presentation the way the real wallet does and delivers it over the wallet's
-own webhook channel (the EUDIPLO-test-client role). Self-contained — it uses
-the same testWallet/dcs_wallet signing primitives AuthService uses for the
-OID4VP login, without importing the behave step modules (which pull in the
+"""Wallet leg of the signing ceremony: builds the PID and PoA SD-JWT VC + KB-JWT
+presentation the way the real wallet does and delivers it over OpenID4VP
+direct_post (JAR from request_uri → vp_token to response_uri). Self-contained —
+it uses the same testWallet/dcs_wallet signing primitives AuthService uses for
+the OID4VP login, without importing the behave step modules (which pull in the
 bdd-executor runtime).
 
-Usage: python3 complete_signing_webhook.py <ceremony_id>
+Usage: python3 complete_signing_webhook.py <openid4vp://... | request_uri>
 Env:   STATUSLIST_SERVICE_URL, BDD_DCS_BASE_URL
 """
 
+from __future__ import annotations
+
+import json
 import os
 import sys
 import time
-import uuid
+from urllib.parse import parse_qs, urlparse
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 sys.path.insert(0, REPO_ROOT)
@@ -24,9 +27,25 @@ localhost_resolver.install()
 import requests  # noqa: E402
 
 from steps.support.api_client import did_document_url  # noqa: E402
-from steps.support.services.auth_service import AuthService  # noqa: E402
+from steps.support.services.auth_service import AuthCredentials, AuthService  # noqa: E402
 
-WEBHOOK_SECRET_HEADER = "X-EUDIPLO-Webhook-Secret"
+PID_QUERY_ID = "eudi_pid_credential"
+POA_QUERY_ID = "dcs_poa_credential"
+
+
+def resolve_request_uri(pasted: str) -> str:
+    pasted = pasted.strip()
+    if not pasted:
+        raise ValueError("empty presentation URL")
+    if pasted.startswith("openid4vp:"):
+        query = parse_qs(urlparse(pasted).query)
+        request_uri = (query.get("request_uri") or [""])[0]
+        if not request_uri:
+            raise ValueError("openid4vp URL missing request_uri")
+        return request_uri
+    if pasted.startswith("http://") or pasted.startswith("https://"):
+        return pasted
+    raise ValueError(f"unsupported presentation URL: {pasted[:80]}")
 
 
 def build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce: str):
@@ -61,11 +80,11 @@ def build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce
         aud=aud,
         nonce=nonce,
     )
-    return join_sd_jwt(issuer_jwt, disclosures, kb_jwt), subject_did
+    return join_sd_jwt(issuer_jwt, disclosures, kb_jwt)
 
 
 def main() -> None:
-    ceremony_id = sys.argv[1]
+    wallet_uri = sys.argv[1]
     base_url = os.environ["BDD_DCS_BASE_URL"].rstrip("/")
     # The organization the wallet's Power of Attorney authorizes it to act for.
     # One org runs one DCS, so that organization is the signing org's own DID,
@@ -73,21 +92,30 @@ def main() -> None:
     # testWallet self-issues under and every peer resolves against.
     poa_organization = requests.get(did_document_url(base_url), timeout=30).json()["id"]
     given_name, family_name = "E2E Vertical Signer", "E2E-Testperson"
-    presentation, subject_did = build_pid_presentation(
+
+    request_uri = resolve_request_uri(wallet_uri)
+    session = requests.Session()
+    auth_request = AuthService.fetch_authorization_request(session, request_uri, timeout=60)
+
+    pid_vp = build_pid_presentation(
         given_name=given_name,
         family_name=family_name,
-        aud="dcs-signature-ceremony",
-        nonce=str(uuid.uuid4()),
+        aud=auth_request.client_id,
+        nonce=auth_request.nonce,
     )
-    response = requests.post(
-        f"{base_url}/signature/request/webhook",
-        json={
-            "ceremony_id": ceremony_id,
-            "vp_token": presentation,
-            "pid_claims": {"sub": subject_did, "given_name": given_name, "family_name": family_name},
-            "poa_organization": poa_organization,
-        },
-        headers={WEBHOOK_SECRET_HEADER: os.getenv("BDD_EUDIPLO_WEBHOOK_SECRET", "bdd-eudiplo-webhook-secret")},
+    poa_vp = AuthService.build_vp_token(
+        AuthCredentials(organization=poa_organization, roles=["Contract Signer"]),
+        nonce=auth_request.nonce,
+        client_id=auth_request.client_id,
+    )
+    vp_token = json.dumps(
+        {PID_QUERY_ID: [pid_vp], POA_QUERY_ID: [poa_vp]},
+        separators=(",", ":"),
+    )
+    response = session.post(
+        auth_request.response_uri,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data={"state": auth_request.state, "vp_token": vp_token},
         timeout=60,
     )
     if not response.ok:
@@ -95,7 +123,7 @@ def main() -> None:
         # presented versus the party the ceremony is bound to); raise_for_status
         # alone reports only the code, which says nothing about the mismatch.
         raise SystemExit(
-            f"webhook {response.status_code} for ceremony {ceremony_id} at {base_url}\n"
+            f"direct_post {response.status_code} for {auth_request.response_uri}\n"
             f"  presented poa_organization={poa_organization!r}\n"
             f"  response: {response.text[:600]}"
         )
