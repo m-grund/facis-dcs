@@ -129,17 +129,29 @@ func (c *Client) ValidatePDF(ctx context.Context, pdf []byte, name string) (*Rep
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		c.baseURL+"/services/rest/validation/validateSignature", bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
+	// The DSS demo container restarts under CI resource pressure; a request
+	// issued during a restart hits connection-refused/EOF. Retry the transport
+	// across a restart window before failing — a configured DSS stays required,
+	// this just waits for it to come back rather than dropping the check.
+	var resp *http.Response
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+			c.baseURL+"/services/rest/validation/validateSignature", bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("dss: validation request failed: %w", err)
+		resp, err = c.httpClient.Do(req)
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			return nil, fmt.Errorf("dss: validation request failed: %w", err)
+		}
+		time.Sleep(3 * time.Second)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(resp.Body)

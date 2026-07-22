@@ -125,9 +125,9 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 // Download posts jsonld to POST /render and returns the resulting PDF bytes
 // plus the renderer version from the X-PDF-Core-Version response header.
 func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, version string, err error) {
-	jsonld, err = flattenComposedStructure(jsonld)
+	jsonld, err = inlinePlaceholderRenderText(jsonld)
 	if err != nil {
-		return nil, "", fmt.Errorf("pdf-core download: flatten composed structure: %w", err)
+		return nil, "", fmt.Errorf("pdf-core download: inline placeholder text: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		c.BaseURL+"/render", bytes.NewReader(jsonld))
@@ -164,9 +164,9 @@ func (c *Client) Download(ctx context.Context, jsonld []byte) (pdf []byte, versi
 // (DCS-OR-C2PA-008). Returns the updated PDF bytes and the renderer version
 // header.
 func (c *Client) Update(ctx context.Context, existingPDF, jsonld, vcBytes []byte, manifestURL string) (pdf []byte, version string, err error) {
-	jsonld, err = flattenComposedStructure(jsonld)
+	jsonld, err = inlinePlaceholderRenderText(jsonld)
 	if err != nil {
-		return nil, "", fmt.Errorf("pdf-core update: flatten composed structure: %w", err)
+		return nil, "", fmt.Errorf("pdf-core update: inline placeholder text: %w", err)
 	}
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -339,6 +339,40 @@ func (c *Client) Verify(ctx context.Context, pdf []byte) (VerifyResult, error) {
 		result.VCBytes = decoded
 	}
 	return result, nil
+}
+
+// VerifyContent posts pdf to POST /verify/content and reports whether the PDF's
+// human-readable page content is the deterministic re-render of its own embedded
+// machine-readable payload. Unlike Verify (byte-prefix reproduction), this is
+// tolerant of the C2PA, signature and amendment layers a peer may have appended,
+// so a legitimately amended offered PDF still matches while tampered page content
+// does not. On a mismatch it also returns a diagnostic detail (which page diverged
+// and a snippet of both renders) so the caller can log WHERE they diverge. Returns
+// an error on non-2xx.
+func (c *Client) VerifyContent(ctx context.Context, pdf []byte) (bool, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+"/verify/content", bytes.NewReader(pdf))
+	if err != nil {
+		return false, "", fmt.Errorf("pdf-core verify/content request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/pdf")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return false, "", fmt.Errorf("pdf-core verify/content: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := checkStatus(resp); err != nil {
+		return false, "", err
+	}
+	var body struct {
+		Match    bool   `json:"match"`
+		Mismatch string `json:"mismatch"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return false, "", fmt.Errorf("pdf-core verify/content: decode: %w", err)
+	}
+	return body.Match, body.Mismatch, nil
 }
 
 // ExtractManifest posts pdf to POST /manifest/extract and returns the raw JUMBF

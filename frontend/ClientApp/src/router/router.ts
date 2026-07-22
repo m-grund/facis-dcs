@@ -7,6 +7,7 @@ import {
   EyeIcon,
   PencilSquareIcon,
   ShieldCheckIcon,
+  ShieldExclamationIcon,
   Square3Stack3DIcon,
   SquaresPlusIcon,
 } from '@heroicons/vue/20/solid'
@@ -39,6 +40,7 @@ import ReviewContractView from '@/views/contract/ReviewContractView.vue'
 import ViewContractView from '@/views/contract/ViewContractView.vue'
 import ContractTemplateListView from '@/views/contract-template-list/ContractTemplateListView.vue'
 import FrontPageView from '@/views/FrontPageView.vue'
+import NonComplianceInvestigationView from '@/views/non-compliance/NonComplianceInvestigationView.vue'
 import SecureContractViewerView from '@/views/signing/SecureContractViewerView.vue'
 import SigningListView from '@/views/signing/SigningListView.vue'
 import TaskListView from '@/views/task/TaskListView.vue'
@@ -85,6 +87,9 @@ const ROUTES = {
   },
   COMPLIANCE: {
     VIEWER: 'compliance.viewer',
+  },
+  NON_COMPLIANCE: {
+    INVESTIGATION: 'non_compliance.investigation',
   },
   SEMANTIC_HUB: {
     DASHBOARD: 'semantic_hub.dashboard',
@@ -417,6 +422,19 @@ const routes: RouteRecordRaw[] = [
       title: 'DCS - Signature Compliance Viewer',
       order: 7,
       roles: ['AUDITOR', 'COMPLIANCE_OFFICER', 'CONTRACT_MANAGER'],
+    },
+  },
+  {
+    path: '/non-compliance',
+    name: ROUTES.NON_COMPLIANCE.INVESTIGATION,
+    component: NonComplianceInvestigationView,
+    meta: {
+      name: 'Non-Compliance Investigation',
+      icon: ShieldExclamationIcon,
+      requiresAuth: true,
+      title: 'DCS - Non-Compliance Investigation',
+      order: 7,
+      roles: ['COMPLIANCE_OFFICER'],
     },
   },
   {

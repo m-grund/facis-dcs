@@ -118,3 +118,28 @@ func (e ComplianceRiskEvent) EventType() string {
 func (e ComplianceRiskEvent) GetDID() string {
 	return e.DID
 }
+
+// IncidentReportEvent anchors one non-compliance finding submitted through
+// POST /pac/report (DCS-IR-PACM-04) against the affected contract or
+// template's PAC audit chain, mirroring ComplianceRiskEvent's per-resource
+// anchoring so a PROCESS_AUDIT_AND_COMPLIANCE-scope audit read can prove the
+// finding was recorded, not merely accepted.
+type IncidentReportEvent struct {
+	DID        string             `json:"did"`
+	RiskType   string             `json:"risk_type"`
+	Detail     string             `json:"detail"`
+	ReportedBy string             `json:"reported_by"`
+	OccurredAt time.Time          `json:"occurred_at"`
+	HolderDID  string             `json:"holder_did"`
+	UserRoles  userrole.UserRoles `json:"user_roles"`
+}
+
+// EventType implements the Event interface.
+func (e IncidentReportEvent) EventType() string {
+	return "PAC_INCIDENT_REPORT"
+}
+
+// GetDID implements the Event interface.
+func (e IncidentReportEvent) GetDID() string {
+	return e.DID
+}

@@ -165,6 +165,20 @@ func (h *Creator) Handle(ctx context.Context, cmd CreateCmd) error {
 		Counterparty: cmd.Counterparty,
 	}
 
+	// Seed one AcroForm signature field per party (origin + counterparty) into the
+	// genesis document, so the very first render carries the full signable
+	// structure. A signature field can only be materialized by a fresh render;
+	// seeding it here means every later render is a provenance-preserving amend of
+	// the stored PDF (or a verbatim carry-over of an inbound one) rather than a
+	// fresh render that would strip the C2PA chain and signatures (ADR-12/ADR-13).
+	seeded, changed, err := seedSignatureFields(*normalizedContractData, resp.GetParties())
+	if err != nil {
+		return fmt.Errorf("could not seed signature fields: %w", err)
+	}
+	if changed {
+		normalizedContractData = &seeded
+	}
+
 	data := db.Contract{
 		DID:             cmd.DID,
 		Origin:          localPeer,

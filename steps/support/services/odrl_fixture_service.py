@@ -15,6 +15,15 @@ carrying either:
     whose rules each carry exactly one `odrl:action` plus
     `odrl:assigner`/`odrl:assignee`/`odrl:target`.
 
+A negotiable data point is one typed `dcs:Placeholder` node (ADR-15,
+docs/adr-15-placeholder-typed-node.md): self-contained, carrying its
+`dcs:datatype` inline (resolved from the field's SHACL shape) and — when a
+value is set — that value inline on `dcs:value`. The node lives in the flat
+top-level `dcs:contractData` registry; the human-readable clause references it
+by a bare `{"@id"}` and the ODRL constraint's `odrl:leftOperand` names the SAME
+`@id`. The backend hard-fails a placeholder that carries no `dcs:datatype`
+(canonicalFieldIDs), so every node here declares one.
+
 Both shapes constrain the SAME field (`urn:uuid:field-provider-country`, a
 string, or `urn:uuid:field-provider-coverage`, a number) so the same fixture
 family can drive the structure, enforcement, operator-matrix, and
@@ -24,29 +33,30 @@ bare-shape-rejection scenarios.
 FIELD_COUNTRY = "urn:uuid:field-provider-country"
 FIELD_COVERAGE = "urn:uuid:field-provider-coverage"
 
+# field name -> (@id, human dcs:label, xsd datatype resolved from its SHACL shape)
 _FIELD_BY_NAME = {
-    "country": (FIELD_COUNTRY, "country", "string"),
-    "coverage": (FIELD_COVERAGE, "coverage", "number"),
+    "country": (FIELD_COUNTRY, "Provider country", "xsd:string"),
+    "coverage": (FIELD_COVERAGE, "Provider coverage", "xsd:decimal"),
 }
 
 
-
-
-def _requirement_field(field_name: str, actual_value=None) -> dict:
-    field_id, parameter_name, value_type = _FIELD_BY_NAME[field_name]
-    field = {
+def _placeholder_node(field_name: str, actual_value=None) -> dict:
+    """One typed `dcs:Placeholder` node (ADR-15): self-contained, carrying its
+    `dcs:datatype` inline (from the field's SHACL shape) and, when a value is
+    set, that value inline on `dcs:value` — the shape the enforcement path
+    reads and the datatype the backend's canonicalFieldIDs validator requires.
+    """
+    field_id, label, datatype = _FIELD_BY_NAME[field_name]
+    node = {
         "@id": field_id,
-        "@type": "dcs:RequirementField",
-        "dcs:parameterName": parameter_name,
-        "dcs:valueType": value_type,
+        "@type": "dcs:Placeholder",
+        "dcs:label": label,
+        "dcs:datatype": datatype,
         "dcs:required": True,
     }
     if actual_value is not None:
-        # The submitted value lives inline on the requirement field
-        # (dcs:parameterValue) — the shape the enforcement path reads.
-        field["dcs:parameterValue"] = actual_value
-        field["dcs:blockId"] = "block-clause-1"
-    return field
+        node["dcs:value"] = actual_value
+    return node
 
 
 def bare_duty_policies(field_name: str, operator: str, right_operand) -> list:
@@ -78,7 +88,8 @@ def odrl_set_policies(
 ) -> dict:
     """The canonical ODRL 2.2 shape: one enclosing `odrl:Offer` (`@id` anchored to
     contract DID), `odrl:profile` declared, rule carries exactly one
-    `odrl:action` plus assigner/assignee/target.
+    `odrl:action` plus assigner/assignee/target. The constraint's
+    `odrl:leftOperand` names the placeholder node's `@id` (ADR-15).
     """
     field_id, _, _ = _FIELD_BY_NAME[field_name]
     rule_bucket = {
@@ -111,8 +122,13 @@ def odrl_set_policies(
 
 def build_contract_document(contract_did: str, field_name: str, policies, actual_value) -> dict:
     """A full canonical `dcs:Contract` document (documentStructure +
-    contractData (values inline on the field) + policies) suitable for a full
-    replacement PUT to /contract/update while the contract is in DRAFT.
+    contractData + policies) suitable for a full replacement PUT to
+    /contract/update while the contract is in DRAFT.
+
+    `dcs:contractData` is the flat, self-contained registry of typed
+    `dcs:Placeholder` nodes (ADR-15); the clause references the node by a bare
+    `{"@id"}`, the value rides inline on the node (`dcs:value`), and the ODRL
+    constraint names the same `@id`.
     """
     field_id, _, _ = _FIELD_BY_NAME[field_name]
     return {
@@ -135,37 +151,24 @@ def build_contract_document(contract_did: str, field_name: str, policies, actual
                         "dcs:content": {
                             "@list": [
                                 f"Provider {field_name}: ",
-                                {
-                                    "@type": "dcs:Placeholder",
-                                    "dcs:token": f"{{{{provider.{field_name}}}}}",
-                                    "dcs:bindsTo": {"@id": field_id},
-                                },
+                                {"@id": field_id},
                             ]
                         },
                     }
                 ]
             },
-            "dcs:layout": [
-                {
-                    "@id": "urn:uuid:block-root",
-                    "@type": "dcs:LayoutNode",
-                    "dcs:isRoot": True,
-                    "dcs:children": {"@list": [{"@id": "urn:uuid:block-clause-1"}]},
-                }
-            ],
+            "dcs:layout": {
+                "@list": [
+                    {
+                        "@id": "urn:uuid:block-root",
+                        "@type": "dcs:LayoutNode",
+                        "dcs:isRoot": True,
+                        "dcs:children": {"@list": [{"@id": "urn:uuid:block-clause-1"}]},
+                    }
+                ]
+            },
         },
-        "dcs:contractData": [
-            {
-                "@id": "urn:uuid:requirement-provider",
-                "@type": "dcs:DataRequirement",
-                "dcs:conditionId": "provider",
-                "dcs:name": "Provider",
-                "dcs:schemaVersion": "v1",
-                "dcs:entityType": "CompanyParty",
-                "dcs:entityRole": "provider",
-                "dcs:fields": [_requirement_field(field_name, actual_value)],
-            }
-        ],
+        "dcs:contractData": [_placeholder_node(field_name, actual_value)],
         "dcs:policies": policies,
     }
 

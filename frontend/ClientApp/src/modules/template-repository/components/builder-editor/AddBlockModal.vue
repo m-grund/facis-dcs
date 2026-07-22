@@ -1,25 +1,29 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
-import ApprovedSubTemplatePicker from '@template-repository/components/builder-editor/preview/ApprovedSubTemplatePicker.vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import {
   getPlaceholderLabelFromConditions,
   parseSegmentsFromContent,
   type Segment,
 } from '@template-repository/composables/useClauseTextChips'
+import { TemplateType } from '@template-repository/models/contract-template.ts'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import { contractTemplateService } from '@/services/contract-template-service'
+import { useContractTemplatesStore } from '@/stores/contract-templates-store'
+import { TemplateState } from '@/types/contract-template-state'
 import BlockPaletteItem from './document-block/BlockPaletteItem.vue'
-import { TemplateType } from '../../models/contract-template.ts'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
+import type { ContractTemplate } from '@/models/contract-template'
 import type { DcsClause } from '@/models/dcs-jsonld'
 import type { NewBlockType } from '@template-repository/models/template-draft-store'
 
 const draftStore = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
+const templatesStore = useContractTemplatesStore()
 const { addBlockModalContext, pendingPlacementClauseBlockId } = storeToRefs(uiStore)
-const { blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
+const { blocks, semanticConditions } = storeToRefs(draftStore)
+const { contractTemplates: allTemplates } = storeToRefs(templatesStore)
 
 const isContractWorkflow = computed(() => uiStore.workflow === 'contract')
 const paletteBlockTypes: { blockType: NewBlockType; label: string }[] = [
@@ -29,16 +33,22 @@ const paletteBlockTypes: { blockType: NewBlockType; label: string }[] = [
 ]
 
 const isContractTemplate = computed(() => draftStore.templateType === TemplateType.contractTemplate)
+const showComponentPicker = computed(() => !isContractWorkflow.value && isContractTemplate.value)
 
-const referenceCountByDid = computed(() => {
-  const inOutline = draftStore.blockIdsInOutline
-  const count: Record<string, number> = {}
-  for (const b of blocks.value) {
-    if (b['@type'] !== 'dcs:ApprovedTemplate' || !inOutline.has(b['@id'])) continue
-    const did = b['dcs:templateDid']
-    count[did] = (count[did] ?? 0) + 1
-  }
-  return count
+onMounted(() => {
+  if (showComponentPicker.value) void templatesStore.loadTemplates()
+})
+
+const componentSearch = ref('')
+const componentTemplates = computed((): ContractTemplate[] => {
+  const query = componentSearch.value.trim().toLowerCase()
+  const selectableStates = new Set<string>([TemplateState.approved, TemplateState.published])
+  return allTemplates.value.filter(
+    (t) =>
+      selectableStates.has(t.state) &&
+      t.template_type === TemplateType.component &&
+      (query === '' || (t.name ?? '').toLowerCase().includes(query) || t.did.toLowerCase().includes(query)),
+  )
 })
 
 const unusedClauses = computed((): DcsClause[] => {
@@ -70,6 +80,7 @@ function clauseContentText(clause: DcsClause): string {
 
 watch(addBlockModalContext, () => {
   clauseSearch.value = ''
+  componentSearch.value = ''
 })
 
 function getSegments(clause: DcsClause): Segment[] {
@@ -93,15 +104,18 @@ function handleAddBlock(blockType: NewBlockType) {
   uiStore.closeAddBlockModal()
 }
 
-function handleAddApprovedTemplate(template: SubTemplateSnapshot) {
+// Flatten-on-compose: fetch the component's full template_data and inline its
+// blocks, placeholders and policies into this document at the insertion point.
+async function handleAddComponent(template: ContractTemplate) {
   const ctx = addBlockModalContext.value
   if (ctx === null) return
-  draftStore.addBlock(ctx.parentBlockId, ctx.insertIndex, {
-    blockType: 'dcs:ApprovedTemplate',
-    templateId: template.did,
+  const full = await contractTemplateService.retrieveById({
+    did: template.did,
     version: template.version,
     document_number: template.document_number,
   })
+  if (!full) return
+  draftStore.inlineComponent(full, ctx.parentBlockId, ctx.insertIndex)
   uiStore.closeAddBlockModal()
 }
 
@@ -131,76 +145,95 @@ function handleAddClause(clauseBlockId: string) {
         @click.stop
       >
         <h2 id="add-block-title" class="text-lg font-bold">Add block</h2>
-        <template v-if="!isContractWorkflow && isContractTemplate">
-          <ApprovedSubTemplatePicker
-            :templates="subTemplateSnapshots"
-            :reference-count-by-did="referenceCountByDid"
-            @select="handleAddApprovedTemplate"
-          />
-        </template>
-        <template v-else>
-          <div>
-            <p class="mb-2 text-sm text-base-content/70">Common:</p>
-            <div class="flex flex-col gap-2">
-              <BlockPaletteItem
-                v-for="item in paletteBlockTypes"
-                :key="item.blockType"
-                :label="item.label"
-                @select="handleAddBlock(item.blockType)"
-              />
-            </div>
+        <div>
+          <p class="mb-2 text-sm text-base-content/70">Common:</p>
+          <div class="flex flex-col gap-2">
+            <BlockPaletteItem
+              v-for="item in paletteBlockTypes"
+              :key="item.blockType"
+              :label="item.label"
+              @select="handleAddBlock(item.blockType)"
+            />
           </div>
+        </div>
 
-          <div class="border-t border-base-300 pt-4">
-            <div v-if="pendingPlacementClause" class="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
-              <p class="mb-2 text-xs font-semibold text-primary">Selected clause</p>
-              <button
-                type="button"
-                class="flex min-h-11 w-full cursor-pointer flex-col justify-center rounded-lg border border-primary/40 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
-                @click="handleAddClause(pendingPlacementClause['@id'])"
-              >
-                <span class="text-sm font-medium text-base-content">
-                  {{ pendingPlacementClause['dcs:title'] || 'Untitled clause' }}
-                </span>
-                <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
-                  <ClauseSegmentsPreview
-                    :segments="getSegments(pendingPlacementClause)"
-                    :get-placeholder-label="getPlaceholderLabel"
-                  />
-                </p>
-              </button>
-            </div>
-            <div class="mb-2 flex flex-col gap-2">
-              <p class="text-sm text-base-content/70">Defined clauses:</p>
-              <input
-                v-model="clauseSearch"
-                type="search"
-                class="input-bordered input input-sm w-full"
-                placeholder="Search clauses"
-                autocomplete="off"
-              />
-            </div>
-            <div class="flex max-h-64 flex-col gap-2 overflow-y-auto">
-              <button
-                v-for="clause in filteredUnusedClauses"
-                :key="clause['@id']"
-                type="button"
-                class="flex min-h-11 cursor-pointer flex-col justify-center rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
-                @click="handleAddClause(clause['@id'])"
-              >
-                <span class="text-sm font-medium text-base-content">
-                  {{ clause['dcs:title'] || 'Untitled clause' }}
-                </span>
-                <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
-                  <ClauseSegmentsPreview :segments="getSegments(clause)" :get-placeholder-label="getPlaceholderLabel" />
-                </p>
-              </button>
-              <p v-if="!filteredUnusedClauses.length" class="py-2 text-sm text-base-content/50">
-                {{ unusedClauses.length ? 'No matching clauses.' : 'No unplaced clauses from the Clauses tab.' }}
-              </p>
-            </div>
+        <div v-if="showComponentPicker" class="border-t border-base-300 pt-4">
+          <div class="mb-2 flex flex-col gap-2">
+            <p class="text-sm text-base-content/70">Components (inlined on add):</p>
+            <input
+              v-model="componentSearch"
+              type="search"
+              class="input-bordered input input-sm w-full"
+              placeholder="Search components"
+              autocomplete="off"
+            />
           </div>
-        </template>
+          <div class="flex max-h-64 flex-col gap-2 overflow-y-auto">
+            <button
+              v-for="t in componentTemplates"
+              :key="`${t.did}-${t.version}-${t.document_number}`"
+              type="button"
+              class="flex min-h-11 cursor-pointer flex-col justify-center rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
+              @click="handleAddComponent(t)"
+            >
+              <span class="text-sm font-medium text-base-content">{{ t.name }}</span>
+              <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">{{ t.description }}</p>
+            </button>
+            <p v-if="!componentTemplates.length" class="py-2 text-sm text-base-content/50">
+              {{ componentSearch ? 'No matching components.' : 'No approved components available.' }}
+            </p>
+          </div>
+        </div>
+
+        <div class="border-t border-base-300 pt-4">
+          <div v-if="pendingPlacementClause" class="mb-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+            <p class="mb-2 text-xs font-semibold text-primary">Selected clause</p>
+            <button
+              type="button"
+              class="flex min-h-11 w-full cursor-pointer flex-col justify-center rounded-lg border border-primary/40 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
+              @click="handleAddClause(pendingPlacementClause['@id'])"
+            >
+              <span class="text-sm font-medium text-base-content">
+                {{ pendingPlacementClause['dcs:title'] || 'Untitled clause' }}
+              </span>
+              <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
+                <ClauseSegmentsPreview
+                  :segments="getSegments(pendingPlacementClause)"
+                  :get-placeholder-label="getPlaceholderLabel"
+                />
+              </p>
+            </button>
+          </div>
+          <div class="mb-2 flex flex-col gap-2">
+            <p class="text-sm text-base-content/70">Defined clauses:</p>
+            <input
+              v-model="clauseSearch"
+              type="search"
+              class="input-bordered input input-sm w-full"
+              placeholder="Search clauses"
+              autocomplete="off"
+            />
+          </div>
+          <div class="flex max-h-64 flex-col gap-2 overflow-y-auto">
+            <button
+              v-for="clause in filteredUnusedClauses"
+              :key="clause['@id']"
+              type="button"
+              class="flex min-h-11 cursor-pointer flex-col justify-center rounded-lg border border-base-300 bg-base-100 px-3 py-2 text-left transition-colors select-none hover:bg-base-200"
+              @click="handleAddClause(clause['@id'])"
+            >
+              <span class="text-sm font-medium text-base-content">
+                {{ clause['dcs:title'] || 'Untitled clause' }}
+              </span>
+              <p class="mt-0.5 line-clamp-2 text-xs leading-relaxed text-base-content/70">
+                <ClauseSegmentsPreview :segments="getSegments(clause)" :get-placeholder-label="getPlaceholderLabel" />
+              </p>
+            </button>
+            <p v-if="!filteredUnusedClauses.length" class="py-2 text-sm text-base-content/50">
+              {{ unusedClauses.length ? 'No matching clauses.' : 'No unplaced clauses from the Clauses tab.' }}
+            </p>
+          </div>
+        </div>
 
         <div class="flex justify-end pt-2">
           <button type="button" class="btn btn-outline btn-sm" @click="handleCancel">Cancel</button>

@@ -34,11 +34,7 @@ const emit = defineEmits<{
   delete: []
 }>()
 
-const canInsertNest = computed(
-  () =>
-    !!props.item.block &&
-    (props.item.block['@type'] === 'dcs:Section' || props.item.block['@type'] === 'dcs:ApprovedTemplate'),
-)
+const canInsertNest = computed(() => !!props.item.block && props.item.block['@type'] === 'dcs:Section')
 const canMoveUp = computed(() => props.item.siblingIndex > 0)
 const canMoveDown = computed(() => props.item.siblingIndex < props.item.siblingCount - 1)
 const canOutdent = computed(() => props.item.canOutdent)

@@ -3,7 +3,7 @@ import { storeToRefs } from 'pinia'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 
-const { layout, blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(useDcsDraftStore())
+const { layout, blocks, semanticConditions } = storeToRefs(useDcsDraftStore())
 </script>
 
 <template>
@@ -16,12 +16,7 @@ const { layout, blocks, semanticConditions, subTemplateSnapshots } = storeToRefs
         style="aspect-ratio: 210 / 297"
       >
         <div class="h-full w-full overflow-auto px-10 py-8">
-          <TemplatePreview
-            :layout="layout"
-            :blocks="blocks"
-            :semantic-conditions="semanticConditions"
-            :sub-template-snapshots="subTemplateSnapshots"
-          />
+          <TemplatePreview :layout="layout" :blocks="blocks" :semantic-conditions="semanticConditions" />
         </div>
       </div>
     </div>

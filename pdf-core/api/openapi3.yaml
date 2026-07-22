@@ -102,6 +102,45 @@ paths:
                     $ref: '#/components/responses/UnsupportedMediaType'
                 "422":
                     $ref: '#/components/responses/UnprocessableEntity'
+    /verify/content:
+        post:
+            tags:
+                - dcspdfcore
+            summary: Verify a PDF's human-readable content against its embedded payload
+            description: |
+                Verify that a PDF's visible page content is the deterministic re-render of its own
+                embedded machine-readable JSON-LD payload. Unlike /verify (which requires byte-prefix
+                reproduction), this compares only the page content streams, so C2PA, signature and
+                amendment layers a peer legitimately appended do not cause a mismatch while tampered
+                page content does. Used to gate a peer-received contract PDF before it is carried over.
+            operationId: verifyContent
+            requestBody:
+                required: true
+                content:
+                    application/pdf:
+                        schema:
+                            type: string
+                            format: binary
+                            description: Received PDF whose page content is checked against its embedded payload
+            responses:
+                "200":
+                    description: Content verification result.
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                required:
+                                    - match
+                                properties:
+                                    match:
+                                        type: boolean
+                                        description: True when every page content stream re-renders from the embedded payload.
+                "400":
+                    $ref: '#/components/responses/BadRequest'
+                "415":
+                    $ref: '#/components/responses/UnsupportedMediaType'
+                "422":
+                    $ref: '#/components/responses/UnprocessableEntity'
     /update:
         post:
             tags:

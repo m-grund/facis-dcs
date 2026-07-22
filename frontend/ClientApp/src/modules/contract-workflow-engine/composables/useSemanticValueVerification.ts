@@ -1,17 +1,8 @@
-import { isDcsMergedApprovedTemplate } from '@template-repository/store/dcsDraftStore'
-import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
 import { normalizeNumberInput } from '@template-repository/utils/number-format'
-import {
-  getOwnerBlockIdFromMergedBlockId,
-  isMergedBlockId,
-  isSameTemplateDataRef,
-} from '@template-repository/utils/template-data-ref'
 import { resolveAllowedValues } from '@template-repository/utils/value-constraint-catalog'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsBlock, DcsClause } from '@/models/dcs-jsonld'
 import type { SemanticCondition, SemanticValueConstraint } from '@template-repository/models/contract-template'
-import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 export interface VerificationResult {
   isValid: boolean
@@ -23,19 +14,12 @@ export interface VerificationResult {
   }[]
 }
 
-interface subTemplateSemanticCondition {
-  templateId: string
-  version: number
-  document_number?: string
-  semanticConditions: SemanticCondition[]
-}
-
 function clauseConditionIds(clause: DcsClause, semanticConditions: SemanticCondition[]): string[] {
   const content = clause['dcs:content']
   if (typeof content === 'string') return []
   const fieldIds = new Set<string>()
   for (const seg of content['@list']) {
-    if (typeof seg !== 'string') fieldIds.add(seg['dcs:bindsTo']['@id'])
+    if (typeof seg !== 'string') fieldIds.add(seg['@id'])
   }
   const conditionIds = new Set<string>()
   for (const cond of semanticConditions) {
@@ -48,78 +32,28 @@ function clauseConditionIds(clause: DcsClause, semanticConditions: SemanticCondi
 
 export function hasConditionParameterForValue(
   conditionValue: SemanticConditionValue,
-  blocks: (DcsBlock | MergedApprovedTemplateBlock)[],
+  blocks: DcsBlock[],
   semanticConditions: SemanticCondition[],
-  subTemplateSnapshots: SubTemplateSnapshot[],
 ): boolean {
-  const block = blocks.find((b) => b['@id'] === conditionValue.blockId)
-  if (block?.['@type'] !== 'dcs:Clause') return false
-  const clause = block
-  const availableConditions = getConditionsByBlockId(
-    conditionValue.blockId,
-    blocks,
-    semanticConditions,
-    subTemplateSnapshots,
+  // A filled value is keyed by its placeholder @id (conditionId), not by the
+  // referencing block — its blockId is intentionally empty. It stays valid as
+  // long as some clause references that placeholder and the matching condition
+  // declares the parameter. Looking the block up by blockId (== '') matched
+  // nothing, so the cleanup watcher dropped every value, emptied the store and
+  // flipped changedContractData true, disabling Submit.
+  const referenced = blocks.some(
+    (block) =>
+      block['@type'] === 'dcs:Clause' &&
+      clauseConditionIds(block, semanticConditions).includes(conditionValue.conditionId),
   )
-  const condIds = clauseConditionIds(clause, availableConditions)
-  if (!condIds.includes(conditionValue.conditionId)) return false
+  if (!referenced) return false
 
-  const matchedCondition = availableConditions.find((condition) => condition.conditionId === conditionValue.conditionId)
+  const matchedCondition = semanticConditions.find((condition) => condition.conditionId === conditionValue.conditionId)
   if (!matchedCondition) return false
   return matchedCondition.parameters.some((parameter) => parameter.parameterName === conditionValue.parameterName)
 }
 
-function getConditionsByBlockId(
-  blockId: string,
-  blocks: (DcsBlock | MergedApprovedTemplateBlock)[],
-  semanticConditions: SemanticCondition[],
-  subTemplateSnapshots: SubTemplateSnapshot[],
-): SemanticCondition[] {
-  let conditions = semanticConditions
-  if (!isMergedBlockId(blockId)) return conditions
-
-  const ownerBlockId = getOwnerBlockIdFromMergedBlockId(blockId)
-  if (!ownerBlockId) return conditions
-  const mergedBlock = blocks.find((b) => b['@id'] === ownerBlockId)
-  if (!mergedBlock || !isDcsMergedApprovedTemplate(mergedBlock)) return conditions
-
-  const matchedSnapshot = subTemplateSnapshots.find((snapshot) =>
-    isSameTemplateDataRef(
-      { templateId: snapshot.did, version: snapshot.version, document_number: snapshot.document_number },
-      {
-        templateId: mergedBlock['dcs:templateDid'],
-        version: mergedBlock['dcs:version'],
-        document_number: mergedBlock['dcs:documentNumber'],
-      },
-    ),
-  )
-  if (matchedSnapshot?.template_data) conditions = getSemanticConditionsFromTemplateData(matchedSnapshot.template_data)
-  return conditions
-}
-
 export function useSemanticValueVerification() {
-  function getConditions(
-    blockId: string,
-    blocks: (DcsBlock | MergedApprovedTemplateBlock)[],
-    semanticConditions: SemanticCondition[],
-    subTemplateSemanticConditions: subTemplateSemanticCondition[],
-  ): SemanticCondition[] {
-    let conditions = semanticConditions
-    if (!isMergedBlockId(blockId)) return conditions
-    const ownerBlockId = getOwnerBlockIdFromMergedBlockId(blockId)
-    const mergedBlock = ownerBlockId ? blocks.find((b) => b['@id'] === ownerBlockId) : undefined
-    if (mergedBlock && isDcsMergedApprovedTemplate(mergedBlock)) {
-      const mergedBlockRef = {
-        templateId: mergedBlock['dcs:templateDid'],
-        version: mergedBlock['dcs:version'],
-        document_number: mergedBlock['dcs:documentNumber'],
-      }
-      const c = subTemplateSemanticConditions.find((c) => isSameTemplateDataRef(c, mergedBlockRef))
-      if (c) conditions = c.semanticConditions
-    }
-    return conditions
-  }
-
   function validateParameterType(value: string | number | boolean, type: string): boolean {
     switch (type) {
       case 'string':
@@ -168,16 +102,15 @@ export function useSemanticValueVerification() {
 
   function verifySemanticValue(
     semanticConditions: SemanticCondition[],
-    subTemplateSemanticConditions: subTemplateSemanticCondition[],
     semanticConditionValues: SemanticConditionValue[],
-    blocks: (DcsBlock | MergedApprovedTemplateBlock)[],
+    blocks: DcsBlock[],
   ): VerificationResult {
     const errors: VerificationResult['errors'] = []
     let isValid = false
     blocks.forEach((b) => {
       if (b['@type'] !== 'dcs:Clause') return
       const clause = b
-      const conditions = getConditions(clause['@id'], blocks, semanticConditions, subTemplateSemanticConditions)
+      const conditions = semanticConditions
       const conditionIds = clauseConditionIds(clause, conditions)
       conditionIds.forEach((cId) => {
         const condition = conditions.find((c) => c.conditionId === cId)
@@ -186,10 +119,9 @@ export function useSemanticValueVerification() {
           if (!p.isRequired) return
           const parameterName = p.parameterName
           const isValueExist = semanticConditionValues.find(
-            (conditionValue) =>
-              conditionValue.blockId === clause['@id'] &&
-              conditionValue.conditionId === cId &&
-              conditionValue.parameterName === parameterName,
+            // A value is keyed by its placeholder @id (conditionId), not the
+            // referencing block — see PreviewClauseBlock / applyInlineSemanticValues.
+            (conditionValue) => conditionValue.conditionId === cId && conditionValue.parameterName === parameterName,
           )
           if (!isValueExist) {
             errors.push({
@@ -204,7 +136,7 @@ export function useSemanticValueVerification() {
     })
 
     semanticConditionValues.forEach((value) => {
-      const conditions = getConditions(value.blockId, blocks, semanticConditions, subTemplateSemanticConditions)
+      const conditions = semanticConditions
       const fieldName = value.parameterName || 'this field'
       const condition = conditions.find((cond) => cond.conditionId === value.conditionId)
       if (!condition) {

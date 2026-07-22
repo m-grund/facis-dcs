@@ -16,8 +16,6 @@ import (
 	compiler "example.com/m/V2/compiler"
 	"example.com/m/V2/manifest"
 
-	"time"
-
 	"github.com/google/uuid"
 )
 
@@ -188,7 +186,9 @@ func (s *service) render(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	signer := compiler.NewCapturingSigner()
-	pdf, err := compiler.CompilePDF(compiler.WithSigner(r.Context(), signer), canonical, time.Now())
+	// Pass the verbatim raw payload: CompilePDF canonicalizes internally for the
+	// render model + graph hash, but embeds these exact bytes as the attachment.
+	pdf, err := compiler.CompilePDF(compiler.WithSigner(r.Context(), signer), raw, compiler.CanonicalCompiledAt)
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return
@@ -254,6 +254,17 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 			writeError(w, errConflict(errors.New("embedded payload does not reproduce the submitted PDF")))
 			return
 		}
+		// An unsigned base must be byte-EQUAL to its deterministic recompile. The
+		// only legitimate bytes appended after a compiled base are a PAdES
+		// signature layer (which makes the PDF signed) or a dcs incremental update
+		// (handled by the branch above via its marker). Trailing content on an
+		// otherwise-unsigned PDF is an offline amendment made outside /update —
+		// reject it (DCS-OR-C2PA-002 tamper-evidence).
+		if !compiler.IsPAdESSigned(raw) &&
+			len(compiler.ZeroCOSESignatures(raw)) != len(compiler.ZeroCOSESignatures(recompiled)) {
+			writeError(w, errConflict(errors.New("submitted PDF was amended offline, outside the /update workflow")))
+			return
+		}
 	}
 
 	// Extract VC attachment if present — returned to the caller so it can
@@ -280,6 +291,50 @@ func (s *service) verify(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+// verifyContent checks ONLY that the submitted PDF's visible page content is the
+// deterministic render of its own embedded machine-readable payload, tolerant of
+// C2PA / signature / amendment incremental-update layers appended after the base
+// (which /verify's byte-prefix reproduction check rejects). This is the legal
+// human↔machine guarantee a DCS applies to a peer-received PDF that may already
+// carry appended manifests: tampering of the visible document fails, an
+// already-C2PA-amended offer passes.
+func (s *service) verifyContent(w http.ResponseWriter, r *http.Request) {
+	if err := checkMediaType(r.Header.Get("Content-Type"), "application/pdf"); err != nil {
+		writeError(w, err)
+		return
+	}
+	raw, err := limitRead(r.Body, 32<<20)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+	payload, err := compiler.ExtractLatestEmbeddedJSONLD(raw)
+	if err != nil {
+		writeError(w, errBadRequest(err))
+		return
+	}
+	compiledAt, err := compiler.ExtractLifecycleEffectiveAt(raw)
+	if err != nil {
+		writeError(w, errBadRequest(fmt.Errorf("extract lifecycle timestamp: %w", err)))
+		return
+	}
+	recompiled, err := compiler.CompilePDF(compiler.WithSigner(r.Context(), compiler.NewCapturingSigner()), payload, compiledAt)
+	if err != nil {
+		writeError(w, errUnprocessableEntity(err))
+		return
+	}
+	var mismatch string
+	if err := compiler.MatchPageContent(raw, recompiled); err != nil {
+		mismatch = err.Error()
+	}
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_ = json.NewEncoder(w).Encode(struct {
+		Match    bool   `json:"match"`
+		Mismatch string `json:"mismatch,omitempty"`
+	}{Match: mismatch == "", Mismatch: mismatch})
 }
 
 // isVCProofStructurallyValid returns true when the VC JSON contains a
@@ -346,9 +401,9 @@ func (s *service) renderAmendment(w http.ResponseWriter, r *http.Request) {
 	// Absent (the default) => neither is emitted.
 	manifestURL := strings.TrimSpace(string(parts["manifest_url"]))
 
-	now := time.Now()
 	signer := compiler.NewCapturingSigner()
-	updated, err := compiler.UpdatePDFWithOptions(compiler.WithSigner(r.Context(), signer), oldPDF, canonical, vcBytes, manifestURL, now)
+	// Verbatim: the amended attachment is embedded exactly as submitted.
+	updated, err := compiler.UpdatePDFWithOptions(compiler.WithSigner(r.Context(), signer), oldPDF, newPayload, vcBytes, manifestURL, compiler.CanonicalCompiledAt)
 	if err != nil {
 		if errors.Is(err, compiler.ErrNoChanges) {
 			writeError(w, errConflict(err))
@@ -522,16 +577,16 @@ func (s *service) claim(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	canonicalPDF, err := compiler.CompilePDF(compiler.WithSigner(r.Context(), compiler.NewCapturingSigner()), canonical, time.Now())
+	referencePDF, err := compiler.CompilePDF(compiler.WithSigner(r.Context(), compiler.NewCapturingSigner()), payloadBytes, compiler.CanonicalCompiledAt)
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return
 	}
-	if err := compiler.MatchPageContent(submittedPDF, canonicalPDF); err != nil {
+	if err := compiler.MatchPageContent(submittedPDF, referencePDF); err != nil {
 		writeError(w, errConflict(err))
 		return
 	}
-	result, err := compiler.AppendVerificationWitness(compiler.WithSigner(r.Context(), compiler.NewCapturingSigner()), canonicalPDF, canonical)
+	result, err := compiler.AppendVerificationWitness(compiler.WithSigner(r.Context(), compiler.NewCapturingSigner()), referencePDF, payloadBytes)
 	if err != nil {
 		writeError(w, errBadRequest(err))
 		return

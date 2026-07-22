@@ -42,6 +42,11 @@ extraEnv:
   # backend/cmd/dcs/main.go's seedTrustedPeersFromEnv (~:304/665).
   - name: DCS_TRUSTED_PEERS
     value: "did:web:dcs-a.localhost%3A18080"
+  # DB-backed sync-fail retry cadence (conf.SyncFailCronJobTimeOut): fast in
+  # BDD/e2e so a deferred/failed peer PDF ship is re-attempted and delivered
+  # within the scenarios' replication wait (see values.bdd.yml for the rationale).
+  - name: DCS_SYNC_FAIL_RETRY_INTERVAL
+    value: "10s"
 
 # DID identity (fatal on startup when missing). The <fullname>-identity
 # Secret (identitySecretName helper — unique per release, so this doesn't
@@ -157,19 +162,23 @@ statusListLocalhostProxy:
   upstream: "http://traefik.kube-system.svc.cluster.local:18080"
   ingressHost: localhost
 
-# IPFS / IPFS Document Manager: shared with instance A via explicit URL
-# overrides rather than a second co-deployed instance. Both override fields
-# live under ipfsClient (see the 'ipfsTenantBaseURL' / 'ipfsMfsBaseURL'
-# helpers in _helpers.tpl, which check these before falling back to
-# auto-wiring from an in-chart ipfs/ipfsDocumentManager sub-chart). Release
-# "dcs" (instance A) -> Service names "dcs-ipfs" / "dcs-ipfs-document-manager".
+# IPFS / IPFS Document Manager: instance B runs its OWN, like a real second
+# organization (two independent provenance stores) — sharing instance A's Kubo
+# was a test shortcut that both collides on MFS paths and bottlenecks every
+# PDF export through one node. Mirrors instance A's values.bdd.yml, release
+# "dcs2" -> Service names "dcs2-ipfs" / "dcs2-ipfs-document-manager".
 ipfs:
-  enabled: false
+  enabled: true
+  persistence:
+    enabled: true
 ipfsDocumentManager:
-  enabled: false
-ipfsClient:
-  tenantBaseURL: "http://dcs-ipfs-document-manager:8080/v1/tenants/tenant_space"
-  mfsBaseURL: "http://dcs-ipfs:5001"
+  enabled: true
+  ipfs:
+    host: "dcs2-ipfs"
+    apiGatewayURL: "http://dcs2-ipfs:8080/ipfs"
+    rpcApiPort: 5001
+  config:
+    serverMode: "debug"
 
 # ORCE (Timestamp Authority): shared with instance A's TSA rather than a
 # second co-deployed instance — see signing.tsaURL below.
@@ -213,3 +222,12 @@ nodeExporter:
   enabled: false
 kubeStateMetrics:
   enabled: false
+
+# Signature VALIDATION for instance B. Without a DSS_URL the instance has no
+# validator and SubmitSignature refuses every externally-produced signature, so
+# the counterparty could never accept a signed contract. DSS is a stateless
+# validator, so B validates against instance A's deployment rather than running
+# a second heavy Java service on the same runner (enabled:false = deploy none).
+dss:
+  enabled: false
+  url: http://dcs-dss:8080

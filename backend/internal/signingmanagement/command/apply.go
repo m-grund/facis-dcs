@@ -1,6 +1,7 @@
 package command
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -77,7 +78,10 @@ type ApplyCmd struct {
 // SignatureValidator validates an externally-produced signature and reports the
 // signer identity, AdES level, and signing time (dss.Client satisfies it). The
 // DCS uses it to accept a signature the signatory produced — never one it made
-// itself — proving sole control (ADR-12, DCS-FR-SM-16/-18).
+// itself (ADR-12, DCS-FR-SM-16/-18). That is what sole control requires of US:
+// we hold no signing key. It does not by itself prove the signatory controlled
+// theirs — that depends on their wallet, and is emphatically untrue of the
+// development testWallet, whose keys are shared files.
 type SignatureValidator interface {
 	ValidatePDF(ctx context.Context, pdf []byte, name string) (*dss.Report, error)
 }
@@ -196,6 +200,22 @@ func (h *Applier) SubmitSignature(ctx context.Context, cmd SubmitSignatureCmd) e
 
 	prepared, err := h.prepare(ctx, tx, cmd.ApplyCmd)
 	if err != nil {
+		return err
+	}
+
+	// A submitted PDF may only ADD a signature to the document we prepared — it
+	// may never redefine it. This is deliberately the opposite of the
+	// federation rule (ADR-13, receivepdf.go), where an inbound PDF is
+	// authoritative and replaces the local copy: there the peer owns the
+	// document, here we do. So the machine-readable payload embedded in what
+	// comes back must still be this instance's contract data, and nothing from
+	// the upload is ever written into contract_data.
+	//
+	// Without this the signature would still validate while the artifact said
+	// something else: finalize records contentHash computed from the LOCAL
+	// payload, so a divergent upload would be stored under a hash that attests
+	// a document it does not contain.
+	if err := h.assertSubmittedPayloadIsOurs(ctx, cmd.SignedPDF, prepared.basePDF); err != nil {
 		return err
 	}
 
@@ -347,6 +367,16 @@ func (h *Applier) prepare(ctx context.Context, tx *sqlx.Tx, cmd ApplyCmd) (*prep
 		if signedCount == 0 {
 			var missing []string
 			for _, f := range requiredFields {
+				// A peer DCS's slot is signed in the peer's own deployment and
+				// its signature arrives over the PDF exchange (ADR-13), so its
+				// ceremony evidence never exists in this database. Demanding it
+				// here made federated signing impossible: neither side could
+				// ever place the first signature. Locally held fields — the
+				// single-instance multi-signer flow, which names fields per
+				// signatory rather than per party DCS — are unaffected.
+				if isPeerPartyField(data.Responsible, h.IssuerDID, f) {
+					continue
+				}
 				c, err := h.CeremonyRepo.FindVerifiedCeremonyByField(ctx, tx, cmd.DID, f)
 				if err != nil {
 					return nil, fmt.Errorf("could not resolve ceremony for field %q: %w", f, err)
@@ -440,7 +470,7 @@ func (h *Applier) prepare(ctx context.Context, tx *sqlx.Tx, cmd ApplyCmd) (*prep
 	// exportcontract.go/verifycontract.go never need to touch it again for the
 	// SIGNED/ACTIVE C2PA state (DCS-OR-C2PA-004, DCS-FR-SM-16).
 	rendererVersion := ""
-	if signedCount == 0 {
+	if signedCount == 0 && !carriesPAdESSignature(basePDF) {
 		stampedPDF, rv, err := stampLifecycleForSigning(ctx, cmd.DID, *data.ContractData, basePDF, h.PDFCore, h.VCIssuer, h.IssuerDID)
 		if err != nil {
 			return nil, fmt.Errorf("stamp active lifecycle assertion before signing: %w", err)
@@ -448,9 +478,14 @@ func (h *Applier) prepare(ctx context.Context, tx *sqlx.Tx, cmd ApplyCmd) (*prep
 		basePDF = stampedPDF
 		rendererVersion = rv
 	}
-	// A PDF that already carries a PAdES signature is never stamped again —
-	// it was stamped before the FIRST signature, and any later mutation
-	// besides an incremental signature is an illegal modification.
+	// A PDF that already carries a PAdES signature is never stamped again — it
+	// was stamped before the FIRST signature, and any later mutation besides an
+	// incremental signature is an illegal modification. signedCount alone does
+	// not express that across a federation: the counterparty's database holds
+	// no record of the originator's signature, so it would re-stamp an already
+	// signed artifact and attach a C2PA manifest after the fact, which breaks
+	// PDF/A-3 clause 6.8 (an embedded file no longer associated with the
+	// document). The artifact itself is the reliable witness.
 
 	contentSum := sha256.Sum256(*data.ContractData)
 	contentHash := hex.EncodeToString(contentSum[:])
@@ -488,13 +523,19 @@ func (h *Applier) prepare(ctx context.Context, tx *sqlx.Tx, cmd ApplyCmd) (*prep
 		if err != nil {
 			return nil, fmt.Errorf("issue signing-summary VC: %w", err)
 		}
-	case signedCount == 0:
+	case signedCount == 0 && !carriesPAdESSignature(basePDF):
 		// First signature on a multi-signer contract: embed EVERY declared
 		// field's summary VC as a JSON array, so no later signer needs a
 		// post-signature attachment (all-ceremonies-before-first-signature).
 		summaries := make([]json.RawMessage, 0, len(requiredFields))
 		for _, f := range requiredFields {
 			c := fieldCeremonies[f]
+			if c == nil {
+				// A peer DCS's field: its ceremony evidence lives in the peer's
+				// own deployment, which embeds that field's summary when it
+				// signs its own copy. We can only summarise ceremonies we hold.
+				continue
+			}
 			fieldKB := ""
 			if c.KbSdHash != nil {
 				fieldKB = *c.KbSdHash
@@ -955,4 +996,61 @@ func replaceNodeIRI(current any, old, new string) {
 			replaceNodeIRI(nested, old, new)
 		}
 	}
+}
+
+// isPeerPartyField reports whether a declared signature field belongs to the
+// counterparty DCS rather than this instance. Fields are named by the signing
+// party's DID (dcs:signatoryName), so a field naming the other party is one
+// this deployment can never hold ceremony evidence for. A field that is not a
+// party DID at all (the single-instance multi-signer flow names fields per
+// signatory) is never treated as remote.
+func isPeerPartyField(resp *db.Responsible, localDID, field string) bool {
+	if resp == nil || localDID == "" || field == "" || field == localDID {
+		return false
+	}
+	return field == resp.Counterparty || field == resp.Creator
+}
+
+// carriesPAdESSignature reports whether pdf already holds a PAdES signature,
+// detected by the signature dictionary's /ByteRange.
+//
+// signedCount counts only signatures recorded in THIS instance's database, so
+// across a federation it is 0 on the counterparty even when the artifact it
+// received already carries the originator's signature. Embedding evidence then
+// mutates an already-signed document — the very thing the multi-signer flow
+// avoids, since an attachment added after a PAdES signature trips diff analysis
+// and breaks PDF/A conformance. The artifact itself is the reliable witness.
+func carriesPAdESSignature(pdf []byte) bool {
+	return bytes.Contains(pdf, []byte("/ByteRange"))
+}
+
+// assertSubmittedPayloadIsOurs refuses a submitted PDF whose embedded JSON-LD is
+// not the one we handed out to be signed.
+//
+// The comparison is attachment against attachment — the payload embedded in the
+// prepared document versus the payload embedded in what came back — NOT against
+// contract_data. Those two legitimately differ: prepare() seals the offered
+// policy set into an Agreement (sealAgreementForSigning) and persists it, so
+// contract_data moves on while the document the signatory holds keeps the
+// payload it was rendered with. The property that matters is that the signatory
+// signed OUR document, and that is what this checks.
+func (h *Applier) assertSubmittedPayloadIsOurs(ctx context.Context, signedPDF, preparedPDF []byte) error {
+	expected, err := h.PDFCore.ExtractPayload(ctx, preparedPDF)
+	if err != nil {
+		return fmt.Errorf("could not read the machine-readable payload of the prepared document: %w", err)
+	}
+	submitted, err := h.PDFCore.ExtractPayload(ctx, signedPDF)
+	if err != nil {
+		return fmt.Errorf("could not read the machine-readable payload embedded in the submitted PDF: %w", err)
+	}
+	if bytes.Equal(expected, submitted) {
+		return nil
+	}
+
+	expectedSum := sha256.Sum256(expected)
+	submittedSum := sha256.Sum256(submitted)
+	return fmt.Errorf(
+		"%w: the submitted PDF carries a different contract than the one prepared for signing (submitted payload %s, prepared %s)",
+		ErrSignatureInvalid,
+		hex.EncodeToString(submittedSum[:8]), hex.EncodeToString(expectedSum[:8]))
 }

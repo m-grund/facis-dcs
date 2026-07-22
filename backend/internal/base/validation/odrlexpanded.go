@@ -176,41 +176,34 @@ func expandedODRLPolicyRules(root map[string]any) []map[string]any {
 	return rules
 }
 
-// expandedODRLFieldIndex maps requirement-field @ids to the parameter they
-// are submitted under and the value carried inline on the field node
-// (dcs:parameterValue) — the same IRI the ODRL constraint names as its
-// odrl:leftOperand.
+// expandedODRLFieldIndex maps placeholder @ids to their label and the value
+// carried inline on the placeholder node (dcs:value) — the same IRI the ODRL
+// constraint names as its odrl:leftOperand.
 func expandedODRLFieldIndex(root map[string]any) map[string]odrlFieldInfo {
 	index := map[string]odrlFieldInfo{}
-	for _, rawReq := range expandedValues(root, dcsNamespace()+"contractData") {
-		req, ok := rawReq.(map[string]any)
+	for _, rawPlaceholder := range expandedValues(root, dcsNamespace()+"contractData") {
+		placeholder, ok := rawPlaceholder.(map[string]any)
 		if !ok {
 			continue
 		}
-		for _, rawField := range expandedValues(req, dcsNamespace()+"fields") {
-			field, ok := rawField.(map[string]any)
-			if !ok {
-				continue
-			}
-			fieldID, _ := field["@id"].(string)
-			if fieldID == "" {
-				continue
-			}
-			value, hasValue := expandedInlineFieldValue(field)
-			index[fieldID] = odrlFieldInfo{
-				parameterName: expandedFirstLiteralString(field, dcsNamespace()+"parameterName"),
-				value:         value,
-				hasValue:      hasValue,
-			}
+		fieldID, _ := placeholder["@id"].(string)
+		if fieldID == "" {
+			continue
+		}
+		value, hasValue := expandedInlineFieldValue(placeholder)
+		index[fieldID] = odrlFieldInfo{
+			label:    expandedFirstLiteralString(placeholder, dcsNamespace()+"label"),
+			value:    value,
+			hasValue: hasValue,
 		}
 	}
 	return index
 }
 
-// expandedInlineFieldValue reads the value a requirement field carries
-// inline (dcs:parameterValue).
+// expandedInlineFieldValue reads the value a placeholder carries inline
+// (dcs:value).
 func expandedInlineFieldValue(field map[string]any) (any, bool) {
-	values := expandedValues(field, dcsNamespace()+"parameterValue")
+	values := expandedValues(field, dcsNamespace()+"value")
 	if len(values) == 0 {
 		return nil, false
 	}
@@ -333,7 +326,7 @@ func auditConstraintBearingNode(ctx context.Context, ruleID string, node map[str
 
 		fieldInfo, ok := fieldIndex[operandID]
 		if !ok {
-			finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, operandID), operandID, "dcs:RequirementField")
+			finding := contractFinding(ruleID, ruleID, "error", fmt.Sprintf("ODRL policy %q references nonexistent contract data field %q", ruleID, operandID), operandID, "dcs:Placeholder")
 			applyODRLPolicyDetails(&finding, operandID, operator, nil, false, rightOperand)
 			findings = append(findings, finding)
 			continue

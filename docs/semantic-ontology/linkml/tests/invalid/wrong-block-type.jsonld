@@ -11,7 +11,7 @@
             "@list": [
                 {
                     "@id": "did:web:localhost:template:test-wrong-block-type#block-1",
-                    "@type": "dcs:DataRequirement",
+                    "@type": "dcs:SignatureField",
                     "dcs:name": "this is not a valid block type"
                 }
             ]

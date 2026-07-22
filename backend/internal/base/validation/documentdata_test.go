@@ -76,11 +76,7 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 					"@type": "dcs:Clause",
 					"dcs:content": map[string]any{"@list": []any{
 						"Provider country: ",
-						map[string]any{
-							"@type":       "dcs:Placeholder",
-							"dcs:token":   "{{provider.country}}",
-							"dcs:bindsTo": map[string]any{"@id": "urn:uuid:field-provider-country"},
-						},
+						map[string]any{"@id": "urn:uuid:field-provider-country"},
 					}},
 				},
 			}},
@@ -94,22 +90,13 @@ func canonicalTemplateData(t *testing.T) *datatype.JSON {
 		},
 		"dcs:contractData": []any{
 			map[string]any{
-				"@id":               "urn:uuid:requirement-provider",
-				"@type":             "dcs:DataRequirement",
-				"dcs:conditionId":   "provider",
-				"dcs:name":          "Provider",
-				"dcs:schemaVersion": "v1",
-				"dcs:entityType":    "CompanyParty",
-				"dcs:entityRole":    "provider",
-				"dcs:fields": []any{
-					map[string]any{
-						"@id":               "urn:uuid:field-provider-country",
-						"@type":             "dcs:RequirementField",
-						"dcs:parameterName": "country",
-						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
-						"dcs:required":      true,
-					},
-				},
+				"@id":                 "urn:uuid:field-provider-country",
+				"@type":               "dcs:Placeholder",
+				"dcs:label":           "Provider country",
+				"dcs:datatype":        "xsd:string",
+				"dcs:shape":           map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-company-location-country"},
+				"dcs:valueConstraint": map[string]any{"format": "iso-3166-1-alpha-3"},
+				"dcs:required":        true,
 			},
 		},
 		"dcs:policies": map[string]any{
@@ -187,7 +174,7 @@ func TestNormalizeTemplateDataForPersistenceAddsDocumentIdentity(t *testing.T) {
 	block := structure["dcs:blocks"].(map[string]any)["@list"].([]any)[0].(map[string]any)
 	require.Equal(t, "did:web:facis.example:template:1#block-clause-1", block["@id"])
 	placeholder := block["dcs:content"].(map[string]any)["@list"].([]any)[1].(map[string]any)
-	require.Equal(t, "did:web:facis.example:template:1#field-provider-country", placeholder["dcs:bindsTo"].(map[string]any)["@id"])
+	require.Equal(t, "did:web:facis.example:template:1#field-provider-country", placeholder["@id"])
 	policy := firstPolicyDuty(data)
 	constraint := policy["odrl:constraint"].(map[string]any)
 	require.Equal(t, "did:web:facis.example:template:1#field-provider-country", constraint["odrl:leftOperand"].(map[string]any)["@id"])
@@ -216,12 +203,12 @@ func TestNormalizeTemplateDataRejectsMissingPlaceholderField(t *testing.T) {
 	structure := data["dcs:documentStructure"].(map[string]any)
 	block := structure["dcs:blocks"].(map[string]any)["@list"].([]any)[0].(map[string]any)
 	placeholder := block["dcs:content"].(map[string]any)["@list"].([]any)[1].(map[string]any)
-	placeholder["dcs:bindsTo"] = map[string]any{"@id": "urn:uuid:field-missing"}
+	placeholder["@id"] = "urn:uuid:field-missing"
 	invalid, err := datatype.NewJSON(data)
 	require.NoError(t, err)
 
 	_, err = NormalizeTemplateData(&invalid)
-	require.ErrorContains(t, err, "placeholder binds to nonexistent contract data field")
+	require.ErrorContains(t, err, "placeholder references nonexistent contract data field")
 }
 
 func TestNormalizeTemplateDataRejectsMissingPolicyField(t *testing.T) {

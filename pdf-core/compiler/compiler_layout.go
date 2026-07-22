@@ -69,7 +69,7 @@ func layoutDocumentFull(doc documentModel) (pages []pageLayout, flatSections []s
 
 	lineSpecs := make([]layoutLine, 0, 32)
 	lineSpecs = append(lineSpecs, layoutLine{Text: doc.Title, FontSize: 18, Kind: "title"})
-	lineSpecs = append(lineSpecs, layoutLine{Text: "Payload hash: " + doc.PayloadHash[:24], FontSize: 9, Kind: "meta"})
+	lineSpecs = append(lineSpecs, layoutLine{Text: "Payload CID: " + doc.PayloadCID, FontSize: 9, Kind: "meta"})
 
 	// addSection recursively flattens sections depth-first, emitting layoutLines.
 	var addSection func(section sectionData, depth int)
@@ -147,11 +147,11 @@ func layoutDocumentFull(doc documentModel) (pages []pageLayout, flatSections []s
 	// preSpacing defines extra vertical space inserted *before* a line of the
 	// given kind. This space is not applied at the very top of a new page.
 	preSpacing := map[string]float64{
-		"meta":              6.0,
-		"section-heading":   18.0,
+		"meta":               6.0,
+		"section-heading":    18.0,
 		"subsection-heading": 10.0,
-		"glossary-heading":  20.0,
-		"glossary":          6.0,
+		"glossary-heading":   20.0,
+		"glossary":           6.0,
 	}
 
 	var positionedLines []positionedLine

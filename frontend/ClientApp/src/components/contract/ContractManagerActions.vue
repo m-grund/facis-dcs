@@ -33,7 +33,15 @@ const props = defineProps<{
 const confirmationModal = useTemplateRef<InstanceType<typeof ConfirmationModal>>('confirmation-modal')
 
 const router = useRouter()
-const { isManager } = useContractPermissions()
+const { isCreator, isManager } = useContractPermissions()
+
+// SRS DCS-IR-CWE-01 / §1.2 offer→acceptance lifecycle: only a Contract Creator
+// may transmit a DRAFT to the counterparty (EventOffer is allowed solely from
+// DRAFT — backend command/offer.go gates on the ContractCreator role + this
+// transition and derives the offerer from the caller's identity).
+const canOffer = computed(() => {
+  return isCreator.value && props.contract.state === ContractState.draft
+})
 
 const canTerminate = computed(() => {
   return isManager.value && props.contract.state !== ContractState.terminated
@@ -42,6 +50,24 @@ const canTerminate = computed(() => {
 const canDeploy = computed(() => {
   return isManager.value && props.contract.state === ContractState.signed
 })
+
+const offering = ref(false)
+
+const offer = async () => {
+  if (!isCreator.value || props.contract.state !== ContractState.draft) return
+  offering.value = true
+  try {
+    await contractWorkflowService.offer({
+      did: props.contract.did,
+      updated_at: props.contract.updated_at,
+    })
+    router.go(0)
+  } catch (err) {
+    console.error('Offer failed:', err)
+  } finally {
+    offering.value = false
+  }
+}
 
 const deploying = ref(false)
 
@@ -89,6 +115,9 @@ const terminate = async () => {
 </script>
 
 <template>
+  <button v-if="canOffer" :class="[filteredClass, 'btn-primary']" :disabled="offering" @click="offer">
+    {{ offering ? 'Offering…' : 'Offer to counterparty' }}
+  </button>
   <button v-if="canDeploy" :class="[filteredClass, 'btn-primary']" :disabled="deploying" @click="deploy">
     {{ deploying ? 'Deploying…' : 'Deploy' }}
   </button>

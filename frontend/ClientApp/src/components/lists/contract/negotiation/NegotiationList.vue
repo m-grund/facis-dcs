@@ -97,7 +97,12 @@ const rejectNegotiation = async (negotiation: ContractNegotiation) => {
 
 const isBtnDisabled = (negotiation: ContractNegotiation) => {
   const decision = negotiation.negotiation_decisions.find((decision) => decision.negotiator === issuer.value)
-  return decision?.decision !== undefined
+  // Disable only once THIS negotiator has actually decided. A pending decision
+  // carries a null decision, and `!== undefined` classed that as decided — so
+  // the very decision the user still owes disabled its own Accept/Reject, and
+  // the round deadlocked: the open decision kept Submit disabled with no way to
+  // resolve it.
+  return decision?.decision != null
 }
 
 const isNegotiationShown = ref<Map<string, boolean>>(new Map())

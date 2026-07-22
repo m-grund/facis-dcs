@@ -140,6 +140,20 @@ def _kpi_violation_names(retrieve_json: dict) -> list:
     return violations if isinstance(violations, list) else []
 
 
+def _odrl_bound_field_iri(context, name: str) -> str:
+    """The @id of the contract's ODRL-bound contract-data placeholder — the
+    node IRI a KPI reports against (EvaluateKPIViolation binds by this IRI, not
+    a label). Read straight from the stored contract so it reflects the @id the
+    backend rebased the fixture's urn: node to."""
+    did, _ = ContractService._contract_data(context, name)
+    manager_h = AuthService.get_headers_for_roles(["Contract Manager"])
+    retrieve = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=manager_h)
+    assert retrieve.status_code == 200, retrieve.text
+    placeholders = (retrieve.json().get("contract_data") or {}).get("dcs:contractData") or []
+    assert placeholders, f"contract '{name}' declares no dcs:contractData placeholder to bind a KPI to"
+    return placeholders[0]["@id"]
+
+
 # ---------------------------------------------------------------------------
 # Given — force-set DB seam
 # ---------------------------------------------------------------------------
@@ -376,6 +390,23 @@ def step_when_target_reports_kpi(context, metric, value, name):
     }
     headers = {"Content-Type": "application/json", DEPLOYMENT_CALLBACK_SECRET_HEADER: _callback_secret()}
     context.requests_response = post_json(context, contract_deployment_callback_url(context), payload, headers=headers)
+
+
+@when('the target reports a KPI value for the ODRL-bound field of contract "{name}" = "{value}"')
+def step_when_target_reports_kpi_for_bound_field(context, name, value):
+    # The metric IS the bound placeholder's @id, so EvaluateKPIViolation binds
+    # it to the ODRL constraint by node IRI (DCS-FR-CWE-09).
+    step_when_target_reports_kpi(context, _odrl_bound_field_iri(context, name), value, name)
+
+
+@then('the contract detail for "{name}" shows a KPI violation flag for its ODRL-bound field')
+def step_then_contract_detail_shows_kpi_violation_for_bound_field(context, name):
+    step_then_contract_detail_shows_kpi_violation(context, name, _odrl_bound_field_iri(context, name))
+
+
+@then('the semantic KPI observations for "{name}" record a violated observation for its ODRL-bound field')
+def step_then_semantic_kpi_observations_for_bound_field(context, name):
+    step_then_semantic_kpi_observations(context, name, _odrl_bound_field_iri(context, name))
 
 
 @then('the contract detail for "{name}" shows a target-reported KPI "{metric}"')

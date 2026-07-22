@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { auditingService } from '@/services/auditing-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { downloadBlob as saveBlob } from '@/utils/download-blob'
 import type { AuditReportFormat, AuditScope } from '@/models/requests/auditing-request'
 import type { AuditFinding } from '@/models/responses/auditing-response'
 
@@ -255,15 +256,7 @@ function setAllTableFilters(key: TableFilterKey, enabled: boolean): void {
 }
 
 function downloadBlob(content: BlobPart, contentType: string, filename: string): void {
-  const blob = new Blob([content], { type: contentType })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
+  saveBlob(new Blob([content], { type: contentType }), filename)
 }
 
 function selectFinding(finding: AuditFinding): void {
@@ -553,6 +546,7 @@ function formatDateTime(value?: string): string {
         <label class="form-control w-full sm:w-64">
           <span class="label-text mb-1">DID (optional)</span>
           <input
+            id="input-did"
             v-model="didFilter"
             class="input-bordered input rounded-box"
             :disabled="auditLoading || reportLoading"
@@ -562,6 +556,7 @@ function formatDateTime(value?: string): string {
         <label class="form-control w-full sm:w-72">
           <span class="label-text mb-1">Audit justification</span>
           <input
+            id="input-justification"
             v-model="justification"
             required
             class="input-bordered input rounded-box"

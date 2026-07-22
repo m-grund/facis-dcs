@@ -44,7 +44,7 @@ func TestAuditTemplatePoliciesFlagsCanonicalClauseWithoutContractDataBinding(t *
 	clause := blocks[0].(map[string]any)
 	content := clause["dcs:content"].(map[string]any)["@list"].([]any)
 	placeholder := content[1].(map[string]any)
-	placeholder["dcs:bindsTo"] = map[string]any{"@id": "urn:uuid:missing-field"}
+	placeholder["@id"] = "urn:uuid:missing-field"
 	raw, err := datatype.NewJSON(decoded)
 	require.NoError(t, err)
 
@@ -82,9 +82,7 @@ func TestAuditTemplatePoliciesAcceptsRequiredDomainFields(t *testing.T) {
 	data := canonicalTemplateData(t)
 	var decoded map[string]any
 	require.NoError(t, json.Unmarshal(*data, &decoded))
-	requirement := decoded["dcs:contractData"].([]any)[0].(map[string]any)
-	fields := requirement["dcs:fields"].([]any)
-	requirement["dcs:fields"] = append(fields,
+	decoded["dcs:contractData"] = append(decoded["dcs:contractData"].([]any),
 		canonicalRequirementField("jurisdiction"),
 		canonicalRequirementField("signature-level"),
 	)
@@ -163,11 +161,12 @@ func canonicalRequirementField(id string) map[string]any {
 		"signature-level": "https://w3id.org/facis/dcs/taxonomy/v1#field-signature-requiredLevel",
 	}
 	return map[string]any{
-		"@id":               "urn:uuid:field-" + id,
-		"@type":             "dcs:RequirementField",
-		"dcs:parameterName": id,
-		"dcs:domainField":   map[string]any{"@id": ontologyIRIs[id]},
-		"dcs:required":      true,
+		"@id":          "urn:uuid:field-" + id,
+		"@type":        "dcs:Placeholder",
+		"dcs:label":    id,
+		"dcs:datatype": "xsd:string",
+		"dcs:shape":    map[string]any{"@id": ontologyIRIs[id]},
+		"dcs:required": true,
 	}
 }
 

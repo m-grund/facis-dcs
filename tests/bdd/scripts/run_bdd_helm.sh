@@ -215,7 +215,7 @@ wait_for_fc_verification
 # with a much less obvious error later.
 if [[ -n "${DCS_DEPLOYMENT_B:-}" ]] && "$KUBECTL_BIN" -n "$K8S_NAMESPACE" get "deployment/$DCS_DEPLOYMENT_B" >/dev/null 2>&1; then
   echo "Waiting for DCS deployment B ($DCS_DEPLOYMENT_B) to be available"
-  "$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=180s "deployment/$DCS_DEPLOYMENT_B"
+  "$KUBECTL_BIN" -n "$K8S_NAMESPACE" wait --for=condition=available --timeout=300s "deployment/$DCS_DEPLOYMENT_B"
 
   BDD_PUBLIC_ORIGIN_B="${BDD_PUBLIC_ORIGIN_B:-http://dcs-b.localhost:18080}"
   DCS_HEALTH_URL_B="${BDD_DCS_BASE_URL_B%/}/auth/login"

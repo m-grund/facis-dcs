@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { useErrorStore } from '@/stores/error-store'
+import { downloadBlob } from '@/utils/download-blob'
 
 /**
  * Shared download-with-feedback for the Export PDF / Export bundle buttons:
@@ -15,12 +16,7 @@ export function useDocumentExport() {
     exporting.value = true
     try {
       const blob = await fetchBlob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      a.click()
-      URL.revokeObjectURL(url)
+      downloadBlob(blob, filename)
     } catch (err: unknown) {
       errorStore.add(`Export failed: ${await exportErrorMessage(err)}`)
     } finally {

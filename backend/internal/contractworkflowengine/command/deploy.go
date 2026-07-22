@@ -31,6 +31,9 @@ type DeployCmd struct {
 	DID         string
 	UpdatedAt   time.Time
 	RequestedBy string
+	// LocalPeer is this instance's own did:web. Signature slots are named by
+	// the signing party, so it identifies which declared slot is ours.
+	LocalPeer string
 }
 
 // DeployResult is what both the manual /contract/deploy endpoint and the
@@ -96,9 +99,21 @@ func (h *Deployer) Handle(ctx context.Context, cmd DeployCmd) (*DeployResult, er
 			}
 			var missing []string
 			for _, f := range required {
-				if !signed[f] {
-					missing = append(missing, f)
+				if signed[f] {
+					continue
 				}
+				// A counterparty signs in ITS deployment and its signature record
+				// never reaches ours, so requiring it here means a federated
+				// contract can never be activated on either side. Activation is a
+				// local act on a local copy: this instance gates on its OWN slot,
+				// while the peer's signature is carried by the artifact we
+				// received and content-verified (the fatal /verify/content gate).
+				// Fields that are not a party DID — the single-instance
+				// multi-signer flow names them per signatory — are never skipped.
+				if isRemotePartyField(data.Responsible, cmd.LocalPeer, f) {
+					continue
+				}
+				missing = append(missing, f)
 			}
 			if len(missing) > 0 {
 				return nil, fmt.Errorf("%w: unsigned signature fields: %s", ErrSigningIncomplete, strings.Join(missing, ", "))
@@ -203,4 +218,16 @@ func hashDeploymentPayload(payload map[string]any) (string, error) {
 	canonical := bytes.TrimRight(buf.Bytes(), "\n")
 	sum := sha256.Sum256(canonical)
 	return "sha256:" + hex.EncodeToString(sum[:]), nil
+}
+
+// isRemotePartyField reports whether a declared signature field belongs to a
+// party other than this instance. Slots are named by the signing party's DID, so
+// a slot naming the counterparty is one whose signature is produced, recorded
+// and activated in the peer's own deployment. A field that is not a party DID is
+// never remote.
+func isRemotePartyField(resp *db.Responsible, localPeer, field string) bool {
+	if resp == nil || localPeer == "" || field == "" || field == localPeer {
+		return false
+	}
+	return field == resp.Creator || field == resp.Counterparty
 }

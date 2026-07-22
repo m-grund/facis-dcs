@@ -21,25 +21,33 @@ import (
 //go:embed testdata/fonts/LiberationSans-Regular.ttf
 var liberationSansTTF []byte
 
+// CanonicalCompiledAt is the fixed render epoch stamped as every compiled PDF's
+// lifecycle effective_at, keeping compilation deterministic (same payload →
+// byte-identical output). It matches the PDF's hardcoded metadata dates
+// (2026-06-04); the trusted contract time is the PAdES B-T timestamp applied at
+// signing, not this render epoch.
+var CanonicalCompiledAt = time.Date(2026, 6, 4, 0, 0, 0, 0, time.UTC)
+
 func CompilePDF(ctx context.Context, payload []byte, compiledAt time.Time) ([]byte, error) {
-	// Compact to stable canonical form first. All subsequent operations (URDNA2015
-	// hash and model extraction) run on the same canonical representation so the
-	// FileID hash is invariant across semantically equivalent input flavors.
-	canonical, err := CanonicalizePayload(payload)
-	if err != nil {
-		return nil, err
-	}
-	nquads, err := NormalizePayload(canonical)
-	if err != nil {
-		return nil, err
-	}
-	sum := sha256.Sum256(nquads)
+	// The FileID and the rendered "Payload hash" backlink are the sha256 of the
+	// EXACT verbatim embedded bytes — a content-address any verifier recomputes
+	// from the attachment. Under the verbatim boundary the embed bytes are fixed,
+	// so A's render and B's recompile derive the identical value. (URDNA2015 graph
+	// hashing is NOT used for this: blank-node labeling is not byte-deterministic,
+	// which made the self-referential hash diverge A↔B.) The render model is
+	// extracted directly from the payload's @list-ordered documentStructure.
+	sum := sha256.Sum256(payload)
 	hashHex := hex.EncodeToString(sum[:])
 
-	doc, err := extractDocumentModelFromCanonical(canonical, hashHex)
+	doc, err := extractDocumentModel(payload, hashHex)
 	if err != nil {
 		return nil, err
 	}
+	// Carry the attachment verbatim: the exact submitted bytes are embedded, never
+	// a re-canonicalized form. The visible render is fully determined by
+	// documentStructure (already parsed into doc), so verify still reproduces it.
+	doc.EmbeddedPayload = payload
+	doc.PayloadCID = payloadCID(payload)
 	doc.CompiledAt = compiledAt
 	return renderPDF(ctx, doc)
 }
@@ -132,7 +140,7 @@ func AppendVerificationWitness(ctx context.Context, pdf []byte, payload []byte) 
 	exclusions := []c2paExclusion{}
 	var candidate []byte
 	for iteration := 0; iteration < 6; iteration++ {
-		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, witnessManifestLabel(hardBindingHash), "", hashHex, hardBindingHash, exclusions, time.Now(), "")
+		updatedC2PA, err := renderVerificationManifestStore(ctx, originalC2PA, witnessManifestLabel(hardBindingHash), "", hashHex, hardBindingHash, exclusions, CanonicalCompiledAt, "")
 		if err != nil {
 			return nil, err
 		}

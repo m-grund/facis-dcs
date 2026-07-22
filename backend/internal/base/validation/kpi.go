@@ -7,11 +7,13 @@ import (
 
 // EvaluateKPIViolation reports whether a target-reported KPI value violates
 // an obligation the contract's own ODRL policies declare for it
-// (DCS-FR-CWE-09/-31). The metric binds to the RequirementFields whose
-// dcs:parameterName equals it (case-insensitive); every constraint whose
-// odrl:leftOperand references a bound field is evaluated with the reported
-// value as the actual value, under the same rule semantics as the content
-// audit (a Prohibition is violated when satisfied).
+// (DCS-FR-CWE-09/-31). The metric is the @id of the contract-data placeholder
+// node the KPI reports on — the same IRI the ODRL odrl:leftOperand names — so
+// the binding is by node IRI, exactly like the content-audit enforcement path
+// (no fragile label-string hop). Every constraint whose odrl:leftOperand
+// references the bound node is evaluated with the reported value as the actual
+// value, under the same rule semantics as the content audit (a Prohibition is
+// violated when satisfied).
 func EvaluateKPIViolation(ctx context.Context, contractDocument any, metric, value string) (bool, error) {
 	if strings.TrimSpace(metric) == "" {
 		return false, nil
@@ -30,15 +32,10 @@ func EvaluateKPIViolation(ctx context.Context, contractDocument any, metric, val
 	}
 
 	fieldIndex := expandedODRLFieldIndex(root)
-	boundFields := map[string]bool{}
-	for fieldID, info := range fieldIndex {
-		if strings.EqualFold(info.parameterName, metric) {
-			boundFields[fieldID] = true
-		}
-	}
-	if len(boundFields) == 0 {
+	if _, bound := fieldIndex[metric]; !bound {
 		return false, nil
 	}
+	boundFields := map[string]bool{metric: true}
 
 	for _, rule := range expandedODRLPolicyRules(root) {
 		isProhibition := expandedTypeLocalName(rule) == "Prohibition"

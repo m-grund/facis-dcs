@@ -413,10 +413,47 @@ func (c *APIClient) copyToMFS(ctx context.Context, baseURL string, cid string, f
 		}
 	}(resp.Body)
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("unexpected Kubo files/cp status %d: %s", resp.StatusCode, body)
+	if resp.StatusCode == http.StatusOK {
+		return nil
 	}
 
-	return nil
+	body, _ := io.ReadAll(resp.Body)
+	// files/cp fails when /<filename> already exists in MFS. In the shared-IPFS
+	// federation a peer instance may have already copied this exact CID: the
+	// store is content-addressed, so an existing entry at the same path holds
+	// identical bytes and the desired postcondition already holds. Confirm the
+	// entry resolves to the same CID and treat that as success rather than
+	// rolling back the caller's work over a benign collision.
+	if c.mfsEntryHasCID(ctx, baseURL, filename, cid) {
+		return nil
+	}
+	return fmt.Errorf("unexpected Kubo files/cp status %d: %s", resp.StatusCode, body)
+}
+
+// mfsEntryHasCID reports whether the MFS path /<filename> already resolves to
+// the given CID (via files/stat). Used to make copyToMFS idempotent: a
+// content-addressed entry that is already present holds the same bytes.
+func (c *APIClient) mfsEntryHasCID(ctx context.Context, baseURL string, filename string, cid string) bool {
+	url := fmt.Sprintf("%s/api/v0/files/stat?arg=/%s", baseURL, filename)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return false
+	}
+	defer func(Body io.ReadCloser) {
+		if err := Body.Close(); err != nil {
+			log.Println("could not close response body")
+		}
+	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	var stat struct {
+		Hash string `json:"Hash"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&stat); err != nil {
+		return false
+	}
+	return stat.Hash == cid
 }

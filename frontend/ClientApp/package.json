@@ -13,6 +13,7 @@
     "build": "vue-tsc -b && vite build",
     "build:docker": "vite build",
     "preview": "vite preview",
+    "check:buttons": "node e2e/check-button-labels.mjs",
     "lint": "eslint ./src",
     "lint:fix": "eslint ./src --fix",
     "format": "prettier --write .",

@@ -85,10 +85,40 @@ func MatchPageContent(candidate, reference []byte) error {
 	}
 	for i := range refStreams {
 		if !bytes.Equal(candStreams[i], refStreams[i]) {
-			return fmt.Errorf("page %d content does not match compiled output", i+1)
+			return fmt.Errorf("page %d content does not match compiled output %s", i+1, firstDiffSnippet(candStreams[i], refStreams[i]))
 		}
 	}
 	return nil
+}
+
+// firstDiffSnippet locates the first differing byte between two page content
+// streams and returns a short window of each side around it — a diagnostic for
+// the verify path to pinpoint WHERE the human-readable render diverges.
+func firstDiffSnippet(candidate, reference []byte) string {
+	n := len(candidate)
+	if len(reference) < n {
+		n = len(reference)
+	}
+	diff := n
+	for i := 0; i < n; i++ {
+		if candidate[i] != reference[i] {
+			diff = i
+			break
+		}
+	}
+	window := func(b []byte) string {
+		lo := diff - 20
+		if lo < 0 {
+			lo = 0
+		}
+		hi := diff + 25
+		if hi > len(b) {
+			hi = len(b)
+		}
+		return string(b[lo:hi])
+	}
+	return fmt.Sprintf("(candidate len=%d reference len=%d; at byte %d: candidate=%q reference=%q)",
+		len(candidate), len(reference), diff, window(candidate), window(reference))
 }
 
 // extractPageContentStreams follows the PDF page tree of pdf, returning the raw

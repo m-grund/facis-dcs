@@ -70,6 +70,14 @@ def _update_contract_policies(context, name, field, policies, actual_value):
     did, updated_at = ContractService._contract_data(context, name)
     headers = context.contract_seed_headers[name]
     doc = odrl.build_contract_document(did, field, policies, actual_value)
+    # A full-document PUT replaces contract_data wholesale, so carry the
+    # signature field(s) seeded at genesis (keyed by the signer's party DID)
+    # forward — dropping them leaves the contract unsignable.
+    current = get_with_headers(context, contract_retrieve_by_id_url(context, did), headers=headers)
+    if current.status_code == 200:
+        sig_fields = (current.json().get("contract_data") or {}).get("dcs:signatureFields")
+        if sig_fields:
+            doc["dcs:signatureFields"] = sig_fields
     resp = put_json(
         context,
         contract_update_url(context),

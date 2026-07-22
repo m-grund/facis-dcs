@@ -100,15 +100,22 @@ jobs:
 
       - name: Dump namespace info on failure
         if: failure()
+        # kubectl must target the kind cluster's kubeconfig (the Makefile writes
+        # it to tests/bdd/.tmp/kind-kubeconfig); otherwise it hits the default
+        # context and reports "namespaces dcs-bdd not found", hiding the logs
+        # (e.g. a DSS-down flake in the signing suite).
+        env:
+          KUBECONFIG: ${{ github.workspace }}/tests/bdd/.tmp/kind-kubeconfig
         run: |
           set -euo pipefail
           kubectl get pods -n dcs-bdd -o wide || true
           kubectl get events -n dcs-bdd --sort-by=.lastTimestamp || true
           kubectl logs -n dcs-bdd -l app.kubernetes.io/component=backend \
-            -c digital-contracting-service --tail=200 --prefix || true
+            -c digital-contracting-service --tail=2000 --prefix || true
           kubectl logs -n dcs-bdd -l app.kubernetes.io/component=backend \
             -c digital-contracting-service --tail=200 --prefix --previous || true
           kubectl logs -n dcs-bdd -l app.kubernetes.io/component=pdf-core --tail=100 --prefix || true
+          kubectl logs -n dcs-bdd -l app.kubernetes.io/component=dss --tail=100 --prefix || true
           kubectl logs deployment/dcs-keycloak -n dcs-bdd --tail=200 || true
           kubectl logs -n dcs-bdd job/dcs-digital-contracting-service-hsm-provision --tail=100 || true
 
@@ -261,16 +268,37 @@ jobs:
           path: frontend/ClientApp/playwright-report/**
           retention-days: 30
 
+      - name: Upload vertical PDF artifacts
+        if: always() && hashFiles('frontend/ClientApp/vertical-artifacts/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: vertical-pdf-artifacts
+          path: frontend/ClientApp/vertical-artifacts/**
+          retention-days: 30
+
       - name: Dump namespace info on failure
         if: failure()
+        # The e2e stack runs in the dcs-e2e kind cluster, whose kubeconfig the
+        # Makefile writes to tests/bdd/.tmp/kind-kubeconfig. Without pointing
+        # kubectl at it this step used the default context and reported
+        # "namespaces dcs-bdd not found", hiding both instances' logs. The
+        # backend selector matches BOTH releases (dcs + dcs2), so --prefix
+        # distinguishes instance A's synchronizer/pdf-gen from instance B's PostPdf.
+        env:
+          KUBECONFIG: ${{ github.workspace }}/tests/bdd/.tmp/kind-kubeconfig
         run: |
           set -euo pipefail
           kubectl get pods -n dcs-bdd -o wide || true
           kubectl get events -n dcs-bdd --sort-by=.lastTimestamp || true
-          kubectl logs -n dcs-bdd -l app.kubernetes.io/component=backend \
-            -c digital-contracting-service --tail=200 --prefix || true
-          kubectl logs -n dcs-bdd -l app.kubernetes.io/component=pdf-core --tail=100 --prefix || true
-          kubectl logs deployment/dcs-keycloak -n dcs-bdd --tail=200 || true
+          # Per-deployment so both instances (dcs + dcs2) are captured whole and a
+          # large tail keeps the export/regeneration diagnostics that fire near the
+          # end of a run inside the window.
+          for dep in $(kubectl get deploy -n dcs-bdd -o name | grep -E 'digital-contracting-service$'); do
+            echo "===== logs $dep ====="
+            kubectl logs -n dcs-bdd "$dep" -c digital-contracting-service --tail=2000 --prefix || true
+          done
+          kubectl logs -n dcs-bdd -l app.kubernetes.io/component=pdf-core --tail=400 --prefix || true
+          kubectl logs deployment/dcs-keycloak -n dcs-bdd --tail=100 || true
 
       - name: Teardown kind cluster
         if: always()

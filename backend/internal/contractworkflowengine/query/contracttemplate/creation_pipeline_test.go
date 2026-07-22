@@ -2,6 +2,7 @@ package contracttemplate
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -136,23 +137,23 @@ func creationPipelineLayout() []any {
 }
 
 func creationPipelineRequirements() []any {
-	return []any{
-		creationPipelineRequirement("customer", "Customer", "CompanyParty", "customer",
-			creationPipelineField("customer", "legalName", "company.legalName"),
-			creationPipelineField("customer", "country", "company.location.country"),
-		),
-		creationPipelineRequirement("provider", "Provider", "CompanyParty", "provider",
-			creationPipelineField("provider", "legalName", "company.legalName"),
-			creationPipelineField("provider", "country", "company.location.country"),
-		),
-		creationPipelineRequirement("payment", "Payment", "ContractDataObject", "",
-			creationPipelineField("payment", "amount", "contract.payment.amount"),
-			creationPipelineField("payment", "currency", "contract.payment.currency"),
-		),
-		creationPipelineRequirement("availability", "Availability", "ContractDataObject", "",
-			creationPipelineField("availability", "availability", "service.sla.availability"),
-		),
-	}
+	placeholders := []any{}
+	placeholders = append(placeholders, creationPipelineRequirement("customer", "Customer", "CompanyParty", "customer",
+		creationPipelineField("customer", "legalName", "company.legalName"),
+		creationPipelineField("customer", "country", "company.location.country"),
+	)...)
+	placeholders = append(placeholders, creationPipelineRequirement("provider", "Provider", "CompanyParty", "provider",
+		creationPipelineField("provider", "legalName", "company.legalName"),
+		creationPipelineField("provider", "country", "company.location.country"),
+	)...)
+	placeholders = append(placeholders, creationPipelineRequirement("payment", "Payment", "ContractDataObject", "",
+		creationPipelineField("payment", "amount", "contract.payment.amount"),
+		creationPipelineField("payment", "currency", "contract.payment.currency"),
+	)...)
+	placeholders = append(placeholders, creationPipelineRequirement("availability", "Availability", "ContractDataObject", "",
+		creationPipelineField("availability", "availability", "service.sla.availability"),
+	)...)
+	return placeholders
 }
 
 func creationPipelinePolicyDefinitions() map[string]any {
@@ -268,12 +269,8 @@ func creationPipelineClause(group string, content []any) map[string]any {
 	}
 }
 
-func creationPipelinePlaceholder(token string, conditionID string, parameterName string) map[string]any {
-	return map[string]any{
-		"@type":       "dcs:Placeholder",
-		"dcs:token":   token,
-		"dcs:bindsTo": map[string]any{"@id": creationPipelineFieldID(conditionID, parameterName)},
-	}
+func creationPipelinePlaceholder(_ string, conditionID string, parameterName string) map[string]any {
+	return map[string]any{"@id": creationPipelineFieldID(conditionID, parameterName)}
 }
 
 func creationPipelineLayoutNode(id string, root bool, children ...string) map[string]any {
@@ -291,38 +288,33 @@ func creationPipelineLayoutNode(id string, root bool, children ...string) map[st
 	return node
 }
 
+// creationPipelineRequirement flattens a condition's fields into the top-level
+// placeholder list — the clean self-contained model has no requirement grouping.
 func creationPipelineRequirement(
-	conditionID string,
-	name string,
-	entityType string,
-	entityRole string,
+	_ string,
+	_ string,
+	_ string,
+	_ string,
 	fields ...map[string]any,
-) map[string]any {
-	rawFields := make([]any, len(fields))
+) []any {
+	placeholders := make([]any, len(fields))
 	for index, field := range fields {
-		rawFields[index] = field
+		placeholders[index] = field
 	}
-	requirement := map[string]any{
-		"@id":               creationTemplateDID + "#requirement-" + conditionID,
-		"@type":             "dcs:DataRequirement",
-		"dcs:conditionId":   conditionID,
-		"dcs:name":          name,
-		"dcs:schemaVersion": "v1",
-		"dcs:entityType":    entityType,
-		"dcs:fields":        rawFields,
-	}
-	if entityRole != "" {
-		requirement["dcs:entityRole"] = entityRole
-	}
-	return requirement
+	return placeholders
 }
 
 func creationPipelineField(conditionID string, parameterName string, domainFieldName string) map[string]any {
+	datatype := "xsd:string"
+	if strings.Contains(domainFieldName, "amount") || strings.Contains(domainFieldName, "availability") {
+		datatype = "xsd:decimal"
+	}
 	return map[string]any{
-		"@id":               creationPipelineFieldID(conditionID, parameterName),
-		"@type":             "dcs:RequirementField",
-		"dcs:parameterName": parameterName,
-		"dcs:domainField": map[string]any{
+		"@id":          creationPipelineFieldID(conditionID, parameterName),
+		"@type":        "dcs:Placeholder",
+		"dcs:label":    parameterName,
+		"dcs:datatype": datatype,
+		"dcs:shape": map[string]any{
 			"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-" + creationPipelineSlug(domainFieldName),
 		},
 		"dcs:required": true,

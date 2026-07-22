@@ -5,7 +5,6 @@ import { useRoute } from 'vue-router'
 import WorkflowStageBanner from '@core/components/WorkflowStageBanner.vue'
 import { contractStory, toBannerActions } from '@core/workflow-story'
 import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import AuditView from '@contract-workflow-engine/components/AuditView.vue'
@@ -64,15 +63,8 @@ const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.
 const story = computed(() => contractStory(contract.value?.state))
 
 const verificationResult = computed(() => {
-  const subTemplateSemanticConditions = dcsDraftStore.subTemplateSnapshots.map((subTemplate) => ({
-    templateId: subTemplate.did,
-    version: subTemplate.version,
-    document_number: subTemplate.document_number,
-    semanticConditions: getSemanticConditionsFromTemplateData(subTemplate.template_data),
-  }))
   return verifySemanticValue(
     dcsDraftStore.semanticConditions,
-    subTemplateSemanticConditions,
     contractContentValuesStore.semanticConditionValues,
     dcsDraftStore.blocks,
   )
@@ -99,16 +91,11 @@ watch(
 )
 
 watch(
-  () => [dcsDraftStore.blocks, dcsDraftStore.semanticConditions, dcsDraftStore.subTemplateSnapshots],
+  () => [dcsDraftStore.blocks, dcsDraftStore.semanticConditions],
   () => {
     const invalidValues = contractContentValuesStore.semanticConditionValues.filter(
       (conditionValue) =>
-        !hasConditionParameterForValue(
-          conditionValue,
-          dcsDraftStore.blocks,
-          dcsDraftStore.semanticConditions,
-          dcsDraftStore.subTemplateSnapshots,
-        ),
+        !hasConditionParameterForValue(conditionValue, dcsDraftStore.blocks, dcsDraftStore.semanticConditions),
     )
     contractContentValuesStore.removeSemanticConditionValues(invalidValues)
   },
@@ -210,7 +197,6 @@ function applyContractDataToDraft(contractData?: unknown) {
       layout: cd.layout,
       contractData: cd.contractData,
       policies: cd.policies,
-      subTemplateSnapshots: cd.subTemplateSnapshots,
     })
     contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   } else {
@@ -275,7 +261,6 @@ const exportPDF = async () => {
                         :semantic-conditions="dcsDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
-                        :sub-template-snapshots="dcsDraftStore.subTemplateSnapshots"
                         :set-semantic-condition-value="setSemanticConditionValue"
                       />
                     </div>

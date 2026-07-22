@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
@@ -499,14 +501,13 @@ func (s *signatureManagementsrvc) Audit(ctx context.Context, req *signaturemanag
 	history := make([]*signaturemanagement.SMContractAuditResponse, 0)
 	for _, entry := range auditLogHistory {
 		history = append(history, &signaturemanagement.SMContractAuditResponse{
-			ID:               entry.ID,
-			Component:        entry.Component,
-			EventType:        entry.EventType,
-			EventData:        entry.EventData,
-			Did:              entry.DID,
-			CreatedAt:        entry.CreatedAt.String(),
-			GlobalLogPredCid: entry.GlobalLogPredCID,
-			ResLogPredCid:    entry.ResLogPredCID,
+			ID:            entry.ID,
+			Component:     entry.Component,
+			EventType:     entry.EventType,
+			EventData:     entry.EventData,
+			Did:           entry.DID,
+			CreatedAt:     entry.CreatedAt.String(),
+			ResLogPredCid: entry.ResLogPredCID,
 		})
 	}
 
@@ -654,11 +655,17 @@ func (s *signatureManagementsrvc) StartCeremony(ctx context.Context, req *signat
 	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
 	defer cancel()
 
+	baseURL := strings.TrimRight(strings.TrimSpace(os.Getenv("DCS_PUBLIC_BASE_URL")), "/")
+	if baseURL == "" {
+		return nil, signaturemanagement.MakeInternalError(fmt.Errorf("could not start the signing ceremony"))
+	}
+
 	handler := command.StartCeremonyHandler{DB: s.DB, CeremonyRepo: s.CeremonyRepo}
 	ceremony, err := handler.Handle(ctx, command.StartCeremonyCmd{
 		ContractDID: req.ContractDid,
 		FieldName:   req.FieldName,
 		RequestedBy: middleware.GetParticipantID(ctx),
+		BaseURL:     baseURL,
 	})
 	if err != nil {
 		return nil, signaturemanagement.MakeInternalError(err)

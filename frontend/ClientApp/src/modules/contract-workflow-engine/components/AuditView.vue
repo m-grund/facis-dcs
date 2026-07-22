@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { type Ref, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useContractEditorUiStore } from '@contract-workflow-engine/store/contractEditorUiStore'
 import ContractAuditList from '@/components/lists/contract/ContractAuditList.vue'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
-import { useContractEditorUiStore } from '../store/contractEditorUiStore'
 import type { ContractAuditResponse } from '@/models/responses/contract-response'
 
 const route = useRoute()

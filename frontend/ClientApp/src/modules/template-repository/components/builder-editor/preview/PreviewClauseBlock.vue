@@ -61,7 +61,9 @@ const segments = computed<PreviewSegment[]>(() => {
         conditionId: seg.conditionId,
         parameterName: seg.parameterName,
         paramType,
-        label: param ? semanticParameterLabel(param) : seg.parameterName,
+        // The placeholder's own label (resolved into displayText) — never the
+        // empty machine parameterName, so the input always has an accessible name.
+        label: param ? semanticParameterLabel(param) : seg.displayText || seg.parameterName,
         value: findSemanticValue(seg.conditionId, seg.parameterName),
         valueConstraint: param?.valueConstraint,
         isInvalid: !!findVerificationError(seg.conditionId, seg.parameterName),
@@ -74,14 +76,20 @@ const segments = computed<PreviewSegment[]>(() => {
   return result
 })
 
+// A value belongs to its placeholder node (conditionId == the placeholder @id),
+// not to the block that references it — the canonical document carries it inline
+// on the node (dcs:value) and applyInlineSemanticValues matches purely by @id.
+// So key it block-agnostically (blockId ''), matching the load snapshot; keying
+// it by the clause block @id instead made the store diverge from the snapshot on
+// render, spuriously flipping changedContractData and disabling Submit.
 function onParamValueChange(seg: PreviewSegment, value: string | number | boolean) {
   if (seg.type !== 'param') return
-  props.setSemanticConditionValue?.(props.blockId, seg.conditionId, seg.parameterName, value)
+  props.setSemanticConditionValue?.('', seg.conditionId, seg.parameterName, value)
 }
 
 function findSemanticValue(conditionId: string, parameterName: string): string | number | boolean | undefined {
   return props.semanticConditionValues?.find((item) => {
-    return item.blockId === props.blockId && item.conditionId === conditionId && item.parameterName === parameterName
+    return item.conditionId === conditionId && item.parameterName === parameterName
   })?.parameterValue
 }
 

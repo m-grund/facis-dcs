@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { nextTick, type Ref, ref } from 'vue'
-import { getLocalDIDFile } from '@/services/did-service'
-import { isDuplicateInList, mergeDraftIntoList } from '@/utils/participant-selection'
+import { nextTick, ref, useTemplateRef } from 'vue'
 import type { ParticipantSelection } from '@/utils/participant-selection'
 
 defineOptions({ inheritAttrs: false })
@@ -10,170 +8,29 @@ const emit = defineEmits<{
   submit: [value: ParticipantSelection]
 }>()
 
-const assigneeModal = ref<HTMLDialogElement | null>(null)
-
-const reviewers = ref<string[]>([])
-const approvers = ref<string[]>([])
-const negotiators = ref<string[]>([])
-const reviewerDraft = ref('')
-const approverDraft = ref('')
-const negotiatorDraft = ref('')
-
-const error = ref('')
-const reviewerError = ref('')
-const approverError = ref('')
-const negotiatorError = ref('')
-
-async function addLocalDID() {
-  error.value = ''
-
-  try {
-    const didDocument = await getLocalDIDFile()
-    const did = didDocument?.id
-
-    if (did === '') {
-      error.value = 'No valid value for local did found'
-      return
-    }
-
-    if (!isDuplicateInList(did, negotiators.value)) {
-      negotiators.value.push(did)
-    }
-
-    if (!isDuplicateInList(did, reviewers.value)) {
-      reviewers.value.push(did)
-    }
-
-    if (!isDuplicateInList(did, approvers.value)) {
-      approvers.value.push(did)
-    }
-  } catch {
-    error.value = 'Could not read local did'
-  }
-}
-
-function clearErrors() {
-  reviewerError.value = ''
-  approverError.value = ''
-  negotiatorError.value = ''
-  error.value = ''
-}
-
-function clearAll() {
-  reviewers.value = []
-  approvers.value = []
-  negotiators.value = []
-  reviewerDraft.value = ''
-  approverDraft.value = ''
-  negotiatorDraft.value = ''
-  clearErrors()
-}
+const counterpartyModal = useTemplateRef<HTMLDialogElement>('counterpartyModal')
+const counterparty = ref('')
 
 async function openModal() {
-  clearAll()
+  counterparty.value = ''
   await nextTick()
-  assigneeModal.value?.showModal()
+  counterpartyModal.value?.showModal()
   focusDialog()
 }
 
 function focusDialog() {
   window.requestAnimationFrame(() => {
-    assigneeModal.value?.focus()
+    counterpartyModal.value?.focus()
   })
 }
 
-function addReviewer() {
-  error.value = ''
-  reviewerError.value = ''
-  const trimmed = reviewerDraft.value.trim()
-  if (!trimmed) return
-  if (isDuplicateInList(trimmed, reviewers.value)) {
-    reviewerError.value = 'This reviewer is already in the list.'
-    return
-  }
-  reviewers.value.push(trimmed)
-  reviewerDraft.value = ''
-}
-
-function addApprover() {
-  error.value = ''
-  approverError.value = ''
-  const trimmed = approverDraft.value.trim()
-  if (!trimmed) return
-  if (isDuplicateInList(trimmed, approvers.value)) {
-    approverError.value = 'This approver is already in the list.'
-    return
-  }
-  approvers.value.push(trimmed)
-  approverDraft.value = ''
-}
-
-function addNegotiator() {
-  error.value = ''
-  negotiatorError.value = ''
-  const trimmed = negotiatorDraft.value.trim()
-  if (!trimmed) return
-  if (isDuplicateInList(trimmed, negotiators.value)) {
-    negotiatorError.value = 'This negotiator is already in the list.'
-    return
-  }
-  negotiators.value.push(trimmed)
-  negotiatorDraft.value = ''
-}
-
-function removeFromList(list: Ref<string[]>, did: string) {
-  list.value = list.value.filter((entry) => entry !== did)
-}
-
-function removeReviewer(did: string) {
-  removeFromList(reviewers, did)
-}
-
-function removeApprover(did: string) {
-  removeFromList(approvers, did)
-}
-
-function removeNegotiator(did: string) {
-  removeFromList(negotiators, did)
-}
-
-function collectAssignees(): ParticipantSelection {
-  return {
-    reviewers: mergeDraftIntoList(reviewers.value, reviewerDraft.value),
-    approvers: mergeDraftIntoList(approvers.value, approverDraft.value),
-    negotiators: mergeDraftIntoList(negotiators.value, negotiatorDraft.value),
-  }
-}
-
-function validateBeforeSubmit(): boolean {
-  clearErrors()
-  const { reviewers: finalReviewers, approvers: finalApprovers, negotiators: finalNegotiators } = collectAssignees()
-  let valid = true
-
-  if (finalReviewers.length === 0) {
-    reviewerError.value = 'Add at least one reviewer.'
-    valid = false
-  }
-  if (finalApprovers.length === 0) {
-    approverError.value = 'Add at least one approver.'
-    valid = false
-  }
-  if (finalNegotiators.length === 0) {
-    negotiatorError.value = 'Add at least one negotiator.'
-    valid = false
-  }
-
-  return valid
-}
-
 function onModalSubmit() {
-  if (!validateBeforeSubmit()) return
-  emit('submit', collectAssignees())
-  assigneeModal.value?.close()
+  emit('submit', { counterparty: counterparty.value.trim() })
+  counterpartyModal.value?.close()
 }
 
 function onModalClose() {
-  assigneeModal.value?.close()
+  counterpartyModal.value?.close()
 }
 </script>
 
@@ -181,127 +38,31 @@ function onModalClose() {
   <button type="button" v-bind="$attrs" @click="openModal">Create</button>
   <Teleport to="body">
     <dialog
-      ref="assigneeModal"
+      ref="counterpartyModal"
       class="modal modal-bottom transition-none sm:modal-middle"
       role="dialog"
       aria-modal="true"
       aria-labelledby="participant-dialog-title"
-      @close="clearAll"
     >
-      <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
-        <h3 id="participant-dialog-title" class="text-lg font-bold">Contract Participants</h3>
+      <div class="modal-box flex w-full max-w-lg flex-col">
+        <h3 id="participant-dialog-title" class="text-lg font-bold">Contract Counterparty</h3>
+        <p class="mt-2 mb-4 text-sm text-base-content/70">
+          The other DCS this contract is offered to and negotiated with. Review, approval and negotiation are handled by
+          your own instance's roles — leave empty for a purely local contract.
+        </p>
 
-        <button type="button" class="btn mt-5 mb-2 btn-primary" @click="addLocalDID">Add local DID</button>
-        <p v-if="error" class="mb-5 text-xs text-error" role="alert">{{ error }}</p>
+        <label class="flex flex-col gap-2">
+          <span class="font-medium">Counterparty did:web</span>
+          <input
+            v-model="counterparty"
+            type="text"
+            class="input-bordered input input-sm w-full font-mono text-xs"
+            placeholder="did:web:..."
+            @keydown.enter.prevent="onModalSubmit"
+          />
+        </label>
 
-        <div class="flex grow flex-col gap-5 overflow-y-auto py-2">
-          <section class="flex flex-col gap-2">
-            <h4 class="font-medium">Reviewers</h4>
-            <ul v-if="reviewers.length > 0" class="flex flex-col gap-1">
-              <li
-                v-for="did in reviewers"
-                :key="did"
-                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
-              >
-                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
-                <button
-                  type="button"
-                  class="btn shrink-0 btn-ghost btn-xs"
-                  aria-label="Remove"
-                  @click="removeReviewer(did)"
-                >
-                  ✕
-                </button>
-              </li>
-            </ul>
-            <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium" for="reviewer-draft">Add reviewer DID</label>
-              <input
-                id="reviewer-draft"
-                v-model="reviewerDraft"
-                type="text"
-                class="input-bordered input input-sm w-full font-mono text-xs"
-                placeholder="did:web:..."
-                @input="reviewerError = ''"
-                @keydown.enter.prevent="addReviewer"
-              />
-              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addReviewer">+</button>
-            </div>
-            <p v-if="reviewerError" class="text-xs text-error" role="alert">{{ reviewerError }}</p>
-          </section>
-
-          <section class="flex flex-col gap-2">
-            <h4 class="font-medium">Approvers</h4>
-            <ul v-if="approvers.length > 0" class="flex flex-col gap-1">
-              <li
-                v-for="did in approvers"
-                :key="did"
-                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
-              >
-                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
-                <button
-                  type="button"
-                  class="btn shrink-0 btn-ghost btn-xs"
-                  aria-label="Remove"
-                  @click="removeApprover(did)"
-                >
-                  ✕
-                </button>
-              </li>
-            </ul>
-            <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium" for="approver-draft">Add approver DID</label>
-              <input
-                id="approver-draft"
-                v-model="approverDraft"
-                type="text"
-                class="input-bordered input input-sm w-full font-mono text-xs"
-                placeholder="did:web:..."
-                @input="approverError = ''"
-                @keydown.enter.prevent="addApprover"
-              />
-              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addApprover">+</button>
-            </div>
-            <p v-if="approverError" class="text-xs text-error" role="alert">{{ approverError }}</p>
-          </section>
-
-          <section class="flex flex-col gap-2">
-            <h4 class="font-medium">Negotiators</h4>
-            <ul v-if="negotiators.length > 0" class="flex flex-col gap-1">
-              <li
-                v-for="did in negotiators"
-                :key="did"
-                class="flex items-center gap-2 rounded-lg border border-base-300 px-3 py-2"
-              >
-                <p class="min-w-0 flex-1 truncate font-mono text-xs" :title="did">{{ did }}</p>
-                <button
-                  type="button"
-                  class="btn shrink-0 btn-ghost btn-xs"
-                  aria-label="Remove"
-                  @click="removeNegotiator(did)"
-                >
-                  ✕
-                </button>
-              </li>
-            </ul>
-            <div class="flex flex-col gap-2">
-              <label class="text-sm font-medium" for="negotiator-draft">Add negotiator DID</label>
-              <input
-                id="negotiator-draft"
-                v-model="negotiatorDraft"
-                type="text"
-                class="input-bordered input input-sm w-full font-mono text-xs"
-                placeholder="did:web:..."
-                @input="negotiatorError = ''"
-                @keydown.enter.prevent="addNegotiator"
-              />
-              <button type="button" class="btn w-fit btn-sm btn-primary" @click="addNegotiator">+</button>
-            </div>
-            <p v-if="negotiatorError" class="text-xs text-error" role="alert">{{ negotiatorError }}</p>
-          </section>
-        </div>
-
-        <div class="modal-action mt-2">
+        <div class="modal-action mt-4">
           <button type="button" class="btn btn-outline" @click="onModalClose">Cancel</button>
           <button type="button" class="btn btn-primary" @click="onModalSubmit">Apply</button>
         </div>

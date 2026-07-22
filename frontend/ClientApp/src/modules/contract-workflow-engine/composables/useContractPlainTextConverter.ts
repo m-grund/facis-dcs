@@ -4,27 +4,15 @@ import {
   isText,
   parseSegmentsFromContent,
 } from '@template-repository/composables/useClauseTextChips'
-import { isDcsMergedApprovedTemplate } from '@template-repository/store/dcsDraftStore'
-import {
-  getBlocksFromTemplateData,
-  getLayoutFromTemplateData,
-  getSemanticConditionsFromTemplateData,
-} from '@template-repository/store/dcsDraftStore'
-import {
-  getOwnerBlockIdFromMergedBlockId,
-  isMergedBlockId,
-  isSameTemplateDataRef,
-} from '@template-repository/utils/template-data-ref'
+import { getSemanticConditionsFromTemplateData } from '@template-repository/store/dcsDraftStore'
 import {
   collectDeclaredRequirements,
   fromDocumentSemanticValues,
 } from '@contract-workflow-engine/utils/semantic-condition-values'
 import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsBlock, DcsClause, DcsLayoutNode } from '@/models/dcs-jsonld'
 import type { SemanticCondition } from '@template-repository/models/contract-template'
-import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 const DEFAULT_PLACEHOLDER_TEXT = '__________'
 const NEWLINE = '\n'
@@ -53,12 +41,11 @@ export function isTextPlainTextBlock(block: ContractPlainTextBlock): block is Co
 }
 
 interface ContractContext {
-  blockMap: Map<string, DcsBlock | MergedApprovedTemplateBlock>
+  blockMap: Map<string, DcsBlock>
   layoutMap: Map<string, DcsLayoutNode>
   rootChildIds: string[]
   semanticConditions: SemanticCondition[]
   semanticConditionValues: SemanticConditionValue[]
-  subTemplateSnapshots: SubTemplateSnapshot[]
 }
 
 interface PlainTextWriter {
@@ -71,11 +58,10 @@ interface PlainTextWriter {
 }
 
 function createContractContext(
-  blocks: (DcsBlock | MergedApprovedTemplateBlock)[],
+  blocks: DcsBlock[],
   layout: DcsLayoutNode[],
   semanticConditions: SemanticCondition[],
   semanticConditionValues: SemanticConditionValue[],
-  subTemplateSnapshots: SubTemplateSnapshot[],
 ): ContractContext {
   const root = layout.find((n) => n['dcs:isRoot'])
   const rootChildIds = root ? root['dcs:children']['@list'].map((r) => r['@id']) : []
@@ -85,7 +71,6 @@ function createContractContext(
     rootChildIds,
     semanticConditions,
     semanticConditionValues,
-    subTemplateSnapshots,
   }
 }
 
@@ -151,15 +136,11 @@ function writeBlockAsPlainText(cxt: ContractContext, blockId: string, level: num
     writer.addBoundarySpaceIfNeeded(text)
   } else if (block['@type'] === 'dcs:Clause') {
     writeClauseBlock(cxt, block, writer)
-  } else if (block['@type'] === 'dcs:ApprovedTemplate') {
-    writeApprovedTemplateBlock(cxt, block, level, writer)
-  } else if (isDcsMergedApprovedTemplate(block)) {
-    writeChildBlocks(cxt, blockId, level, writer)
   }
 }
 
 function writeClauseBlock(cxt: ContractContext, clause: DcsClause, writer: PlainTextWriter): void {
-  const conditions = getConditionsForBlock(clause['@id'], cxt)
+  const conditions = cxt.semanticConditions
   const content = clause['dcs:content']
   const segments_raw = typeof content === 'string' ? [] : content['@list']
   const segments = parseSegmentsFromContent(segments_raw, conditions)
@@ -169,10 +150,8 @@ function writeClauseBlock(cxt: ContractContext, clause: DcsClause, writer: Plain
       writer.addText(seg.value)
     } else if (isPlaceholder(seg)) {
       const parameterValue = cxt.semanticConditionValues.find(
-        (item) =>
-          item.blockId === clause['@id'] &&
-          item.conditionId === seg.conditionId &&
-          item.parameterName === seg.parameterName,
+        // A value is keyed by its placeholder @id (conditionId), not the block.
+        (item) => item.conditionId === seg.conditionId && item.parameterName === seg.parameterName,
       )?.parameterValue
       writer.addText(parameterValue == null ? DEFAULT_PLACEHOLDER_TEXT : String(parameterValue))
     } else if (isNewline(seg)) {
@@ -184,43 +163,6 @@ function writeClauseBlock(cxt: ContractContext, clause: DcsClause, writer: Plain
   writer.addBoundarySpaceIfNeeded(clauseText)
 }
 
-function writeApprovedTemplateBlock(
-  cxt: ContractContext,
-  block: import('@/models/dcs-jsonld').DcsApprovedTemplate,
-  level: number,
-  writer: PlainTextWriter,
-): void {
-  writer.breakLineIfOpen()
-  const snapshot = cxt.subTemplateSnapshots.find((item) =>
-    isSameTemplateDataRef(
-      { templateId: item.did, version: item.version, document_number: item.document_number },
-      {
-        templateId: block['dcs:templateDid'],
-        version: block['dcs:version'],
-        document_number: block['dcs:documentNumber'],
-      },
-    ),
-  )
-
-  if (snapshot?.template_data) {
-    const subBlocks = getBlocksFromTemplateData(snapshot.template_data)
-    const subLayout = getLayoutFromTemplateData(snapshot.template_data)
-    const subConditions = getSemanticConditionsFromTemplateData(snapshot.template_data)
-    const snapshotContext = createContractContext(
-      subBlocks,
-      subLayout,
-      subConditions,
-      cxt.semanticConditionValues,
-      cxt.subTemplateSnapshots,
-    )
-    for (const childId of snapshotContext.rootChildIds) {
-      writeBlockAsPlainText(snapshotContext, childId, level, writer)
-    }
-  }
-
-  writeChildBlocks(cxt, block['@id'], level, writer)
-}
-
 function writeChildBlocks(cxt: ContractContext, parentBlockId: string, level: number, writer: PlainTextWriter): void {
   const node = cxt.layoutMap.get(parentBlockId)
   const childIds = node ? node['dcs:children']['@list'].map((r) => r['@id']) : []
@@ -229,46 +171,17 @@ function writeChildBlocks(cxt: ContractContext, parentBlockId: string, level: nu
   }
 }
 
-function getConditionsForBlock(blockId: string, cxt: ContractContext): SemanticCondition[] {
-  if (!isMergedBlockId(blockId)) return cxt.semanticConditions
-  const ownerBlockId = getOwnerBlockIdFromMergedBlockId(blockId)
-  if (!ownerBlockId) return cxt.semanticConditions
-  const ownerBlock = cxt.blockMap.get(ownerBlockId)
-  if (!ownerBlock || !isDcsMergedApprovedTemplate(ownerBlock)) return cxt.semanticConditions
-  const snapshot = cxt.subTemplateSnapshots.find((item) =>
-    isSameTemplateDataRef(
-      { templateId: item.did, version: item.version, document_number: item.document_number },
-      {
-        templateId: ownerBlock['dcs:templateDid'],
-        version: ownerBlock['dcs:version'],
-        document_number: ownerBlock['dcs:documentNumber'],
-      },
-    ),
-  )
-  return snapshot?.template_data
-    ? getSemanticConditionsFromTemplateData(snapshot.template_data)
-    : cxt.semanticConditions
-}
-
 export function useContractPlainTextConverter() {
   function convertContractToPlainTextBlocks(contractData: ContractPlainTextInput): ContractPlainTextBlock[] {
     if (!isDcsDocumentData(contractData)) return []
 
     const cd = contractData as import('@/models/dcs-jsonld').DcsContractData
-    const blocks = cd['dcs:documentStructure']['dcs:blocks']['@list'] as (DcsBlock | MergedApprovedTemplateBlock)[]
-    const layout = cd['dcs:documentStructure']['dcs:layout']
+    const blocks = cd['dcs:documentStructure']['dcs:blocks']['@list']
+    const layout = cd['dcs:documentStructure']['dcs:layout']['@list']
     const conditions = getSemanticConditionsFromTemplateData(cd)
     const conditionValues = fromDocumentSemanticValues(collectDeclaredRequirements(cd))
-    const subTemplateSnapshots: SubTemplateSnapshot[] = (cd['dcs:metadata']?.['dcs:subTemplates'] ?? []).map((s) => ({
-      did: s['@id'],
-      version: s['dcs:version'],
-      document_number: s['dcs:documentNumber'],
-      name: s['dcs:name'],
-      description: s['dcs:description'],
-      template_data: s['dcs:template'],
-    }))
 
-    const context = createContractContext(blocks, layout, conditions, conditionValues, subTemplateSnapshots)
+    const context = createContractContext(blocks, layout, conditions, conditionValues)
     if (context.rootChildIds.length === 0) return []
 
     const writer = createPlainTextWriter()

@@ -23,6 +23,12 @@ spec:
           # the foreground so the pod stays up.
           command: ["/dss/apache-tomcat-11.0.4/bin/catalina.sh"]
           args: ["run"]
+          env:
+            # Bound the JVM heap so the demo container has a predictable
+            # footprint and is not OOM-killed under the two-instance kind node's
+            # memory pressure (its default heap scales to a share of node RAM).
+            - name: JAVA_OPTS
+              value: "-Xms256m -Xmx1024m"
           ports:
             - name: http
               containerPort: 8080
@@ -33,6 +39,10 @@ spec:
               port: http
             initialDelaySeconds: 90
             periodSeconds: 10
+            # Tomcat serving the DSS landing page can take several seconds under
+            # load; the 1s probe default times out ("context deadline exceeded")
+            # and flaps the pod NotReady mid-signing.
+            timeoutSeconds: 5
             failureThreshold: 30
           {{- with .Values.resources }}
           resources:

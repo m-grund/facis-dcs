@@ -24,7 +24,7 @@ interface Rule {
 }
 interface TemplateData {
   'dcs:policies': { 'odrl:permission'?: Rule[] }
-  'dcs:contractData': { 'dcs:fields'?: { '@id': string }[] }[]
+  'dcs:contractData': { '@id': string }[]
   'dcs:documentStructure': { 'dcs:blocks': { '@list': { 'dcs:title'?: string }[] } }
 }
 
@@ -89,9 +89,9 @@ test('an exhaustive access-grant template lets the Appendix C policy be negotiat
     'prose block persisted',
   ).toBeTruthy()
 
-  // The two boundaries are declared as fillable requirement fields.
-  const fieldIds = new Set(doc['dcs:contractData'].flatMap((r) => (r['dcs:fields'] ?? []).map((f) => f['@id'])))
-  expect(fieldIds.size, 'two negotiated fields declared').toBeGreaterThanOrEqual(2)
+  // The two boundaries are declared as fillable typed placeholders.
+  const fieldIds = new Set(doc['dcs:contractData'].map((ph) => ph['@id']))
+  expect(fieldIds.size, 'two negotiated placeholders declared').toBeGreaterThanOrEqual(2)
 
   // The Permission's spatial + temporal constraints reference those fields as
   // their boundaries — resolved to the filled values at negotiation.

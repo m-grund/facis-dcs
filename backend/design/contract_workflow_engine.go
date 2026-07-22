@@ -265,6 +265,7 @@ var ContractRetrieveByIDResponse = Type("ContractRetrieveByIDResponse", func() {
 	Attribute("did", String, "DID of the contract")
 	Attribute("contract_version", Int, "The version of the contract")
 	Attribute("state", String, "Current state of the contract")
+	Attribute("extrinsic_lifecycle", String, "Peer-facing negotiation lifecycle inferred from the intrinsic state (proposed/agreed/executed), ADR-13")
 	Attribute("name", String, "The name of the contract")
 	Attribute("description", String, "The description of the contract")
 
@@ -536,7 +537,6 @@ var ContractAuditResponse = Type("ContractAuditResponse", func() {
 	Attribute("did", String, "Decentralized Identifier of the contract template")
 	Attribute("created_at", String, "The creation date of the event")
 	Attribute("res_log_pred_cid", String, "Resource audit trail predecessor on the IPFS chain")
-	Attribute("global_log_pred_cid", String, "Global audit trail predecessor on the IPFS chain")
 
 	Required("id", "component", "event_type", "event_data", "created_at")
 })
@@ -691,6 +691,10 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
+			// The counterparty drives its inbound contract as Contract Manager
+			// (SRS §4); per-contract authorization is the negotiator/party check in
+			// the command handler, not local RBAC.
+			Scope("Contract Manager")
 			Scope("Contract Approver")
 			Scope("Sys. Contract Approver")
 		})
@@ -771,6 +775,11 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
+			// The Responder negotiates an inbound offer through the role that
+			// manages its received contracts (SRS §4 Contract Negotiation &
+			// Review); per-contract authorization for an inbound offer is the
+			// counterparty gate in command/negotiate.go, not local RBAC.
+			Scope("Contract Manager")
 		})
 
 		Payload(ContractNegotiationRequest)
@@ -799,6 +808,10 @@ var _ = Service("ContractWorkflowEngine", func() {
 			Scope("Contract Negotiator")
 			Scope("Contract Reviewer")
 			Scope("Sys. Contract Reviewer")
+			// The counterparty drives its inbound contract as Contract Manager
+			// (SRS §4); per-contract authorization is the negotiator/party check in
+			// the command handler, not local RBAC.
+			Scope("Contract Manager")
 		})
 
 		Payload(ContractNegotiationRespondRequest)

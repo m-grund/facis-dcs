@@ -81,37 +81,30 @@ type contractFieldInfo struct {
 	hasValue bool
 }
 
-// contractFieldValues indexes the document's requirement fields by @id, noting
-// whether each is required and carries an inline value (dcs:parameterValue).
+// contractFieldValues indexes the document's top-level placeholder nodes by
+// @id, noting whether each is required and carries an inline value (dcs:value).
 func contractFieldValues(data documentData) map[string]contractFieldInfo {
 	out := map[string]contractFieldInfo{}
-	requirements, _ := topLevelValue(data, "contractData").([]any)
-	for _, rawReq := range requirements {
-		req, ok := rawReq.(map[string]any)
+	placeholders, _ := topLevelValue(data, "contractData").([]any)
+	for _, rawPlaceholder := range placeholders {
+		placeholder, ok := rawPlaceholder.(map[string]any)
 		if !ok {
 			continue
 		}
-		fields, _ := req["dcs:fields"].([]any)
-		for _, rawField := range fields {
-			field, ok := rawField.(map[string]any)
-			if !ok {
-				continue
-			}
-			id, _ := field["@id"].(string)
-			if id == "" {
-				continue
-			}
-			required, _ := field["dcs:required"].(bool)
-			out[id] = contractFieldInfo{required: required, hasValue: hasInlineValue(field)}
+		id, _ := placeholder["@id"].(string)
+		if id == "" {
+			continue
 		}
+		required, _ := placeholder["dcs:required"].(bool)
+		out[id] = contractFieldInfo{required: required, hasValue: hasInlineValue(placeholder)}
 	}
 	return out
 }
 
-// hasInlineValue reports whether a requirement field carries a non-empty
-// submitted value (dcs:parameterValue); an absent key or empty string is unset.
-func hasInlineValue(field map[string]any) bool {
-	value, present := field["dcs:parameterValue"]
+// hasInlineValue reports whether a placeholder carries a non-empty filled value
+// (dcs:value); an absent key or empty string is unset.
+func hasInlineValue(placeholder map[string]any) bool {
+	value, present := placeholder["dcs:value"]
 	if !present || value == nil {
 		return false
 	}
@@ -132,8 +125,9 @@ func nodeReferenceID(value any) string {
 	return id
 }
 
-// unresolvedProsePlaceholders reports document placeholders that bind to a
-// field carrying no value — a placeholder that never got materialized.
+// unresolvedProsePlaceholders reports clause placeholder references (bare
+// {"@id"} nodes) whose top-level placeholder carries no value — a placeholder
+// that never got materialized.
 func unresolvedProsePlaceholders(data documentData, fields map[string]contractFieldInfo) []string {
 	messages := []string{}
 	structure, ok := topLevelValue(data, "documentStructure").(map[string]any)
@@ -155,11 +149,13 @@ func unresolvedProsePlaceholders(data documentData, fields map[string]contractFi
 		}
 		for _, rawSegment := range content {
 			segment, ok := rawSegment.(map[string]any)
-			if !ok || segment["@type"] != "dcs:Placeholder" {
+			if !ok {
 				continue
 			}
-			bindsTo, _ := segment["dcs:bindsTo"].(map[string]any)
-			fieldID, _ := bindsTo["@id"].(string)
+			fieldID, _ := segment["@id"].(string)
+			if fieldID == "" {
+				continue
+			}
 			if info, ok := fields[fieldID]; !ok || !info.hasValue {
 				messages = append(messages, fmt.Sprintf("prose placeholder binds to unfilled field %q", fieldID))
 			}

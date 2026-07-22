@@ -86,16 +86,11 @@ watch(
 )
 
 watch(
-  () => [dcsDraftStore.blocks, dcsDraftStore.semanticConditions, dcsDraftStore.subTemplateSnapshots],
+  () => [dcsDraftStore.blocks, dcsDraftStore.semanticConditions],
   () => {
     const invalidValues = contractContentValuesStore.semanticConditionValues.filter(
       (conditionValue) =>
-        !hasConditionParameterForValue(
-          conditionValue,
-          dcsDraftStore.blocks,
-          dcsDraftStore.semanticConditions,
-          dcsDraftStore.subTemplateSnapshots,
-        ),
+        !hasConditionParameterForValue(conditionValue, dcsDraftStore.blocks, dcsDraftStore.semanticConditions),
     )
     contractContentValuesStore.removeSemanticConditionValues(invalidValues)
   },
@@ -207,7 +202,6 @@ function applyContractDataToDraft(contractData?: unknown) {
       layout: cd.layout,
       contractData: cd.contractData,
       policies: cd.policies,
-      subTemplateSnapshots: cd.subTemplateSnapshots,
     })
     contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   } else {
@@ -277,7 +271,6 @@ const exportPDF = async () => {
                         :semantic-conditions="dcsDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
-                        :sub-template-snapshots="dcsDraftStore.subTemplateSnapshots"
                         :set-semantic-condition-value="setSemanticConditionValue"
                       />
                     </div>

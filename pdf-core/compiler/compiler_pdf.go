@@ -87,8 +87,8 @@ func renderPDF(ctx context.Context, doc documentModel) ([]byte, error) {
 		pdfObject{ID: ids.c2paEmbeddedID, Data: streamObject(c2paManifest, fmt.Sprintf("<< /Type /EmbeddedFile /Subtype /application#2Fc2pa /Length %d >>", len(c2paManifest)))},
 		// C2PA manifest store attachment per C2PA 2.4 Appendix A.4 for PDF embedding.
 		pdfObject{ID: ids.c2paFileSpecID, Data: []byte(fmt.Sprintf("<< /Type /Filespec /F (content_credential.c2pa) /UF (content_credential.c2pa) /AFRelationship /C2PA_Manifest /Desc (Embedded C2PA manifest store) /EF << /F %d 0 R >> >>", ids.c2paEmbeddedID))},
-		pdfObject{ID: ids.embeddedFileID, Data: streamObject(doc.CanonicalJSON, fmt.Sprintf("<< /Type /EmbeddedFile /Subtype /application#2Fld+json /Length %d /Params << /Size %d /ModDate (D:20260604000000Z) /CheckSum <%s> >> >>", len(doc.CanonicalJSON), len(doc.CanonicalJSON), doc.PayloadHash[:32]))},
-		// CanonicalJSON holds the original JSON-LD bytes; PayloadHash is SHA-256 of URDNA2015 N-Quads.
+		pdfObject{ID: ids.embeddedFileID, Data: streamObject(doc.EmbeddedPayload, fmt.Sprintf("<< /Type /EmbeddedFile /Subtype /application#2Fld+json /Length %d /Params << /Size %d /ModDate (D:20260604000000Z) /CheckSum <%s> >> >>", len(doc.EmbeddedPayload), len(doc.EmbeddedPayload), doc.PayloadHash[:32]))},
+		// PayloadHash is the sha256 of the verbatim embedded payload bytes (a content-address).
 		pdfObject{ID: ids.fileSpecID, Data: []byte(fmt.Sprintf("<< /Type /Filespec /F (contract.jsonld) /UF (contract.jsonld) /AFRelationship /Source /Desc (Embedded canonical JSON-LD payload) /EF << /F %d 0 R >> >>", ids.embeddedFileID))},
 		pdfObject{ID: ids.metadataID, Data: streamObject(xmpMetadata, fmt.Sprintf("<< /Type /Metadata /Subtype /XML /Length %d >>", len(xmpMetadata)))},
 	)
@@ -732,7 +732,33 @@ func renderXMPMetadata(remoteManifestURL string) []byte {
 	if remoteManifestURL != "" {
 		provenanceDescription = "  <rdf:Description rdf:about=\"\"\n" +
 			"    xmlns:dcterms=\"http://purl.org/dc/terms/\"\n" +
-			"    dcterms:provenance=\"" + remoteManifestURL + "\"/>\n"
+			"    dcterms:provenance=\"" + remoteManifestURL + "\"/>\n" +
+			// ISO 19005-3:2012 clause 6.6.2.3.2: dcterms is not a predefined XMP
+			// schema, so it must be declared as a PDF/A extension schema.
+			"  <rdf:Description rdf:about=\"\"\n" +
+			"    xmlns:pdfaExtension=\"http://www.aiim.org/pdfa/ns/extension/\"\n" +
+			"    xmlns:pdfaSchema=\"http://www.aiim.org/pdfa/ns/schema#\"\n" +
+			"    xmlns:pdfaProperty=\"http://www.aiim.org/pdfa/ns/property#\">\n" +
+			"    <pdfaExtension:schemas>\n" +
+			"      <rdf:Bag>\n" +
+			"        <rdf:li rdf:parseType=\"Resource\">\n" +
+			"          <pdfaSchema:schema>Dublin Core Terms</pdfaSchema:schema>\n" +
+			"          <pdfaSchema:namespaceURI>http://purl.org/dc/terms/</pdfaSchema:namespaceURI>\n" +
+			"          <pdfaSchema:prefix>dcterms</pdfaSchema:prefix>\n" +
+			"          <pdfaSchema:property>\n" +
+			"            <rdf:Seq>\n" +
+			"              <rdf:li rdf:parseType=\"Resource\">\n" +
+			"                <pdfaProperty:name>provenance</pdfaProperty:name>\n" +
+			"                <pdfaProperty:valueType>Text</pdfaProperty:valueType>\n" +
+			"                <pdfaProperty:category>external</pdfaProperty:category>\n" +
+			"                <pdfaProperty:description>Remote C2PA manifest URL</pdfaProperty:description>\n" +
+			"              </rdf:li>\n" +
+			"            </rdf:Seq>\n" +
+			"          </pdfaSchema:property>\n" +
+			"        </rdf:li>\n" +
+			"      </rdf:Bag>\n" +
+			"    </pdfaExtension:schemas>\n" +
+			"  </rdf:Description>\n"
 	}
 	xmp := "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 		"<?xpacket begin=\"\xef\xbb\xbf\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n" +

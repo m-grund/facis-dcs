@@ -40,3 +40,14 @@ Feature: Process audit and compliance management
   Scenario: Compliance Officer submits a non-compliance incident report
     When the Compliance Officer submits a non-compliance incident report
     Then get http 200:Success code
+
+  # Backend half of the Non-Compliance Investigation UI (AC5, UI half is
+  # frontend/ClientApp/e2e/non-compliance-investigation.spec.ts): the report
+  # must not be a no-op — it links the finding, typed, to an affected contract
+  # (or template) and the server must persist that link so it is auditable.
+  @REQ-non-compliance-investigation-ui-AC5 @DCS-IR-PACM-04 @UC-08-02
+  Scenario: A submitted incident report is persisted as a PAC audit event linked to the affected contract
+    Given contract "PAC Incident Contract" is in "Draft" status
+    When the Compliance Officer submits a non-compliance incident report linking contract "PAC Incident Contract" with risk type "UNAUTHORIZED_CLAUSE_CHANGE" and detail "Clause altered outside the approved negotiation window"
+    Then get http 200:Success code
+    And the incident report is recorded as a PAC audit event for contract "PAC Incident Contract" with risk type "UNAUTHORIZED_CLAUSE_CHANGE"

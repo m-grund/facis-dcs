@@ -86,10 +86,12 @@ func TestSeedSignatureFieldsIdempotent(t *testing.T) {
 	require.Equal(t, first, second)
 }
 
-// TestSeedSignatureFieldsPreservesExisting proves a field a template already
-// declared for an instance is kept as-is (its @id untouched), and only the
-// missing instance's field is added.
-func TestSeedSignatureFieldsPreservesExisting(t *testing.T) {
+// TestSeedSignatureFieldsExplicitDeclarationWins proves that a contract which
+// already declares its signature fields is signed against exactly that
+// declaration: the per-party auto-seed adds nothing on top (no extra
+// instance-DID field) and reports no change, so an explicitly authored
+// multi-signatory contract is never silently augmented.
+func TestSeedSignatureFieldsExplicitDeclarationWins(t *testing.T) {
 	raw, err := datatype.NewJSON(map[string]any{
 		"@id":   "urn:contract:1",
 		"@type": "dcs:Contract",
@@ -105,10 +107,10 @@ func TestSeedSignatureFieldsPreservesExisting(t *testing.T) {
 
 	seeded, changed, err := seedSignatureFields(raw, []string{"did:web:origin", "did:web:peer"})
 	require.NoError(t, err)
-	require.True(t, changed)
+	require.False(t, changed)
 
 	fields := signatureFieldsOf(t, seeded)
-	require.Len(t, fields, 2)
+	require.Len(t, fields, 1)
 	require.Equal(t, "urn:uuid:template-field", fields["did:web:origin"])
-	require.Contains(t, fields, "did:web:peer")
+	require.NotContains(t, fields, "did:web:peer")
 }

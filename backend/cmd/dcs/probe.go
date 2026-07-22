@@ -27,6 +27,24 @@ func probeHTTP(rawURL string) error {
 	return nil
 }
 
+// probeHTTPUntilReady polls probe until it succeeds or timeout elapses, so a
+// required dependency that is merely slow to start (common under CI resource
+// pressure) does not crash-loop the DCS. It still returns the last error — a
+// hard fail — if the dependency never becomes reachable within the window.
+func probeHTTPUntilReady(timeout time.Duration, probe func() error) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		err := probe()
+		if err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(2 * time.Second)
+	}
+}
+
 // probeHTTPAny tries multiple URLs and returns nil on first success.
 func probeHTTPAny(urls ...string) error {
 	if len(urls) == 0 {

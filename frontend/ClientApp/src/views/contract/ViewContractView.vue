@@ -122,7 +122,6 @@ function applyContractDataToDraft(contractData?: unknown) {
       layout: cd.layout,
       contractData: cd.contractData,
       policies: cd.policies,
-      subTemplateSnapshots: cd.subTemplateSnapshots,
     })
     contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   } else {
@@ -242,7 +241,6 @@ const exportBundle = async () => {
                         :semantic-conditions="dcsDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
-                        :sub-template-snapshots="dcsDraftStore.subTemplateSnapshots"
                       />
                     </div>
                   </div>
@@ -316,8 +314,15 @@ const exportBundle = async () => {
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
-        <button class="btn btn-outline md:w-32" :disabled="exporting" @click="exportPDF">Export PDF</button>
-        <button class="btn btn-outline md:w-36" :disabled="exporting" @click="exportBundle">Export bundle</button>
+        <!-- Both exports need the loaded contract's DID; until it arrives the
+             handlers can only return silently, so the click looks like it did
+             nothing. Disable them while the contract is still loading. -->
+        <button class="btn btn-outline md:w-32" :disabled="exporting || !contract" @click="exportPDF">
+          Export PDF
+        </button>
+        <button class="btn btn-outline md:w-36" :disabled="exporting || !contract" @click="exportBundle">
+          Export bundle
+        </button>
         <ContractManagerActions v-if="contract" :contract="contract" class="btn flex-1 btn-primary" />
       </div>
     </div>

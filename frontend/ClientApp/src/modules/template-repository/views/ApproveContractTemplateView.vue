@@ -4,6 +4,7 @@ import { computed, type Ref, ref, useTemplateRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import WorkflowStageBanner from '@core/components/WorkflowStageBanner.vue'
 import { templateStory, toBannerActions } from '@core/workflow-story'
+import CopyTemplateButton from '@template-repository/components/CopyTemplateButton.vue'
 import TemplateEditors from '@template-repository/components/TemplateEditors.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
@@ -13,7 +14,6 @@ import TemplateManagerActions from '@/components/template/TemplateManagerActions
 import { useDocumentExport } from '@/composables/useDocumentExport'
 import { contractTemplateService } from '@/services/contract-template-service'
 import { useNavStore } from '@/stores/nav-store'
-import CopyTemplateButton from '../components/CopyTemplateButton.vue'
 import type { PartialContractTemplate } from '@/models/contract-template'
 
 const router = useRouter()

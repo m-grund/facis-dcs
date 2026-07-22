@@ -14,11 +14,11 @@ SHAPES_EXTRA  ?= shapes-content.ttl
 SHAPES_MERGED := $(OUTPUT_PATH)/$(SCHEMA).shacl.merged.ttl
 
 # Properties that form ordered RDF lists of embedded objects (@container: @list).
-LIST_PROPS := blocks content
+LIST_PROPS := blocks content layout
 # Properties that are ordered RDF lists of IRI references (@type: @id, @container: @list).
 IRI_LIST_PROPS := children
 # Properties that are unordered IRI-reference sets (@type: @id, @container: @set).
-IRI_SET_PROPS := layout signatureFields
+IRI_SET_PROPS := signatureFields
 
 VALID_TESTS   := $(wildcard tests/valid/*.jsonld)
 INVALID_TESTS := $(wildcard tests/invalid/*.jsonld)

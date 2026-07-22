@@ -1,9 +1,11 @@
 package compiler
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -42,10 +44,90 @@ func expandCanonicalIRI(compact string) string {
 	return compact
 }
 
-// parseCanonicalSegment maps one ContentItem from the canonical compact form to
-// a clauseSegment. The compact form uses short term names and prefix notation
-// for IRIs; expandCanonicalIRI resolves them to full IRIs where needed.
-func parseCanonicalSegment(item ContentItem) clauseSegment {
+// requirementFieldValue extracts a field's filled value from parameterValue,
+// accepting a bare scalar, a JSON number, or a typed {"@value":…} literal.
+func requirementFieldValue(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var n json.Number
+	if json.Unmarshal(raw, &n) == nil {
+		return n.String()
+	}
+	var obj map[string]any
+	if json.Unmarshal(raw, &obj) == nil {
+		if v, ok := obj["@value"]; ok {
+			return fmt.Sprint(v)
+		}
+	}
+	return ""
+}
+
+// placeholderFillValue resolves a Placeholder's dcs:bindsTo reference to the
+// bound field's filled value ("" when unbound or unfilled).
+func placeholderFillValue(item ContentItem, fields map[string]string) string {
+	if len(item.Raw) == 0 {
+		return ""
+	}
+	var raw map[string]any
+	if json.Unmarshal(item.Raw, &raw) != nil {
+		return ""
+	}
+	binds, ok := raw["bindsTo"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	id, _ := binds["@id"].(string)
+	return fields[id]
+}
+
+// inlinedPlaceholderText reports whether a content item is a DCS-inlined
+// placeholder reference — a node carrying a dcs:label the DCS copied from the
+// top-level dcs:Placeholder registry — and returns its filling. The value is
+// read with json.Number so a numeric filling keeps its exact source token
+// (e.g. 15000 stays "15000"), making the render a deterministic function of the
+// bytes. An empty string with ok=true means an unfilled placeholder (empty slot).
+func inlinedPlaceholderText(raw json.RawMessage) (string, bool) {
+	if len(raw) == 0 || raw[0] != '{' {
+		return "", false
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	var obj map[string]any
+	if dec.Decode(&obj) != nil {
+		return "", false
+	}
+	if _, labelled := obj["label"]; !labelled {
+		return "", false
+	}
+	value, present := obj["value"]
+	if !present {
+		return "", true
+	}
+	return scalarText(value), true
+}
+
+// scalarText renders a JSON scalar to its deterministic display text.
+func scalarText(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return t
+	case bool:
+		return strconv.FormatBool(t)
+	case json.Number:
+		return t.String()
+	default:
+		return fmt.Sprint(t)
+	}
+}
+
+func parseCanonicalSegment(item ContentItem, fields map[string]string) clauseSegment {
 	// Value objects: typed literal or plain string.
 	if item.Value != "" {
 		if item.Datatype != "" {
@@ -56,8 +138,26 @@ func parseCanonicalSegment(item ContentItem) clauseSegment {
 
 	// Decode raw JSON for schema: properties (schema:url, schema:name).
 
-	// Placeholder: dcs:Placeholder in content renders as five underscores.
+	// Placeholder: renders its bound field's filled value in a contract, or the
+	// empty slot ("_____") in a template / when the field is unfilled.
 	if item.Datatype == "Placeholder" || item.Datatype == "dcs:Placeholder" {
+		if v := placeholderFillValue(item, fields); v != "" {
+			return clauseSegment{Type: "prose", Text: v}
+		}
+		return clauseSegment{Type: "prose", Text: "_____"}
+	}
+
+	// Clean ADR-15 placeholder reference: the clause references a top-level
+	// dcs:Placeholder by @id, and the DCS has copied the placeholder's dcs:label
+	// (always) and its dcs:value (once filled) onto this node so the renderer
+	// resolves the visible text without chasing the registry. Render the filled
+	// value, or the empty slot when unfilled — never the @id. This is a pure,
+	// ordered function of the segment bytes, so a recompile from the embedded
+	// payload reproduces the same visible text.
+	if value, ok := inlinedPlaceholderText(item.Raw); ok {
+		if value != "" {
+			return clauseSegment{Type: "prose", Text: value}
+		}
 		return clauseSegment{Type: "prose", Text: "_____"}
 	}
 
@@ -101,7 +201,7 @@ func parseCanonicalSegment(item ContentItem) clauseSegment {
 	return clauseSegment{Type: "prose"}
 }
 
-func parseCanonicalClause(block *Block) clauseData {
+func parseCanonicalClause(block *Block, fields map[string]string) clauseData {
 	if block.Type == "TextBlock" {
 		return clauseData{Segments: []clauseSegment{{Type: "prose", Text: block.Text}}}
 	}
@@ -110,13 +210,13 @@ func parseCanonicalClause(block *Block) clauseData {
 	for _, rawItem := range block.Content {
 		var item ContentItem
 		if err := json.Unmarshal(rawItem, &item); err == nil {
-			clause.Segments = append(clause.Segments, parseCanonicalSegment(item))
+			clause.Segments = append(clause.Segments, parseCanonicalSegment(item, fields))
 		}
 	}
 	return clause
 }
 
-func walkCanonicalSectionNode(sec sectionData, ln *LayoutNode, layoutByID map[string]*LayoutNode, blockByID map[string]*Block) sectionData {
+func walkCanonicalSectionNode(sec sectionData, ln *LayoutNode, layoutByID map[string]*LayoutNode, blockByID map[string]*Block, fields map[string]string) sectionData {
 	for _, childID := range ln.Children {
 		block := blockByID[childID]
 		if block == nil {
@@ -124,14 +224,14 @@ func walkCanonicalSectionNode(sec sectionData, ln *LayoutNode, layoutByID map[st
 		}
 		switch block.Type {
 		case "Clause", "TextBlock":
-			sec.Clauses = append(sec.Clauses, parseCanonicalClause(block))
+			sec.Clauses = append(sec.Clauses, parseCanonicalClause(block, fields))
 		case "Section":
 			sub := sectionData{
 				Heading: strings.TrimSpace(block.Title),
 				Clauses: []clauseData{},
 			}
 			if subLayout, ok := layoutByID[childID]; ok {
-				sub = walkCanonicalSectionNode(sub, subLayout, layoutByID, blockByID)
+				sub = walkCanonicalSectionNode(sub, subLayout, layoutByID, blockByID, fields)
 			}
 			sec.Subsections = append(sec.Subsections, sub)
 		}
@@ -139,7 +239,7 @@ func walkCanonicalSectionNode(sec sectionData, ln *LayoutNode, layoutByID map[st
 	return sec
 }
 
-func walkCanonicalSections(ds *DocumentStructure) []sectionData {
+func walkCanonicalSections(ds *DocumentStructure, fields map[string]string) []sectionData {
 	blockByID := make(map[string]*Block, len(ds.Blocks))
 	for i := range ds.Blocks {
 		b := &ds.Blocks[i]
@@ -189,14 +289,14 @@ func walkCanonicalSections(ds *DocumentStructure) []sectionData {
 				Clauses: []clauseData{},
 			}
 			if secLayout, ok := layoutByID[childID]; ok {
-				sec = walkCanonicalSectionNode(sec, secLayout, layoutByID, blockByID)
+				sec = walkCanonicalSectionNode(sec, secLayout, layoutByID, blockByID, fields)
 			}
 			sections = append(sections, sec)
 		case "Clause", "TextBlock":
 			if anonymous == nil {
 				anonymous = &sectionData{Clauses: []clauseData{}}
 			}
-			anonymous.Clauses = append(anonymous.Clauses, parseCanonicalClause(block))
+			anonymous.Clauses = append(anonymous.Clauses, parseCanonicalClause(block, fields))
 		}
 	}
 	flushAnonymousSection(anonymous)
@@ -218,10 +318,12 @@ func extractDocumentModelFromCanonical(canonical []byte, hashHex string) (docume
 		SignatureFields: []sigFieldDef{},
 		Glossary:        []glossaryTerm{},
 		NamespaceMap:    canonicalNamespaceMap(),
-		CanonicalJSON:   canonical,
-		PayloadHash:     hashHex,
-		FileID:          hashHex[:32],
-		ContractID:      tmpl.ID,
+		// EmbeddedPayload is set by the caller (CompilePDF/updatePDF) to the
+		// VERBATIM submitted bytes — not the canonical form used here only to
+		// build the render model and the graph hash.
+		PayloadHash: hashHex,
+		FileID:      hashHex[:32],
+		ContractID:  tmpl.ID,
 	}
 
 	if tmpl.Metadata == nil || strings.TrimSpace(tmpl.Metadata.Title) == "" {
@@ -229,8 +331,17 @@ func extractDocumentModelFromCanonical(canonical []byte, hashHex string) (docume
 	}
 	model.Title = strings.TrimSpace(tmpl.Metadata.Title)
 
+	fields := map[string]string{}
+	for _, dr := range tmpl.ContractData {
+		for _, f := range dr.Fields {
+			if v := requirementFieldValue(f.ParameterValue); v != "" {
+				fields[f.ID] = v
+			}
+		}
+	}
+
 	if tmpl.DocumentStructure != nil {
-		model.Sections = walkCanonicalSections(tmpl.DocumentStructure)
+		model.Sections = walkCanonicalSections(tmpl.DocumentStructure, fields)
 	}
 
 	for _, sf := range tmpl.SignatureFields {
@@ -284,11 +395,125 @@ func extractDocumentModelFromCanonical(canonical []byte, hashHex string) (docume
 	}
 	collectRefs(model.Sections)
 
-	if section, ok := buildPolicySection(tmpl.Policies); ok {
-		model.Sections = append(model.Sections, section)
-	}
-
 	return model, nil
+}
+
+// extractDocumentModel builds the render model directly from the verbatim
+// payload's documentStructure, honoring @list order. It strips the dcs: prefix
+// and unwraps @list wrappers without a json-gold expand/compact round trip, so
+// the ordered structures the payload carries drive the render deterministically
+// (that round trip reorders @set/multi-value nodes non-deterministically).
+func extractDocumentModel(payload []byte, hashHex string) (documentModel, error) {
+	shaped, err := shapeForModel(payload)
+	if err != nil {
+		return documentModel{}, err
+	}
+	return extractDocumentModelFromCanonical(shaped, hashHex)
+}
+
+// shapeForModel rewrites a JSON-LD payload into the bare-term, plain-array shape
+// the render structs read: it strips the dcs: prefix from keys and @type values
+// and unwraps {"@list":[...]} to [...], preserving array order. It never
+// reorders, so the same payload always yields identical model input.
+func shapeForModel(raw []byte) ([]byte, error) {
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("invalid JSON-LD payload: %w", err)
+	}
+	if _, ok := doc.(map[string]any); !ok {
+		return nil, fmt.Errorf("JSON-LD payload must be a JSON object at the root")
+	}
+	return json.Marshal(stripDCSTerms(doc))
+}
+
+// listValuedTerms are the documentStructure properties the render model reads as
+// Go slices. JSON-LD serializes a single-cardinality value as a bare object (or
+// scalar) rather than a 1-element array, so shapeForModel coerces them to arrays.
+var listValuedTerms = map[string]bool{
+	"layout":          true,
+	"blocks":          true,
+	"children":        true,
+	"content":         true,
+	"signatureFields": true,
+	"contractData":    true,
+	"fields":          true,
+}
+
+// idRefListTerms are list properties the model reads as []string of bare IRIs,
+// but DCS serializes each element as an @id-reference object ({"@id":"c1"}).
+// flattenIDRefs reduces each such element to its @id string.
+var idRefListTerms = map[string]bool{"children": true}
+
+func flattenIDRefs(v any) any {
+	arr, ok := v.([]any)
+	if !ok {
+		return v
+	}
+	for i, e := range arr {
+		if m, ok := e.(map[string]any); ok {
+			if id, ok := m["@id"].(string); ok {
+				arr[i] = id
+			}
+		}
+	}
+	return arr
+}
+
+func stripDCSTerms(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		if len(t) == 1 {
+			if list, ok := t["@list"]; ok {
+				return stripDCSTerms(list)
+			}
+		}
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			key := stripDCSPrefix(k)
+			if key == "@type" {
+				out[key] = stripDCSType(val)
+				continue
+			}
+			shaped := stripDCSTerms(val)
+			if listValuedTerms[key] {
+				if _, isArray := shaped.([]any); !isArray {
+					shaped = []any{shaped}
+				}
+			}
+			if idRefListTerms[key] {
+				shaped = flattenIDRefs(shaped)
+			}
+			out[key] = shaped
+		}
+		return out
+	case []any:
+		for i := range t {
+			t[i] = stripDCSTerms(t[i])
+		}
+		return t
+	default:
+		return v
+	}
+}
+
+func stripDCSType(v any) any {
+	switch t := v.(type) {
+	case string:
+		return stripDCSPrefix(t)
+	case []any:
+		for i := range t {
+			if s, ok := t[i].(string); ok {
+				t[i] = stripDCSPrefix(s)
+			}
+		}
+		return t
+	default:
+		return v
+	}
+}
+
+func stripDCSPrefix(s string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(s, "dcs:"), dcsOntologyIRI)
 }
 
 func compactIRI(iri string, nsMap map[string]string) string {

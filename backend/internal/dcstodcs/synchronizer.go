@@ -70,7 +70,15 @@ func (s *DCSToDCSSynchronizer) StartSynchronizerJob(ctx context.Context, client 
 		// signed PDF directly). shipContractPDF gates on the shippable state.
 		switch source {
 		case componenttype.ContractWorkflowEngine:
-			if evt.Type() != eventtype.PDFRegenerated.String() {
+			// Ship when the regenerator produced a fresh PDF (a content or C2PA
+			// state change) OR when the contract entered the shippable OFFERED
+			// state. An offer is a pure state transition that changes neither the
+			// payload hash nor the C2PA lifecycle (DRAFT and OFFERED both map to
+			// "draft"), so a contract edited while DRAFT and then offered emits no
+			// PDF_REGENERATED — the offer itself must trigger the ship of the
+			// already-stored PDF (shipContractPDF still gates on the shippable
+			// state, so a non-shippable transition is a no-op).
+			if evt.Type() != eventtype.PDFRegenerated.String() && evt.Type() != eventtype.Offer.String() {
 				return
 			}
 		case componenttype.SignatureManagement:
@@ -179,8 +187,18 @@ func (s *DCSToDCSSynchronizer) shipContractPDF(ctx context.Context, did string) 
 	_ = readTx.Rollback()
 
 	state := string(contractData.State)
-	if !shippableStates[state] || pdfState.IPFSCID == "" {
+	if !shippableStates[state] {
 		return nil
+	}
+	if pdfState.IPFSCID == "" {
+		// The contract is shippable but its PDF has not been stored yet: the
+		// regenerator compiles it asynchronously, so an offer (a pure state
+		// transition) can fire before the CID exists. Never silently drop the
+		// ship — record a sync_fail so the DB-backed retry scheduler re-attempts
+		// once the CID is written. A dropped ship with no record and no retry is
+		// a correctness bug, not merely a timing race.
+		return s.recordShipOutcome(ctx, did,
+			fmt.Errorf("contract %s is shippable but its PDF is not stored yet; deferring ship to the retry scheduler", did))
 	}
 
 	recipients := contractData.Responsible.GetParties()

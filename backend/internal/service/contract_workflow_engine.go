@@ -548,26 +548,28 @@ func (s *contractWorkflowEnginesrvc) RetrieveByID(ctx context.Context, req *cont
 		return nil, contractworkflowengine.MakeInternalError(err)
 	}
 
+	extrinsic := string(contractstate.InferExtrinsic(contractResult.State.String()))
 	return &contractworkflowengine.ContractRetrieveByIDResponse{
-		Did:             contractResult.DID,
-		ContractVersion: contractResult.ContractVersion,
-		State:           contractResult.State.String(),
-		Name:            contractResult.Name,
-		Description:     contractResult.Description,
-		CreatedBy:       contractResult.CreatedBy,
-		CreatedAt:       contractResult.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:       contractResult.UpdatedAt.Format(time.RFC3339),
-		ContractData:    contractResult.ContractData,
-		TemplateDid:     contractResult.TemplateDID,
-		TemplateVersion: contractResult.TemplateVersion,
-		Negotiations:    negotiationList,
-		StartDate:       startDate,
-		ExpDate:         expDate,
-		ExpPolicy:       expPolicy,
-		ExpNoticePeriod: contractResult.ExpNoticePeriod,
-		Responsible:     contractResult.Responsible,
-		Kpis:            kpis,
-		KpiViolations:   kpiViolations,
+		Did:                contractResult.DID,
+		ContractVersion:    contractResult.ContractVersion,
+		State:              contractResult.State.String(),
+		ExtrinsicLifecycle: &extrinsic,
+		Name:               contractResult.Name,
+		Description:        contractResult.Description,
+		CreatedBy:          contractResult.CreatedBy,
+		CreatedAt:          contractResult.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:          contractResult.UpdatedAt.Format(time.RFC3339),
+		ContractData:       contractResult.ContractData,
+		TemplateDid:        contractResult.TemplateDID,
+		TemplateVersion:    contractResult.TemplateVersion,
+		Negotiations:       negotiationList,
+		StartDate:          startDate,
+		ExpDate:            expDate,
+		ExpPolicy:          expPolicy,
+		ExpNoticePeriod:    contractResult.ExpNoticePeriod,
+		Responsible:        contractResult.Responsible,
+		Kpis:               kpis,
+		KpiViolations:      kpiViolations,
 	}, nil
 }
 
@@ -1311,14 +1313,13 @@ func (s *contractWorkflowEnginesrvc) Audit(ctx context.Context, req *contractwor
 			continue
 		}
 		history = append(history, &contractworkflowengine.ContractAuditResponse{
-			ID:               entry.ID,
-			Component:        entry.Component,
-			EventType:        entry.EventType,
-			EventData:        entry.EventData,
-			Did:              entry.DID,
-			CreatedAt:        entry.CreatedAt.String(),
-			GlobalLogPredCid: entry.GlobalLogPredCID,
-			ResLogPredCid:    entry.ResLogPredCID,
+			ID:            entry.ID,
+			Component:     entry.Component,
+			EventType:     entry.EventType,
+			EventData:     entry.EventData,
+			Did:           entry.DID,
+			CreatedAt:     entry.CreatedAt.String(),
+			ResLogPredCid: entry.ResLogPredCID,
 		})
 	}
 
@@ -1381,10 +1382,15 @@ func (s *contractWorkflowEnginesrvc) Deploy(ctx context.Context, req *contractwo
 		DeploymentRepo: s.DeploymentRepo,
 		Target:         s.TargetClient,
 	}
+	localPeer, err := s.DIDDocument.GetID()
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
 	result, err := handler.Handle(ctx, command.DeployCmd{
 		DID:         req.Did,
 		UpdatedAt:   updatedAt,
 		RequestedBy: middleware.GetParticipantID(ctx),
+		LocalPeer:   localPeer,
 	})
 	if err != nil {
 		return nil, mapContractCommandError(err)

@@ -119,61 +119,6 @@ func (constraint *valueConstraint) clone() *valueConstraint {
 	return &copied
 }
 
-func (constraint *valueConstraint) asMap() map[string]any {
-	result := map[string]any{}
-	if constraint.Format != "" {
-		result["format"] = constraint.Format
-	}
-	if constraint.Pattern != "" {
-		result["pattern"] = constraint.Pattern
-	}
-	if constraint.ValueType != "" {
-		result["valueType"] = constraint.ValueType
-	}
-	if len(constraint.AllowedValues) > 0 {
-		values := make([]any, len(constraint.AllowedValues))
-		for i, value := range constraint.AllowedValues {
-			values[i] = value
-		}
-		result["allowedValues"] = values
-	}
-	if valueOptions := constraint.ValueOptions; len(valueOptions) > 0 {
-		options := make([]any, 0, len(valueOptions))
-		for _, option := range valueOptions {
-			if option.Value == "" {
-				continue
-			}
-			item := map[string]any{"value": option.Value}
-			if option.Label != "" {
-				item["label"] = option.Label
-			}
-			if option.Symbol != "" {
-				item["symbol"] = option.Symbol
-			}
-			if option.IRI != "" {
-				item["iri"] = option.IRI
-			}
-			options = append(options, item)
-		}
-		if len(options) > 0 {
-			result["valueOptions"] = options
-		}
-	}
-	if constraint.AllowedValuesRef != "" {
-		result["allowedValuesRef"] = constraint.AllowedValuesRef
-	}
-	if constraint.Min != nil {
-		result["min"] = *constraint.Min
-	}
-	if constraint.Max != nil {
-		result["max"] = *constraint.Max
-	}
-	if constraint.Description != "" {
-		result["description"] = constraint.Description
-	}
-	return result
-}
-
 type documentData map[string]any
 
 // ErrContractHierarchyInvalid is the sentinel wrapped by every hierarchy
@@ -555,7 +500,10 @@ func validateCanonicalReferences(data documentData, documentStructure map[string
 	if !ok {
 		return errors.New("documentStructure.dcs:blocks must be an array")
 	}
-	layout, ok := documentStructure["dcs:layout"].([]any)
+	layout, ok := jsonLDList(documentStructure["dcs:layout"])
+	if !ok {
+		layout, ok = documentStructure["dcs:layout"].([]any)
+	}
 	if !ok {
 		return errors.New("documentStructure.dcs:layout must be an array")
 	}
@@ -632,36 +580,36 @@ func validateCanonicalReferences(data documentData, documentStructure map[string
 	return validatePolicyOperands(data, fieldIDs)
 }
 
+// canonicalFieldIDs indexes the document's top-level dcs:Placeholder nodes by
+// @id. dcs:contractData is a flat, self-contained registry of typed placeholder
+// nodes; each carries its own dcs:datatype (resolved from its SHACL shape), so
+// render and pdf-core resolve a clause reference by @id with no field/shape
+// chasing. A placeholder with no datatype is rejected outright.
 func canonicalFieldIDs(data documentData) (map[string]bool, error) {
 	contractData, _ := topLevelValue(data, "contractData").([]any)
 	fieldIDs := map[string]bool{}
-	for requirementIndex, rawRequirement := range contractData {
-		requirement, ok := rawRequirement.(map[string]any)
+	for index, rawPlaceholder := range contractData {
+		placeholder, ok := rawPlaceholder.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("contractData.%d must be an object", requirementIndex)
+			return nil, fmt.Errorf("contractData.%d must be a placeholder object", index)
 		}
-		fields, ok := requirement["dcs:fields"].([]any)
-		if !ok {
-			return nil, fmt.Errorf("contractData.%d.dcs:fields must be an array", requirementIndex)
+		id, _ := placeholder["@id"].(string)
+		if strings.TrimSpace(id) == "" {
+			return nil, fmt.Errorf("contractData.%d.@id is required", index)
 		}
-		for fieldIndex, rawField := range fields {
-			field, ok := rawField.(map[string]any)
-			if !ok {
-				return nil, fmt.Errorf("contractData.%d.dcs:fields.%d must be an object", requirementIndex, fieldIndex)
-			}
-			id, _ := field["@id"].(string)
-			if strings.TrimSpace(id) == "" {
-				return nil, fmt.Errorf("contractData.%d.dcs:fields.%d.@id is required", requirementIndex, fieldIndex)
-			}
-			if fieldIDs[id] {
-				return nil, fmt.Errorf("duplicate contract data field @id %q", id)
-			}
-			fieldIDs[id] = true
+		if fieldIDs[id] {
+			return nil, fmt.Errorf("duplicate contract data placeholder @id %q", id)
 		}
+		if strings.TrimSpace(stringMapValue(placeholder, "dcs:datatype")) == "" {
+			return nil, fmt.Errorf("contract data placeholder %q has no dcs:datatype", id)
+		}
+		fieldIDs[id] = true
 	}
 	return fieldIDs, nil
 }
 
+// validateBlockPlaceholders checks that every placeholder a clause references
+// (a bare {"@id"} node in dcs:content) resolves to a top-level placeholder.
 func validateBlockPlaceholders(block map[string]any, fieldIDs map[string]bool) error {
 	content, ok := jsonLDList(block["dcs:content"])
 	if !ok {
@@ -669,13 +617,15 @@ func validateBlockPlaceholders(block map[string]any, fieldIDs map[string]bool) e
 	}
 	for _, rawSegment := range content {
 		segment, ok := rawSegment.(map[string]any)
-		if !ok || segment["@type"] != "dcs:Placeholder" {
+		if !ok {
+			continue // a plain text run
+		}
+		id, _ := segment["@id"].(string)
+		if strings.TrimSpace(id) == "" {
 			continue
 		}
-		bindsTo, _ := segment["dcs:bindsTo"].(map[string]any)
-		fieldID, _ := bindsTo["@id"].(string)
-		if !fieldIDs[fieldID] {
-			return fmt.Errorf("placeholder binds to nonexistent contract data field %q", fieldID)
+		if !fieldIDs[id] {
+			return fmt.Errorf("placeholder references nonexistent contract data field %q", id)
 		}
 	}
 	return nil

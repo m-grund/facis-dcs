@@ -222,7 +222,7 @@ func (r *PostgresContractRepo) ReadAllMetaDataByFilter(ctx context.Context, tx *
 
 func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
-        SELECT did, origin,  state, updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
+        SELECT did, origin,  state, updated_at, content_updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
         FROM contracts_effective_process_data WHERE did = $1
     `
 	var processData db.ContractProcessData
@@ -238,7 +238,7 @@ func (r *PostgresContractRepo) ReadProcessDataByDID(ctx context.Context, tx *sql
 
 func (r *PostgresContractRepo) ReadProcessDataByDIDOrNil(ctx context.Context, tx *sqlx.Tx, did string) (*db.ContractProcessData, error) {
 	query := `
-        SELECT did, origin,  state, updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
+        SELECT did, origin,  state, updated_at, content_updated_at, created_by, contract_version, start_date, exp_date, exp_policy, exp_notice_period
         FROM contracts_effective_process_data WHERE did = $1
     `
 	var processData db.ContractProcessData
