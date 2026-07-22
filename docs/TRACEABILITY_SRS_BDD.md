@@ -273,7 +273,7 @@ not a coverage hole.
 
 | ID | Requirement | Status | Evidence / disposition |
 |---|---|---|---|
-| DCS-IR-CWE-01 | Contract Creation UI MUST allow Contract Creators to create and sub… | 🟡 Partial | API: 03 create from approved template. UI out of harness. |
+| DCS-IR-CWE-01 | Contract Creation UI MUST allow Contract Creators to create and sub… | 🟡 Partial | API: 03 create from approved template; offer gated on a closed, validated draft (SRS 1.2 definite proposal / 2.2.2 filled-out contract, 03 state-machine "unresolved required placeholder" scenario). UI asserted: e2e/contract-offer-gate.spec.ts drives the gate through the real contract view (blocked → fill via edit UI → DRAFT→OFFERED). |
 | DCS-IR-CWE-02 | Contract Creation UI MUST enable population of contract data, inclu… | ✅ Covered | API: parties/policies/evidence populated at create (03, 18, 05 evidence). UI now asserted: e2e/contract-fill.spec.ts fills a placeholder through the edit UI and the emitted document carries the forField-bound typed value in an odrl:Offer, with no editor-internal keys leaking. |
 | DCS-IR-CWE-03 | Contract Negotiation UI MUST allow parties to exchange responses, r… | 🟡 Partial | API: negotiation responses/redlines/comments (03). UI out of harness. |
 | DCS-IR-CWE-04 | Contract Negotiation UI MUST support comparison of contract version… | 🟡 Partial | API: version history compare (03). UI out of harness. |
