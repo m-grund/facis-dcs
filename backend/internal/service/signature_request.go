@@ -384,13 +384,13 @@ func (s *signatureManagementsrvc) ceremonyPresentationDirectPost(ctx context.Con
 	verifiedPoA, err := oid4vp.NewVerifier(s.Trust).Verify(poaPresentation, presCtx)
 	if err != nil {
 		log.Printf(ctx, "SignatureRequestCallback: Verify PoA failed for ceremony %s: %v", ceremonyID, err)
-		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("vp verification failed"))
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("vp verification failed: PoA: %w", err))
 	}
 
 	verifiedPID, err := oid4vp.NewVerifier(s.Trust).VerifyPID(pidPresentation, presCtx)
 	if err != nil {
 		log.Printf(ctx, "SignatureRequestCallback: VerifyPID failed for ceremony %s: %v", ceremonyID, err)
-		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("vp verification failed"))
+		return nil, signaturemanagement.MakeBadRequest(fmt.Errorf("vp verification failed: PID: %w", err))
 	}
 
 	var pidClaims any

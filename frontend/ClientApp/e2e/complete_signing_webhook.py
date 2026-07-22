@@ -64,7 +64,7 @@ def build_pid_presentation(*, given_name: str, family_name: str, aud: str, nonce
         visible_claims={
             "iss": DEFAULT_ISSUER_DID,
             "sub": subject_did,
-            "vct": "urn:eudi:pid:1",
+            "vct": "urn:eudi:pid:de:1",
             "iat": now - 3600,
             "exp": now + 3600,
             "cnf": {"jwk": cnf_jwk(holder_public)},

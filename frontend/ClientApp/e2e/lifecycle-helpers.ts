@@ -1,14 +1,15 @@
 import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page } from '@playwright/test'
-import { E2E_API_BASE, E2E_DSS_URL, E2E_FRONTEND_ORIGIN, E2E_STATUSLIST_URL } from '../playwright.config'
 import { applySession, type DcsRole, expect, mintSession, test } from './dcs-test'
+import { E2E_API_BASE, E2E_DSS_URL, E2E_FRONTEND_ORIGIN, E2E_STATUSLIST_URL } from '../playwright.config'
+import type { Browser, Page } from '@playwright/test'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(here, '../../..')
-const python = process.env.E2E_BDD_PYTHON || path.join(homedir(), '.dcs-bdd-venv', 'bin', 'python3')
+const python = process.env.E2E_BDD_PYTHON ?? path.join(homedir(), '.dcs-bdd-venv', 'bin', 'python3')
 
 /**
  * UI lifecycle helpers shared by e2e specs that need a contract in a given
@@ -492,23 +493,40 @@ export async function signApprovedContractViaViewer(page: Page, loginAs: LoginAs
   await expect(page.getByText('Verified', { exact: true })).toBeVisible()
 
   const ceremonyStarted = page.waitForResponse(
-    (r) => r.url().includes('/signature/request') && r.request().method() === 'POST' && r.ok(),
+    (r) => r.url().includes('/signature/request') && r.request().method() === 'POST',
+    { timeout: 30_000 },
   )
-  // Clicking the step-3 button opens the ceremony dialog; once the wallet
-  // presents its PID over the webhook, the viewer fetches the to-be-signed PDF
-  // (/signature/prepare) and downloads it.
-  const preparedDownload = page.waitForEvent('download')
-  await page.getByRole('button', { name: /download document to sign/ }).click()
-  const ceremony = (await (await ceremonyStarted).json()) as { ceremony_id: string }
-  expect(ceremony.ceremony_id).toBeTruthy()
+  const preparedResponse = page.waitForResponse((r) => r.url().includes('/signature/prepare'), {
+    timeout: 180_000,
+  })
 
-  execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.ceremony_id], {
+  await page.getByRole('button', { name: /download document to sign/ }).click()
+  const ceremonyResponse = await ceremonyStarted
+  expect(
+    ceremonyResponse.ok(),
+    `start signing ceremony: HTTP ${ceremonyResponse.status()} ${await ceremonyResponse.text().catch(() => '')}`,
+  ).toBeTruthy()
+  const ceremony = (await ceremonyResponse.json()) as { ceremony_id: string; wallet_uri: string }
+  expect(ceremony.ceremony_id).toBeTruthy()
+  expect(ceremony.wallet_uri).toBeTruthy()
+
+  execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.wallet_uri], {
     cwd: repoRoot,
     env: { ...process.env, STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL, BDD_DCS_BASE_URL: E2E_API_BASE },
     stdio: 'pipe',
   })
 
-  const preparedPath = (await (await preparedDownload).path())!
+  const prepared = await preparedResponse
+  expect(
+    prepared.ok(),
+    `prepare the to-be-signed document: HTTP ${prepared.status()} ${await prepared.text().catch(() => '')}`,
+  ).toBeTruthy()
+
+  const preparedEnvelope = (await prepared.json()) as { document: string }
+  const preparedBytes = Buffer.from(preparedEnvelope.document, 'base64')
+  expect(preparedBytes.subarray(0, 5).toString('latin1'), 'prepared document is a PDF').toBe('%PDF-')
+  const preparedPath = path.join(tmpdir(), `prepared-${ceremony.ceremony_id}.pdf`)
+  fs.writeFileSync(preparedPath, preparedBytes)
   const signedPath = path.join(tmpdir(), `signed-${ceremony.ceremony_id}.pdf`)
   // No E2E_SIGN_FIELD: the wallet discovers the pre-placed field from the PDF.
   execFileSync(python, [path.join(here, 'sign_prepared_pdf.py'), preparedPath, signedPath], {
