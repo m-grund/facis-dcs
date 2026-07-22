@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, reactive, watch } from 'vue'
 import {
   composeConstraintTree,
   type GroupDraft,
@@ -8,7 +9,6 @@ import {
 import ConstraintGroupEditor from '@template-repository/components/clauses-editor/ConstraintGroupEditor.vue'
 import IriPicker from '@template-repository/components/clauses-editor/IriPicker.vue'
 import { ODRL_ACTIONS, ODRL_RULE_TYPES } from '@template-repository/utils/odrl-vocabulary'
-import { computed, reactive, watch } from 'vue'
 import { type OdrlDuty, type OdrlRule } from '@/models/dcs-jsonld'
 
 /**

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, useId } from 'vue'
 import { registerSchema } from '@/services/semantic-hub-service'
 
 /**
@@ -32,6 +32,11 @@ const sourceUrl = ref('')
 const activate = ref(true)
 const submitting = ref(false)
 const error = ref<string | null>(null)
+
+const nameId = useId()
+const kindId = useId()
+const contentId = useId()
+const sourceUrlId = useId()
 
 const canSubmit = computed(
   () => !!name.value.trim() && (source.value === 'url' ? !!sourceUrl.value.trim() : !!content.value.trim()),
@@ -73,8 +78,11 @@ async function submit() {
   <form class="space-y-3" @submit.prevent="submit">
     <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div class="form-control">
-        <label class="label py-1"><span class="label-text text-xs">Name</span></label>
+        <label :for="nameId" class="label py-1 text-base-content/70">
+          <span class="label-text text-xs">Name</span>
+        </label>
         <input
+          :id="nameId"
           v-model="name"
           type="text"
           class="input-bordered input input-sm w-full"
@@ -83,21 +91,35 @@ async function submit() {
         />
       </div>
       <div class="form-control">
-        <label class="label py-1"><span class="label-text text-xs">Kind</span></label>
-        <select v-model="kind" class="select-bordered select w-full select-sm" aria-label="Entry kind">
+        <label :for="kindId" class="label py-1 text-base-content/70">
+          <span class="label-text text-xs">Kind</span>
+        </label>
+        <select :id="kindId" v-model="kind" class="select-bordered select w-full select-sm" aria-label="Entry kind">
           <option v-for="option in KINDS" :key="option" :value="option">{{ option }}</option>
         </select>
       </div>
     </div>
     <div role="tablist" class="tabs-boxed tabs w-fit tabs-sm">
-      <a role="tab" class="tab" :class="{ 'tab-active': source === 'inline' }" @click="source = 'inline'">
+      <a
+        role="tab"
+        class="tab"
+        :class="[source === 'inline' ? 'tab-active' : 'text-base-content/70']"
+        @click="source = 'inline'"
+      >
         Paste / upload
       </a>
-      <a role="tab" class="tab" :class="{ 'tab-active': source === 'url' }" @click="source = 'url'">From URL</a>
+      <a
+        role="tab"
+        class="tab"
+        :class="[source === 'url' ? 'tab-active' : 'text-base-content/70']"
+        @click="source = 'url'"
+      >
+        From URL
+      </a>
     </div>
 
     <div v-if="source === 'inline'" class="form-control">
-      <label class="label py-1">
+      <label :for="contentId" class="label py-1 text-base-content/90">
         <span class="label-text text-xs">Content ({{ MEDIA_TYPE_BY_KIND[kind] }})</span>
         <label class="label-text-alt link cursor-pointer text-xs">
           Upload file
@@ -105,6 +127,7 @@ async function submit() {
         </label>
       </label>
       <textarea
+        :id="contentId"
         v-model="content"
         class="textarea-bordered textarea h-40 w-full resize-y font-mono text-xs"
         placeholder="Paste the vocabulary's raw content, or upload a file"
@@ -113,11 +136,12 @@ async function submit() {
       />
     </div>
     <div v-else class="form-control">
-      <label class="label py-1">
+      <label :for="sourceUrlId" class="label py-1 text-base-content/90">
         <span class="label-text text-xs">Source URL</span>
-        <span class="label-text-alt text-xs text-base-content/50">follows redirects · snapshotted as a version</span>
+        <span class="label-text-alt text-xs text-base-content/70">follows redirects · snapshotted as a version</span>
       </label>
       <input
+        :id="sourceUrlId"
         v-model="sourceUrl"
         type="url"
         class="input-bordered input input-sm w-full font-mono text-xs"
@@ -126,7 +150,7 @@ async function submit() {
       />
     </div>
     <div class="flex items-center justify-between gap-3">
-      <label class="label cursor-pointer gap-2 py-0">
+      <label class="label cursor-pointer gap-2 py-0 text-base-content/70">
         <input v-model="activate" type="checkbox" class="checkbox checkbox-sm" />
         <span class="label-text text-xs">Activate immediately</span>
       </label>

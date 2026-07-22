@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { usePageStore } from '@core/store/page'
 import { storeToRefs } from 'pinia'
 import { onMounted, useTemplateRef } from 'vue'
 import { RouterView } from 'vue-router'
-import PageNavBar from '@/core/layouts/page/PageNavBar.vue'
-import PageSidebar from '@/core/layouts/page/PageSidebar.vue'
-import { useScrollStore } from '@/core/store/scroll'
+import PageNavBar from '@core/layouts/page/PageNavBar.vue'
+import PageSidebar from '@core/layouts/page/PageSidebar.vue'
+import { usePageStore } from '@core/store/page'
+import { useScrollStore } from '@core/store/scroll'
 
 const scrollContainer = useTemplateRef<HTMLElement>('scroll-container')
 
@@ -37,7 +37,7 @@ onMounted(() => {
       </header>
 
       <!-- Main Content -->
-      <main ref="scroll-container" class="grow overflow-y-auto bg-base-200">
+      <main ref="scroll-container" class="grow overflow-y-auto bg-base-200" tabindex="-1">
         <slot>
           <RouterView />
         </slot>

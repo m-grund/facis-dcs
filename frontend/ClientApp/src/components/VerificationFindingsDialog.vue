@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue'
-import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { contractTemplateService } from '@/services/contract-template-service'
 
 const draftStore = useDcsDraftStore()
@@ -43,6 +43,13 @@ async function openModal() {
   await verifyTemplate()
   await nextTick()
   findingsModal.value?.showModal()
+  focusDialog()
+}
+
+function focusDialog() {
+  window.requestAnimationFrame(() => {
+    findingsModal.value?.focus()
+  })
 }
 
 function onModalClose() {
@@ -57,10 +64,17 @@ function onModalClose() {
   </button>
 
   <Teleport to="body">
-    <dialog ref="findingsModal" class="modal modal-bottom transition-none sm:modal-middle" @close="clearAll">
+    <dialog
+      ref="findingsModal"
+      class="modal modal-bottom transition-none sm:modal-middle"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="verification-findings-title"
+      @close="clearAll"
+    >
       <div class="modal-box flex max-h-[85vh] w-full max-w-lg flex-col">
-        <h3 class="text-lg font-bold">Verification Findings</h3>
-        <p v-if="error" class="mb-5 text-xs text-error">{{ error }}</p>
+        <h3 id="verification-findings-title" class="text-lg font-bold">Verification Findings</h3>
+        <p v-if="error" class="mb-5 text-xs text-error" role="alert">{{ error }}</p>
 
         <div v-if="findings.length > 0" class="mt-4 mb-4">
           <div

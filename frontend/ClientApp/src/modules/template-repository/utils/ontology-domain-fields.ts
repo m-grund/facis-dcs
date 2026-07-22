@@ -4,7 +4,7 @@ import type {
   SemanticParameterType,
   SemanticValueConstraint,
   SemanticValueOption,
-} from '@/modules/template-repository/models/contract-template'
+} from '@template-repository/models/contract-template'
 
 /**
  * The builder's pickable domain-field vocabulary, discovered at startup from

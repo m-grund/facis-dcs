@@ -19,6 +19,9 @@ interface ConfirmData {
 
 const actionModal = useTemplateRef('action-modal')
 const modalData: Ref<ModalData> = ref({ message: 'Confirm selection' })
+const dialogTitleId = 'confirmation-modal-title'
+const dialogDescriptionId = 'confirmation-modal-description'
+const editorLabelId = 'confirmation-modal-editor-label'
 
 const inputText = ref('')
 
@@ -38,10 +41,26 @@ watch(isRevealed, (value) => {
   if (value) {
     inputText.value = ''
     actionModal.value?.showModal()
+    focusFirstControl()
   } else {
     actionModal.value?.close()
   }
 })
+
+function focusFirstControl() {
+  window.requestAnimationFrame(() => {
+    const dialog = actionModal.value
+    if (!dialog) return
+
+    const firstControl = dialog.querySelector<HTMLElement>('button:not([disabled]), textarea')
+
+    if (firstControl) {
+      firstControl.focus()
+    } else {
+      dialog.focus()
+    }
+  })
+}
 
 const handleConfirm = () => {
   if (hasEditor.value) {
@@ -60,20 +79,36 @@ defineExpose<ModalExpose>({ reveal: reveal })
 </script>
 
 <template>
-  <dialog ref="action-modal" class="modal modal-bottom sm:modal-middle" @close="cancel">
+  <dialog
+    ref="action-modal"
+    class="modal modal-bottom sm:modal-middle"
+    role="dialog"
+    aria-modal="true"
+    :aria-labelledby="dialogTitleId"
+    :aria-describedby="dialogDescriptionId"
+    @close="cancel"
+  >
     <div class="modal-box">
-      <h3 class="text-lg font-bold">Confirmation</h3>
-      <p class="text-md py-4">{{ modalData.message }}</p>
-      <div v-if="modalData.editor" class="mx-auto flex max-w-4xl flex-col gap-3 py-3 md:flex-row">
+      <h3 :id="dialogTitleId" class="text-lg font-bold">Confirmation</h3>
+      <p :id="dialogDescriptionId" class="text-md py-4">{{ modalData.message }}</p>
+      <div v-if="modalData.editor" class="mx-auto flex w-full max-w-4xl flex-col gap-2 py-3">
+        <label :id="editorLabelId" class="sr-only" for="confirmation-text-input">Comment</label>
         <textarea
+          id="confirmation-text-input"
           v-model="inputText"
           class="textarea mt-0.5 min-h-10 w-full resize-y rounded-lg border textarea-ghost border-base-300/50 text-sm textarea-sm"
           :placeholder="modalData.editor.placeholder ?? 'Comment'"
+          :aria-invalid="inputRequired"
+          :aria-describedby="inputRequired ? 'confirmation-input-help' : undefined"
           rows="4"
         />
+        <p v-if="inputRequired" id="confirmation-input-help" class="text-xs text-error">
+          A comment is required before submitting.
+        </p>
       </div>
       <div class="modal-action flex-col" :class="{ 'flex-row-reverse justify-start': hasEditor }">
         <button
+          type="button"
           class="btn btn-sm btn-primary"
           :class="{ 'btn-disabled': inputRequired }"
           :disabled="inputRequired"
@@ -81,7 +116,7 @@ defineExpose<ModalExpose>({ reveal: reveal })
         >
           {{ hasEditor ? 'Submit' : 'Confirm' }}
         </button>
-        <button class="btn btn-outline btn-sm" @click="cancel">Cancel</button>
+        <button type="button" class="btn btn-outline btn-sm" @click="cancel">Cancel</button>
       </div>
     </div>
     <div v-if="!hasEditor" class="modal-backdrop" @click="cancel"></div>

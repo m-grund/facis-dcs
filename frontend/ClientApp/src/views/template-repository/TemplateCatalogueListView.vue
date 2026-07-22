@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
 import { toProperCase } from '@/utils/string'
-import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
+import type { TemplateResourcesItem } from '@template-catalogue/models/template-resource'
 
 const Limit = 20
 const page = ref(0)

@@ -72,7 +72,12 @@ const submitIncidentReport = async () => {
       <div class="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <label class="form-control w-full md:w-96">
           <span class="label-text mb-1">Filter by contract DID</span>
-          <input v-model="searchTerm" data-testid="monitor-search" class="input-bordered input rounded-box" />
+          <input
+            id="input-filter-did"
+            v-model="searchTerm"
+            data-testid="monitor-search"
+            class="input-bordered input rounded-box"
+          />
         </label>
 
         <button
@@ -124,6 +129,7 @@ const submitIncidentReport = async () => {
         <label class="form-control w-full">
           <span class="label-text mb-1">Contract DID</span>
           <input
+            id="input-contract-did"
             v-model="contractDid"
             data-testid="incident-contract-did"
             class="input-bordered input rounded-box"
@@ -134,6 +140,7 @@ const submitIncidentReport = async () => {
         <label class="form-control w-full">
           <span class="label-text mb-1">Risk type</span>
           <input
+            id="input-risk-type"
             v-model="riskType"
             data-testid="incident-risk-type"
             class="input-bordered input rounded-box"
@@ -144,6 +151,7 @@ const submitIncidentReport = async () => {
         <label class="form-control w-full md:col-span-2">
           <span class="label-text mb-1">Finding detail</span>
           <textarea
+            id="input-detail"
             v-model="detail"
             data-testid="incident-detail"
             class="textarea-bordered textarea rounded-box"

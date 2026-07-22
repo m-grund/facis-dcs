@@ -1,9 +1,9 @@
 import { flattenPolicySet } from '@template-repository/store/dcsDraftStore'
-import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import {
   collectDeclaredRequirements,
   fromDocumentSemanticValues,
-} from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
+} from '@contract-workflow-engine/utils/semantic-condition-values'
+import { isDcsDocumentData } from '@/models/dcs-jsonld'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { DcsBlock, DcsContractData, DcsLayoutNode, OdrlRule } from '@/models/dcs-jsonld'
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import { computed } from 'vue'
+import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import IconInsertAbove from './icons/IconInsertAbove.vue'
 import IconInsertBelow from './icons/IconInsertBelow.vue'
 import IconInsertNestBelow from './icons/IconInsertNestBelow.vue'

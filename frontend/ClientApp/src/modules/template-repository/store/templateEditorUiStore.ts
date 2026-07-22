@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
+import { TemplateType, type TemplateTypeValue } from '@template-repository/models/contract-template'
 import { useAuthStore } from '@/stores/auth-store'
-import { TemplateType, type TemplateTypeValue } from '../models/contract-template'
 import type {
   BlockMovementPreview,
   ClausePlaceholderHighlight,

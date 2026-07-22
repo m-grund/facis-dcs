@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, useTemplateRef } from 'vue'
 import type { ParticipantSelection } from '@/utils/participant-selection'
 
 defineOptions({ inheritAttrs: false })
@@ -8,13 +8,20 @@ const emit = defineEmits<{
   submit: [value: ParticipantSelection]
 }>()
 
-const counterpartyModal = ref<HTMLDialogElement | null>(null)
+const counterpartyModal = useTemplateRef<HTMLDialogElement>('counterpartyModal')
 const counterparty = ref('')
 
 async function openModal() {
   counterparty.value = ''
   await nextTick()
   counterpartyModal.value?.showModal()
+  focusDialog()
+}
+
+function focusDialog() {
+  window.requestAnimationFrame(() => {
+    counterpartyModal.value?.focus()
+  })
 }
 
 function onModalSubmit() {
@@ -30,9 +37,15 @@ function onModalClose() {
 <template>
   <button type="button" v-bind="$attrs" @click="openModal">Create</button>
   <Teleport to="body">
-    <dialog ref="counterpartyModal" class="modal modal-bottom transition-none sm:modal-middle">
+    <dialog
+      ref="counterpartyModal"
+      class="modal modal-bottom transition-none sm:modal-middle"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="participant-dialog-title"
+    >
       <div class="modal-box flex w-full max-w-lg flex-col">
-        <h3 class="text-lg font-bold">Contract Counterparty</h3>
+        <h3 id="participant-dialog-title" class="text-lg font-bold">Contract Counterparty</h3>
         <p class="mt-2 mb-4 text-sm text-base-content/70">
           The other DCS this contract is offered to and negotiated with. Review, approval and negotiation are handled by
           your own instance's roles — leave empty for a purely local contract.

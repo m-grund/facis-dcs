@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, ref, watch } from 'vue'
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
@@ -9,8 +11,6 @@ import {
 } from '@template-repository/composables/useClauseTextChips'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 
 const props = defineProps<{
