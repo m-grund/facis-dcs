@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, ref } from 'vue'
 import ExistingClausesList from '@template-repository/components/clauses-editor/ExistingClausesList.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
 import type { DcsClause, DcsContentSegment } from '@/models/dcs-jsonld'
 
 const store = useDcsDraftStore()

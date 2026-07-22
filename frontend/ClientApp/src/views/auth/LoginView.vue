@@ -325,7 +325,7 @@ async function copyPresentationUrl() {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col items-center justify-center gap-6 bg-base-200 p-6">
+  <div class="flex min-h-screen flex-col items-center justify-center gap-6 bg-base-200 p-6" role="main">
     <div v-if="presentationUrl" class="card w-full max-w-md bg-base-100 shadow-md">
       <div class="card-body items-center gap-4 text-center">
         <h1 class="card-title text-lg">Sign in with wallet</h1>

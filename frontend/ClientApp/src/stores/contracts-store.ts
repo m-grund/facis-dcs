@@ -22,8 +22,6 @@ export const useContractsStore = defineStore('contracts', () => {
 
   const hasContracts = computed(() => contracts.value.length > 0)
 
-  const findContractByDid = (did: string) => contracts.value.find((contract) => contract.did === did)
-
   const hasApprovedTemplates = computed(() =>
     contractTemplates.value.some(
       (template) => template.state === TemplateState.registered || template.state === TemplateState.published,
@@ -34,6 +32,8 @@ export const useContractsStore = defineStore('contracts', () => {
       (template) => template.state === TemplateState.registered || template.state === TemplateState.published,
     ),
   )
+
+  const findContractByDid = (did: string) => contracts.value.find((contract) => contract.did === did)
 
   const fetchContracts = async (limit?: number, offset?: number) =>
     await contractWorkflowService.retrieve({ limit, offset })

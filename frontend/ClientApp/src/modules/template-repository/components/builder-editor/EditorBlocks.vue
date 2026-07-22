@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
 import EditorBlock from '@template-repository/components/builder-editor/document-block/EditorBlock.vue'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
 import { type FlattenedOutlineItem, useFlattenedOutline } from '@template-repository/composables/useFlattenedOutline'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
 import { isDcsSection } from '@/models/dcs-jsonld'
 import type { DcsBlock, DcsLayoutNode } from '@/models/dcs-jsonld'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'

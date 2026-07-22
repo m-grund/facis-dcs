@@ -6,20 +6,23 @@ import {
   DocumentTextIcon,
   EyeIcon,
   PencilSquareIcon,
+  ShieldCheckIcon,
   ShieldExclamationIcon,
+  Square3Stack3DIcon,
   SquaresPlusIcon,
 } from '@heroicons/vue/20/solid'
+import { nextTick } from 'vue'
+import { createRouter, createWebHistory, type RouteRecordRaw, START_LOCATION } from 'vue-router'
+import { useScrollStore } from '@core/store/scroll'
+import ApproveContractTemplateView from '@template-repository/views/ApproveContractTemplateView.vue'
 import NewContractTemplateView from '@template-repository/views/NewContractTemplateView.vue'
-import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import ReviewContractTemplateView from '@template-repository/views/ReviewContractTemplateView.vue'
+import ViewContractTemplateView from '@template-repository/views/ViewContractTemplateView.vue'
+import TemplateCatalogueListView from '@template-catalogue/views/TemplateCatalogueListView.vue'
+import TemplateCatalogueView from '@template-catalogue/views/TemplateCatalogueView.vue'
+import SemanticHubView from '@semantic-hub/views/SemanticHubView.vue'
 import { getUIBasePath } from '@/config'
-import { useScrollStore } from '@/core/store/scroll'
 import { OID4VP_STATE_KEY } from '@/hydra-login-guard'
-import SemanticHubView from '@/modules/semantic-hub/views/SemanticHubView.vue'
-import TemplateCatalogueListView from '@/modules/template-catalogue/views/TemplateCatalogueListView.vue'
-import TemplateCatalogueView from '@/modules/template-catalogue/views/TemplateCatalogueView.vue'
-import ApproveContractTemplateView from '@/modules/template-repository/views/ApproveContractTemplateView.vue'
-import ReviewContractTemplateView from '@/modules/template-repository/views/ReviewContractTemplateView.vue'
-import ViewContractTemplateView from '@/modules/template-repository/views/ViewContractTemplateView.vue'
 import { authenticationService } from '@/services/authentication-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useAuthTokenStore } from '@/stores/auth-token-store'
@@ -230,7 +233,7 @@ const routes: RouteRecordRaw[] = [
     component: TemplateCatalogueListView,
     meta: {
       name: 'Template Catalogue',
-      icon: DocumentTextIcon,
+      icon: Square3Stack3DIcon,
       requiresAuth: true,
       title: 'DCS - Template Catalogue',
       order: 4,
@@ -392,7 +395,7 @@ const routes: RouteRecordRaw[] = [
       icon: PencilSquareIcon,
       requiresAuth: true,
       title: 'DCS - Signing',
-      order: 5,
+      order: 6,
       roles: ['CONTRACT_SIGNER', 'CONTRACT_MANAGER', 'CONTRACT_OBSERVER'],
     },
   },
@@ -414,10 +417,10 @@ const routes: RouteRecordRaw[] = [
     component: ComplianceViewerView,
     meta: {
       name: 'Compliance Viewer',
-      icon: CheckCircleIcon,
+      icon: ShieldCheckIcon,
       requiresAuth: true,
       title: 'DCS - Signature Compliance Viewer',
-      order: 6,
+      order: 7,
       roles: ['AUDITOR', 'COMPLIANCE_OFFICER', 'CONTRACT_MANAGER'],
     },
   },
@@ -443,7 +446,7 @@ const routes: RouteRecordRaw[] = [
       icon: CircleStackIcon,
       requiresAuth: true,
       title: 'DCS - Semantic Hub',
-      order: 6,
+      order: 8,
       roles: ['TEMPLATE_MANAGER'],
     },
   },
@@ -531,6 +534,16 @@ router.beforeEach((to) => {
 router.beforeEach((_, from) => {
   const navStore = useNavStore()
   navStore.previousRoute = from
+})
+
+router.afterEach(async (to, from) => {
+  if (from === START_LOCATION) return
+
+  if (to.path === from.path) return
+
+  const scrollStore = useScrollStore()
+  await nextTick()
+  scrollStore.scrollContainer?.focus()
 })
 
 export { router, ROUTES }

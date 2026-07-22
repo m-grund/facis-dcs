@@ -14,6 +14,8 @@ export interface CeremonyResult {
 }
 
 const POLL_INTERVAL_MS = 2500
+const dialogTitleId = 'signing-ceremony-title'
+const dialogDescriptionId = 'signing-ceremony-description'
 
 const ceremonyModal = useTemplateRef('ceremony-modal')
 const request = ref<CeremonyRequest>({ contractDid: '', fieldName: '' })
@@ -40,11 +42,18 @@ onReveal((data) => {
 watch(isRevealed, (value) => {
   if (value) {
     ceremonyModal.value?.showModal()
+    focusDialog()
   } else {
     stopPolling()
     ceremonyModal.value?.close()
   }
 })
+
+function focusDialog() {
+  window.requestAnimationFrame(() => {
+    ceremonyModal.value?.focus()
+  })
+}
 
 function stopPolling() {
   if (pollTimer) {
@@ -111,29 +120,41 @@ defineExpose<DialogExpose>({ reveal })
 
 <template>
   <Teleport to="body">
-    <dialog ref="ceremony-modal" class="modal modal-bottom transition-none sm:modal-middle" @close="onCancel">
+    <dialog
+      ref="ceremony-modal"
+      class="modal modal-bottom transition-none sm:modal-middle"
+      role="dialog"
+      aria-modal="true"
+      :aria-labelledby="dialogTitleId"
+      :aria-describedby="dialogDescriptionId"
+      @close="onCancel"
+    >
       <div class="modal-box flex w-full max-w-md flex-col items-center gap-4 text-center">
-        <h3 class="text-lg font-bold">Sign with your EUDI Wallet</h3>
+        <h3 :id="dialogTitleId" class="text-lg font-bold">Sign with your EUDI Wallet</h3>
 
-        <div v-if="phase === 'starting'" class="flex flex-col items-center gap-3 py-4">
-          <span class="loading loading-lg loading-spinner" />
-          <p class="text-sm opacity-70">Starting signing ceremony…</p>
+        <div v-if="phase === 'starting'" class="flex flex-col items-center gap-3 py-4" role="status" aria-live="polite">
+          <span class="loading loading-lg loading-spinner" aria-hidden="true" />
+          <p :id="dialogDescriptionId" class="text-sm opacity-70">Starting signing ceremony…</p>
         </div>
 
         <div v-else-if="phase === 'pending'" class="flex flex-col items-center gap-3">
-          <p class="text-sm opacity-80">
+          <p :id="dialogDescriptionId" class="text-sm opacity-80">
             Scan the QR code with your wallet to present your PID and Power of Attorney, then sign.
           </p>
           <figure class="rounded-box bg-white p-3">
             <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="Signing ceremony QR code" class="mx-auto h-48 w-48" />
           </figure>
           <button type="button" class="btn btn-sm btn-primary" @click="copyWalletUri">Copy link</button>
-          <p v-if="copyHint" class="text-sm text-warning">{{ copyHint }}</p>
-          <p class="text-xs opacity-70">Waiting for the wallet presentation…</p>
+          <p v-if="copyHint" class="text-sm text-warning" role="status" aria-live="polite">{{ copyHint }}</p>
+          <p class="text-xs opacity-70" role="status" aria-live="polite">Waiting for the wallet presentation…</p>
         </div>
 
-        <div v-else-if="phase === 'expired' || phase === 'failed'" class="flex flex-col items-center gap-3 py-2">
-          <p class="text-sm text-error">
+        <div
+          v-else-if="phase === 'expired' || phase === 'failed'"
+          class="flex flex-col items-center gap-3 py-2"
+          role="alert"
+        >
+          <p :id="dialogDescriptionId" class="text-sm text-error">
             {{ phase === 'expired' ? 'The signing ceremony expired.' : errorMessage || 'The signing ceremony failed.' }}
           </p>
           <button type="button" class="btn btn-sm btn-primary" @click="retry">Start a new ceremony</button>

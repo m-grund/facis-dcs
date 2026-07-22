@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import {
   isNewline,
   isPlaceholder,
@@ -6,14 +7,13 @@ import {
   parseSegmentsFromContent,
 } from '@template-repository/composables/useClauseTextChips'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
-import { computed } from 'vue'
 import { PREVIEW_NEWLINE_SPAN_CLASS } from './preview-classes'
 import PreviewParamInput from './PreviewParamInput.vue'
 import PreviewTextBlock from './PreviewTextBlock.vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
 import type { DcsContentSegment } from '@/models/dcs-jsonld'
-import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
+import type { VerificationResult } from '@contract-workflow-engine/composables/useSemanticValueVerification'
+import type { SemanticConditionValueSetter } from '@contract-workflow-engine/models/contract-content-values-store'
 import type {
   SemanticCondition,
   SemanticParameterType,

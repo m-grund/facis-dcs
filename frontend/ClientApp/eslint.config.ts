@@ -1,7 +1,7 @@
-import pluginVue from 'eslint-plugin-vue'
+import skipFormattingConfig from '@vue/eslint-config-prettier/skip-formatting'
 import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
 import simpleImportSort from 'eslint-plugin-simple-import-sort'
-import skipFormattingConfig from '@vue/eslint-config-prettier/skip-formatting'
+import pluginVue from 'eslint-plugin-vue'
 
 export default defineConfigWithVueTs(
   {
@@ -41,7 +41,22 @@ export default defineConfigWithVueTs(
       'simple-import-sort/imports': [
         'error',
         {
-          groups: [['^\\u0000', '^node:', '^@?\\w', '^@/', '^\\.', '^\\.\\.', '^.*\\u0000$']],
+          groups: [
+            [
+              '^\\u0000',
+              '^node:',
+              '^@?\\w',
+              '^@core',
+              '^@template-repository',
+              '^@contract-workflow-engine',
+              '^@template-catalogue',
+              '^@semantic-hub',
+              '^@/',
+              '^\\.',
+              '^\\.\\.',
+              '^.*\\u0000$',
+            ],
+          ],
         },
       ],
     },

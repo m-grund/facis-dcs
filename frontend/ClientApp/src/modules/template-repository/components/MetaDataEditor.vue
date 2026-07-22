@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, reactive, ref } from 'vue'
 import MetaDataRow from '@template-repository/components/meta-data/MetaDataRow.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { storeToRefs } from 'pinia'
-import { computed, reactive, ref } from 'vue'
 
 const store = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
@@ -50,7 +50,7 @@ function deleteMeta(index: number) {
     <div class="overflow-x-auto rounded-box border border-base-content/5 bg-base-100">
       <table class="table table-sm">
         <thead>
-          <tr>
+          <tr class="text-base-content/70">
             <th class="w-1/4">Name</th>
             <th>Value</th>
             <th class="w-40 text-right">Actions</th>

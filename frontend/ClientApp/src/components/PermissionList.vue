@@ -22,18 +22,18 @@ const formatRole = (role: string): string => toProperCase(role)
       anchor="perm-btn-user"
     >
       <div class="mb-3 border-b border-base-300 pb-3">
-        <p class="mb-2 text-xs font-bold text-base-content/50 uppercase">Issuer</p>
-        <p class="text-xs break-all text-base-content/60">{{ authStore.user?.issuer }}</p>
+        <p class="mb-2 text-xs font-bold text-base-content/80 uppercase">Issuer</p>
+        <p class="text-xs break-all text-base-content/70">{{ authStore.user?.issuer }}</p>
       </div>
 
       <div class="mb-3 border-b border-base-300 pb-3">
-        <p class="mb-2 text-xs font-bold text-base-content/50 uppercase">Holder</p>
-        <p class="text-xs break-all text-base-content/60">{{ authStore.user?.holder }}</p>
+        <p class="mb-2 text-xs font-bold text-base-content/80 uppercase">Holder</p>
+        <p class="text-xs break-all text-base-content/70">{{ authStore.user?.holder }}</p>
       </div>
 
-      <p class="mb-2 text-xs font-bold text-base-content/50 uppercase">Permissions</p>
+      <p class="mb-2 text-xs font-bold text-base-content/80 uppercase">Permissions</p>
       <ul class="flex flex-col gap-1">
-        <li v-for="role in roles" :key="role" class="w-full justify-start">
+        <li v-for="role in roles" :key="role" class="w-full justify-start text-base-content/70">
           {{ formatRole(role) }}
         </li>
       </ul>

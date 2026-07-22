@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, useId } from 'vue'
+import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
+import { TemplateType } from '@template-repository/models/contract-template'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
-import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
-import { TemplateType } from '@/modules/template-repository/models/contract-template'
 import { TemplateState } from '@/types/contract-template-state'
-import { useTemplatePermissions } from '../composables/useTemplatePermissions'
 
 const store = useDcsDraftStore()
 const uiStore = useTemplateEditorUiStore()
@@ -13,20 +13,25 @@ const { templateType, state, version } = storeToRefs(store)
 
 const { isManager } = useTemplatePermissions()
 
+const stateId = useId()
+
 const document_number = computed({
   get: () => store.document_number,
   set: (value: string) => store.updateDocumentNumber(value),
 })
+const document_numberId = useId()
 
 const name = computed({
   get: () => store.name,
   set: (value: string) => store.updateName(value.trim()),
 })
+const nameId = useId()
 
 const description = computed({
   get: () => store.description,
   set: (value: string) => store.updateDescription(value),
 })
+const descriptionId = useId()
 </script>
 
 <template>
@@ -44,7 +49,7 @@ const description = computed({
         >
           <div class="card-body gap-1 p-4">
             <span class="card-title text-sm">Contract</span>
-            <p class="text-xs font-normal text-base-content/60">Top-level contract template that can serve as parent</p>
+            <p class="text-xs font-normal text-base-content/70">Top-level contract template that can serve as parent</p>
           </div>
         </div>
         <div
@@ -53,7 +58,7 @@ const description = computed({
         >
           <div class="card-body gap-1 p-4">
             <span class="card-title text-sm">Component</span>
-            <p class="text-xs font-normal text-base-content/60">
+            <p class="text-xs font-normal text-base-content/70">
               Reusable partial contract, embeddable in other templates
             </p>
           </div>
@@ -63,7 +68,14 @@ const description = computed({
 
     <fieldset v-if="isManager" class="fieldset border-none p-0">
       <legend class="fieldset-legend">Template State</legend>
-      <select v-model="state" class="input-bordered select w-full" required :disabled="!uiStore.isTemplateEditable">
+      <label :for="stateId" class="sr-only">Template State</label>
+      <select
+        :id="stateId"
+        v-model="state"
+        class="input-bordered select w-full"
+        required
+        :disabled="!uiStore.isTemplateEditable"
+      >
         <option>DRAFT</option>
         <option>REJECTED</option>
         <option>SUBMITTED</option>
@@ -77,7 +89,9 @@ const description = computed({
 
     <fieldset class="fieldset border-none p-0">
       <legend class="fieldset-legend">Document number</legend>
+      <label :for="document_numberId" class="sr-only">Document number</label>
       <input
+        :id="document_numberId"
         v-model="document_number"
         class="input-bordered input w-full"
         type="text"
@@ -88,7 +102,9 @@ const description = computed({
 
     <fieldset class="fieldset border-none p-0">
       <legend class="fieldset-legend">Global Name</legend>
+      <label :for="nameId" class="sr-only">Global Name</label>
       <input
+        :id="nameId"
         v-model="name"
         class="input-bordered input w-full"
         type="text"
@@ -99,7 +115,9 @@ const description = computed({
 
     <fieldset class="fieldset border-none p-0">
       <legend class="fieldset-legend">Base Description</legend>
+      <label :for="descriptionId" class="sr-only">Base Description</label>
       <textarea
+        :id="descriptionId"
         v-model="description"
         class="textarea-bordered textarea h-24 w-full"
         required
