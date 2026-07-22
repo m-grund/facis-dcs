@@ -5,6 +5,32 @@
 mapping metadata, not requirements). Coverage: `features/**/*.feature` (behave suite run on every
 CI push, kind-in-docker).
 
+**2026-07-22 wave note.** Two DCS instances now negotiate a contract end to end
+(`full-vertical-2dcs.spec.ts`: offer → negotiation ping-pong with a PDF exchanged per
+adjustment → settle → dual signing → scoped audit, every workflow action driven through the
+real UI). Federation follows the prefer-inbound rule — the peer's PDF is authoritative and
+stored verbatim because it carries provenance we cannot reproduce, regeneration is
+verify-only — and inbound counter-offers are authorised by counterparty rather than by local
+RBAC. The audit trail's global tamper evidence moved from a per-event chain to Merkle
+checkpoints (ADR-16), the contract format collapsed onto one typed `dcs:Placeholder` node
+(ADR-15) in expanded JSON-LD (ADR-14), and machine callers became SRS System Users with one
+OAuth2 client per class. Two dispositions in this wave are refusals rather than features:
+`Sys. Contract Signer` holds no signing scope (ADR-17, eIDAS Art. 3(9)/26 — a signatory is a
+natural person under sole control, and a legal person's instrument is a seal we do not
+implement), and external anchoring of the checkpoint chain is wired but not in force, since
+the ORCE flow polling the head ends at a debug node. New pack this wave:
+12/system_user_classes.
+
+**Claim correction (2026-07-22).** An assessment of `testWallet` against the ARF and the EUDI
+reference libraries, fetching both verbatim, found the ARF citations used elsewhere in this
+repo were wrong: Topic 16 is QES-scoped throughout and has no AES track, `QES_05` is
+remote-QES enrolment rather than the flow list (that is `QES_06`), and CSC API 2.0 was
+`QES_07`, now `Empty`. Only "QES_08 = PAdES" holds. Since the SRS descopes QES, **ARF Topic 16
+conformance is not a claim this project may make**, and neither is sole control/SCAL2 —
+testWallet's keys are shared files by design. The same assessment found four verified
+divergences from the reference wallet that testWallet currently accommodates, so a green CI
+run is not evidence of wallet interoperability.
+
 **2026-07-17 wave note.** First fully green combined CI run: behave (312 scenarios) and the
 Playwright suite (11 specs) pass in the same kind-stack job (run 29541989685 @ 27c0a1be).
 Since the 2026-07-16 note the E2E layer grew the Semantic Hub management specs
@@ -118,7 +144,7 @@ not a coverage hole.
 | DCS-FR-CWE-25 | Contract Review and Approval Interface | 🟡 Partial | Approval API surface covered (03/contract_approval); dedicated reviewer UI out of harness scope. |
 | DCS-FR-CWE-26 | Contract Signing Interface | 🟡 Partial | Signing API + ceremony covered (22); browser signing UI documented out-of-scope (22 @skip UI scenario). |
 | DCS-FR-CWE-27 | Contract Tracking and Status Overview | ✅ Covered | 03 state-machine state-filtered search; status history via retrieve_history_by_id (approval routing scenario). |
-| DCS-FR-CWE-28 | Automated Contract Interaction via API | ✅ Covered | 12/contract_lifecycle_via_api: full lifecycle + queryable history via API. |
+| DCS-FR-CWE-28 | Automated Contract Interaction via API | ✅ Covered | 12/contract_lifecycle_via_api: full lifecycle + queryable history via API. Machine callers now have real identities: one OAuth2 client_credentials client per SRS §2.4 Table 5 System User class, with roles fixed by deployment configuration because such a token carries no verifiable role claims (ADR-16) — 12/system_user_classes obtains real Hydra tokens and checks what each class may and may not reach. |
 | DCS-FR-CWE-29 | Multi-Contract Visualization | ✅ Covered | 20 parent_did search filter + frame-contract detail (tagged @DCS-FR-CWE-29). |
 | DCS-FR-CWE-30 | Contract Package Bundling | ✅ Covered | 20 bundle-export scenarios: ZIP members, parent-chain refs, manifest hashes (tagged @DCS-FR-CWE-30). |
 | DCS-FR-CWE-31 | Contract Performance Tracking | ✅ Covered | 05 ACTIVE-in-live-list + KPI-on-detail scenarios (tagged @DCS-FR-CWE-31). |
@@ -129,7 +155,7 @@ not a coverage hole.
 |---|---|---|---|
 | DCS-FR-SM-01 | Level of Assurance Flexibility for Simple Electronic Signature, Adv… | 🟡 Partial | AES level proven end-to-end (22 e2e scenario); credential_type honored (apply-fields scenario). QES requires a qualified TSP/QSCD — unavailable in hermetic env; deviation note for QES execution. |
 | DCS-FR-SM-02 | Support for PAdES, JAdES, and CAdES Signatures | ✅ Covered | PAdES B-T proven (22) with ETSI.CAdES.detached CMS container (CAdES); JAdES baseline-B implemented for the machine-readable contract in the DCS-to-DCS flow (17 provenance + tamper-negative scenarios; internal/base/jades unit tests). |
-| DCS-FR-SM-03 | Signing Identity and PoA Authorization Credentials | 🟡 Partial | Signer identity credential (PID SD-JWT VC) verified before signing (22 ceremony-gate, webhook/PID-embedding, and verify cross-check scenarios). PoA (dc+sd-jwt, vct urn:dcs:poa:v1) is presented at LOGIN and mapped into the Hydra session — every authenticated call is PoA-gated; issuer chain-walk to trust anchor stays open (recorded deviation; SRS TBD-B acknowledges XFSC PCM unavailability). |
+| DCS-FR-SM-03 | Signing Identity and PoA Authorization Credentials | 🟡 Partial | Signer identity credential (PID SD-JWT VC) verified before signing (22 ceremony-gate, webhook/PID-embedding, and verify cross-check scenarios). PoA (dc+sd-jwt, vct urn:dcs:poa:v1) is presented at LOGIN and mapped into the Hydra session — every authenticated call is PoA-gated; issuer chain-walk to trust anchor stays open (recorded deviation; SRS TBD-B acknowledges XFSC PCM unavailability). A machine caller cannot sign at all: eIDAS Art. 3(9) makes a signatory a natural person and Art. 26 requires sole control, so the System Contract Signer class holds no signing scope (ADR-17) — 12/system_user_classes asserts the refusal at ceremony start, prepare and submit, and that the same client may still verify. |
 | DCS-FR-SM-04 | Counterparty Authorization and PoA Credential Chain Verification | 🟡 Partial | Credential status/revocation is checked on every verification (status-list check in each verify path) — a revoked PoA blocks the login that gates signing. Chain-walk to a trust anchor remains roadmap (recorded deviation). |
 | DCS-FR-SM-05 | Integration with Signing Identity and PoA Verifiable Credentials | ✅ Covered | W3C-compliant SD-JWT VC + KB-JWT presented, verified, embedded verbatim under the PAdES signature (22 verbatim-embedding + verify cross-check scenarios). |
 | DCS-FR-SM-06 | Wallet for Identity, PoA Credential Management, and Signing | 🟡 Partial | Wallet protocol surface (OID4VP presentation, headless) proven (22 webhook + headless-ceremony scenarios); a real end-user wallet app is outside the harness. |
@@ -159,7 +185,7 @@ not a coverage hole.
 
 | ID | Requirement | Status | Evidence / disposition |
 |---|---|---|---|
-| DCS-FR-CSA-01 | Tamper-Proof Contract Storage | ✅ Covered | Hash-chained, TSA-anchored audit trail + tamper scenarios (03/format_review tampered-PDF) prove tamper-evidence. |
+| DCS-FR-CSA-01 | Tamper-Proof Contract Storage | ✅ Covered | Merkle-checkpointed, TSA-anchored audit trail (ADR-16) + tamper scenarios (03/format_review tampered-PDF) prove tamper-evidence. A submitted PDF may add a signature but never redefine the contract: the submit path compares the embedded JSON-LD against the prepared document, deliberately the opposite of the federation rule where an inbound PDF is authoritative. |
 | DCS-FR-CSA-02 | Role-Based Access Control | ✅ Covered | 07 role-outside-archive-scope denied; access audited (20 export audit-log scenario). |
 | DCS-FR-CSA-03 | Proof-of-Existence | ✅ Covered | TSA timestamp + IPFS anchoring per event (05 TSA receipt, 08 audit anchoring). |
 | DCS-FR-CSA-04 | Contract Expiry & Renewal Tracking | 🟡 Partial | Expiry detection + banner proven (19). Configurable-threshold alert notifications not modeled — deviation note. |
@@ -190,7 +216,7 @@ not a coverage hole.
 
 | ID | Requirement | Status | Evidence / disposition |
 |---|---|---|---|
-| DCS-FR-PACM-01 | Tamper-Proof Audit Trail for Contract Lifecycle | ✅ Covered | 08 process audit incl. create event; hash-chained TSA/IPFS-anchored entries; exportable via /pac/report. |
+| DCS-FR-PACM-01 | Tamper-Proof Audit Trail for Contract Lifecycle | ✅ Covered | 08 process audit incl. create event; exportable via /pac/report. Global tamper evidence is now a Merkle checkpoint per anchoring batch, each root chained to its predecessor and timestamped once (ADR-16), replacing the per-event global chain that serialised every event behind one TSA round-trip and stalled the trail when a single event failed; per-resource hash chains are unchanged. Leaves are blinded so a published proof reveals nothing, and 12/system_user_classes asserts a checkpoint head carrying a root and leaking no entry data. An unanchorable event is dead-lettered rather than retried silently, i.e. a gap is visible. NOT yet in force: external anchoring — the ORCE flow polling the head ends at a debug node, so the log is tamper-evident to us but not provable against the operator. |
 | DCS-FR-PACM-02 | Compliance Monitoring and Risk Detection | ✅ Covered | 08 continuous monitoring; risk-during-approval scenario (03/contract_approval). |
 | DCS-FR-PACM-03 | Automated Regulatory and Policy Compliance Checks | ✅ Covered | 18 ODRL gates on approve+sign; /pac/monitor sweep flags MISSING_APPROVAL risks on approval-pending contracts and anchors each as PAC_COMPLIANCE_RISK per contract (03/contract_approval monitoring scenario, 08). |
 | DCS-FR-PACM-04 | Role-Based Access Control for Audit Logs | 🟡 Partial | 08 non-auditor denied. Per-access justification recording not modeled — noted. |
@@ -329,7 +355,7 @@ not a coverage hole.
 | DCS-NFR-SEC-07 | Testing | 📋 Not BDD-verifiable | Process requirement — this BDD suite + Go tests + linters + CI are the evidence; pentest is external. |
 | DCS-NFR-SEC-08 | Confidentiality | 🟡 Partial | RBAC + party read-scoping proven at API level (03 party-access scenarios, 403 + audit trail); storage-level encryption is infra (SEC-14). |
 | DCS-NFR-SEC-09 | Monitoring, Logging & Auditability | ✅ Covered | Immutable audit logs retrievable for audits (08); /metrics exposed (16/prometheus). |
-| DCS-NFR-SEC-10 | Data Integrity | ✅ Covered | Hash chains + tamper-detection scenarios (03/format_review) + C2PA/PAdES integrity (19/22). |
+| DCS-NFR-SEC-10 | Data Integrity | ✅ Covered | Per-resource hash chains + Merkle checkpoint roots (ADR-16) + tamper-detection scenarios (03/format_review) + C2PA/PAdES integrity (19/22). |
 | DCS-NFR-SEC-11 | Monitoring & Incident Response | 🟡 Partial | Prometheus /metrics (16); automated incident response not modeled — noted. |
 | DCS-NFR-SEC-12 | Secure Configuration Management | 📋 Not BDD-verifiable | Secure config management — GitOps/platform concern. |
 | DCS-NFR-SEC-13 | Secure Data Disposal | 🟡 Partial | Archive delete with audit (07); cryptographic erasure policy is infra — noted. |
@@ -389,7 +415,7 @@ not a coverage hole.
 | UC-09 | DCS Administration | RBAC config is IdP/Helm config (📋); role enforcement covered by 01 + negatives suite-wide |
 | UC-10 | Contract Automation & Integration | 05 (ORCE), 12 (API automation), 18 (integrity gates) |
 | UC-11 | API & System Integrations | 05, 12, 17; catalogue (02) |
-| UC-12 | System-Based Contract Management | 12_system_based_contract_management |
+| UC-12 | System-Based Contract Management | 12_system_based_contract_management (contract_lifecycle_via_api, system_user_classes) |
 | UC-13 | External System Contract Execution | 05_contract_deployment (target-system deploy/callback/evidence) |
 | UC-14 | Identity & PoA Credential Acquisition | 22 (PID identity); PoA = deviation (14_credential_acquisition documents it) |
 | UC-15 | Access Rights Revocation | 15_access_revocation, 21 CRL revocation |
