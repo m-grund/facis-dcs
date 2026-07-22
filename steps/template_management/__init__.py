@@ -12,6 +12,7 @@ from . import template_catalogue_steps  # noqa: F401
 from . import template_integrity_audit_steps  # noqa: F401
 from . import contract_creation_extra_steps  # noqa: F401
 from . import contract_approval_extra_steps  # noqa: F401
+from . import contract_negotiation_draft_steps  # noqa: F401
 from . import contract_negotiation_extra_steps  # noqa: F401
 from . import contract_format_review_extra_steps  # noqa: F401
 from . import template_notification_steps  # noqa: F401
