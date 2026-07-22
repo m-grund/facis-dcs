@@ -715,6 +715,53 @@ export async function fillContractAmountOn(inst: Instance, contractDid: string, 
 }
 
 /**
+ * Makes a counter-offer through the SRS §3.1.1 "Save draft" leg: stages the
+ * redline as the party's negotiation draft, proves it survives leaving the
+ * view (restored value + Discard draft offered on return), then proposes it
+ * via "Change Proposal". Until the propose, the staged redline is invisible
+ * to the peer — the caller's assertManifestChainGrew after this call is what
+ * proves the chain grew from the PROPOSE, the save itself ships nothing.
+ */
+export async function stagedCounterOffer(inst: Instance, contractDid: string, opts: { value: string }): Promise<void> {
+  await inst.gotoAs('Contract Manager', `/ui/contracts/negotiate/${contractDid}`)
+  await inst.page
+    .getByRole('tab', { name: /content/i })
+    .or(inst.page.getByText('Contract Content', { exact: true }))
+    .first()
+    .click()
+  const amount = inst.page.getByRole('textbox', { name: 'Payment Amount' }).first()
+  await expect(amount).toBeVisible({ timeout: 30_000 })
+  await amount.fill(opts.value)
+  const saved = inst.page.waitForResponse(
+    (r) => r.url().includes('/contract/negotiation_draft') && r.request().method() === 'PUT',
+  )
+  await inst.page.getByRole('button', { name: 'Save draft', exact: true }).click()
+  const saveResp = await saved
+  expect(saveResp.ok(), `draft save ${saveResp.status()}: ${await saveResp.text()}`).toBeTruthy()
+
+  // The staged draft survives navigation: a fresh visit restores the value
+  // and offers Discard draft.
+  await inst.gotoAs('Contract Manager', '/ui/contracts')
+  await inst.gotoAs('Contract Manager', `/ui/contracts/negotiate/${contractDid}`)
+  await inst.page
+    .getByRole('tab', { name: /content/i })
+    .or(inst.page.getByText('Contract Content', { exact: true }))
+    .first()
+    .click()
+  const restored = inst.page.getByRole('textbox', { name: 'Payment Amount' }).first()
+  await expect(restored).toBeVisible({ timeout: 30_000 })
+  await expect(restored).toHaveValue(opts.value)
+  await expect(inst.page.getByRole('button', { name: 'Discard draft', exact: true })).toBeVisible()
+
+  const proposed = inst.page.waitForResponse(
+    (r) => r.url().includes('/contract/negotiate') && r.request().method() === 'POST' && r.ok(),
+    { timeout: 30_000 },
+  )
+  await inst.page.getByRole('button', { name: 'Change Proposal' }).click()
+  await proposed
+}
+
+/**
  * Makes a non-trivial counter-offer on the instance's Negotiate view: edits a
  * requirement value in the contract editor (producing a change request) and
  * submits it, which regenerates the PDF and re-ships it to the counterparty.
