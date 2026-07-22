@@ -6,11 +6,12 @@ import { buildDraftContract, gotoAs } from './lifecycle-helpers'
  * transmission of a draft to its counterparty (DRAFT -> OFFERED), and SRS §1.2
  * defines an offer as a clear and DEFINITE proposal — §2.2.2 requires Contract
  * Generation to end with a filled-out contract "ready to be sent to the
- * Responder". command/offer.go's validateOfferReady therefore enforces contract
- * closedness: a draft still carrying an unfilled required placeholder is
- * rejected (HTTP 400, surfaced via the global error toast) and stays DRAFT;
- * once the Contract Creator fills the placeholder through the real edit UI, the
- * same button performs DRAFT -> OFFERED.
+ * Responder". command/offer.go's validateOfferReady enforces contract
+ * closedness server-side (HTTP 400, covered by the BDD state-machine pack),
+ * and ContractManagerActions mirrors it in the UI: while a required
+ * placeholder is unfilled the button is disabled and names the missing field;
+ * once the Contract Creator fills it through the real edit UI, the same button
+ * performs DRAFT -> OFFERED.
  *
  * The fixture walks the same path a user does — author a Payment component with
  * an inline required placeholder, drive it through its template lifecycle,
@@ -23,18 +24,13 @@ test('offer to counterparty is blocked until the draft is filled out', async ({ 
 
   const { contractDid } = await buildDraftContract(page, loginAs)
 
-  await test.step('offering the unfilled draft is rejected and the contract stays DRAFT', async () => {
+  await test.step('the offer action is disabled while the draft is unfilled, naming the missing field', async () => {
     await gotoAs(page, loginAs, 'Contract Creator', `/ui/contracts/view/${contractDid}`)
-    const rejected = page.waitForResponse((r) => r.url().includes('/contract/offer') && r.request().method() === 'POST')
-    await page.getByRole('button', { name: 'Offer to counterparty' }).click()
-    const resp = await rejected
-    expect(resp.status(), `offer of an unfilled draft must be a client error: ${await resp.text()}`).toBe(400)
-    // The backend's closedness message reaches the user via the global toast.
-    await expect(page.getByRole('alert').filter({ hasText: 'contract is not closed' })).toBeVisible()
-    // Still DRAFT: reloading the view still shows the state and the offer action.
-    await page.reload()
     await expect(page.getByText('DRAFT', { exact: true }).first()).toBeVisible({ timeout: 15_000 })
-    await expect(page.getByRole('button', { name: 'Offer to counterparty' })).toBeVisible()
+    const offerButton = page.getByRole('button', { name: 'Offer to counterparty' })
+    await expect(offerButton).toBeVisible()
+    await expect(offerButton).toBeDisabled()
+    await expect(offerButton).toHaveAttribute('title', /required field.*amount/i)
   })
 
   await test.step('fill the required Payment Amount through the edit UI', async () => {
@@ -59,6 +55,7 @@ test('offer to counterparty is blocked until the draft is filled out', async ({ 
 
   await test.step('offering the filled draft succeeds: DRAFT -> OFFERED', async () => {
     await gotoAs(page, loginAs, 'Contract Creator', `/ui/contracts/view/${contractDid}`)
+    await expect(page.getByRole('button', { name: 'Offer to counterparty' })).toBeEnabled({ timeout: 15_000 })
     const offered = page.waitForResponse(
       (r) => r.url().includes('/contract/offer') && r.request().method() === 'POST' && r.ok(),
       { timeout: 30_000 },
