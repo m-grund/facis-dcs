@@ -48,71 +48,71 @@ import {
  * the rendered list to zero exactly as a genuinely clean sweep would.
  */
 
-test(
-  '@REQ-non-compliance-investigation-ui-AC1 @DCS-IR-PACM-03 @UC-08-02 compliance officer triggers a monitoring sweep and sees a detected risk',
-  async ({ page, loginAs }) => {
-    test.setTimeout(600_000)
+test('@REQ-non-compliance-investigation-ui-AC1 @DCS-IR-PACM-03 @UC-08-02 compliance officer triggers a monitoring sweep and sees a detected risk', async ({
+  page,
+  loginAs,
+}) => {
+  test.setTimeout(600_000)
 
-    const contractDid = await buildContractPendingApproval(page, loginAs)
+  const contractDid = await buildContractPendingApproval(page, loginAs)
 
+  await gotoAs(page, loginAs, 'Compliance Officer', '/ui/non-compliance')
+
+  const swept = page.waitForResponse(
+    (r) => r.url().includes('/pac/monitor') && r.request().method() === 'GET' && r.ok(),
+  )
+  await page.getByTestId('run-monitoring-sweep').click()
+  await swept
+
+  // Scope down to the fixture built above — the sweep is global (see the
+  // file-level design note), so other contracts may also be flagged.
+  await page.getByTestId('monitor-search').fill(contractDid)
+
+  const row = page.getByTestId('monitor-risk-row').filter({ hasText: contractDid })
+  await expect(row).toBeVisible()
+  await expect(row.getByTestId('monitor-risk-did')).toHaveText(contractDid)
+  await expect(row.getByTestId('monitor-risk-type')).toHaveText('MISSING_APPROVAL')
+  await expect(row.getByTestId('monitor-risk-detail')).not.toHaveText('')
+  await expect(row.getByTestId('monitor-risk-detected-at')).toHaveText(/\d{4}-\d{2}-\d{2}/)
+})
+
+test('@REQ-non-compliance-investigation-ui-AC2 @DCS-IR-PACM-03 monitor view shows an explicit empty state instead of a blank area', async ({
+  page,
+  loginAs,
+}) => {
+  await gotoAs(page, loginAs, 'Compliance Officer', '/ui/non-compliance')
+
+  const swept = page.waitForResponse(
+    (r) => r.url().includes('/pac/monitor') && r.request().method() === 'GET' && r.ok(),
+  )
+  await page.getByTestId('run-monitoring-sweep').click()
+  await swept
+
+  // See the file-level design note: filter to a DID guaranteed to carry no
+  // flagged risk, forcing the identical "zero rows" branch a clean global
+  // sweep would render.
+  await page.getByTestId('monitor-search').fill(`did:example:non-compliance-investigation-ui-empty-${Date.now()}`)
+
+  await expect(page.getByTestId('monitor-empty-state')).toBeVisible()
+  await expect(page.getByTestId('monitor-risk-row')).toHaveCount(0)
+})
+
+test('@REQ-non-compliance-investigation-ui-AC3 @DCS-IR-PACM-03 @DCS-IR-PACM-04 the view is reachable only for the Compliance Officer scope', async ({
+  page,
+  loginAs,
+}) => {
+  await test.step('Compliance Officer reaches the view', async () => {
     await gotoAs(page, loginAs, 'Compliance Officer', '/ui/non-compliance')
+    await expect(page).toHaveURL(/\/ui\/non-compliance/)
+    await expect(page.getByTestId('run-monitoring-sweep')).toBeVisible()
+  })
 
-    const swept = page.waitForResponse(
-      (r) => r.url().includes('/pac/monitor') && r.request().method() === 'GET' && r.ok(),
-    )
-    await page.getByTestId('run-monitoring-sweep').click()
-    await swept
-
-    // Scope down to the fixture built above — the sweep is global (see the
-    // file-level design note), so other contracts may also be flagged.
-    await page.getByTestId('monitor-search').fill(contractDid)
-
-    const row = page.getByTestId('monitor-risk-row').filter({ hasText: contractDid })
-    await expect(row).toBeVisible()
-    await expect(row.getByTestId('monitor-risk-did')).toHaveText(contractDid)
-    await expect(row.getByTestId('monitor-risk-type')).toHaveText('MISSING_APPROVAL')
-    await expect(row.getByTestId('monitor-risk-detail')).not.toHaveText('')
-    await expect(row.getByTestId('monitor-risk-detected-at')).toHaveText(/\d{4}-\d{2}-\d{2}/)
-  },
-)
-
-test(
-  '@REQ-non-compliance-investigation-ui-AC2 @DCS-IR-PACM-03 monitor view shows an explicit empty state instead of a blank area',
-  async ({ page, loginAs }) => {
-    await gotoAs(page, loginAs, 'Compliance Officer', '/ui/non-compliance')
-
-    const swept = page.waitForResponse(
-      (r) => r.url().includes('/pac/monitor') && r.request().method() === 'GET' && r.ok(),
-    )
-    await page.getByTestId('run-monitoring-sweep').click()
-    await swept
-
-    // See the file-level design note: filter to a DID guaranteed to carry no
-    // flagged risk, forcing the identical "zero rows" branch a clean global
-    // sweep would render.
-    await page.getByTestId('monitor-search').fill(`did:example:non-compliance-investigation-ui-empty-${Date.now()}`)
-
-    await expect(page.getByTestId('monitor-empty-state')).toBeVisible()
-    await expect(page.getByTestId('monitor-risk-row')).toHaveCount(0)
-  },
-)
-
-test(
-  '@REQ-non-compliance-investigation-ui-AC3 @DCS-IR-PACM-03 @DCS-IR-PACM-04 the view is reachable only for the Compliance Officer scope',
-  async ({ page, loginAs }) => {
-    await test.step('Compliance Officer reaches the view', async () => {
-      await gotoAs(page, loginAs, 'Compliance Officer', '/ui/non-compliance')
-      await expect(page).toHaveURL(/\/ui\/non-compliance/)
-      await expect(page.getByTestId('run-monitoring-sweep')).toBeVisible()
-    })
-
-    await test.step('a role outside the Compliance Officer scope is guard-redirected away', async () => {
-      await gotoAs(page, loginAs, 'Contract Manager', '/ui/non-compliance')
-      await expect(page).not.toHaveURL(/\/ui\/non-compliance/)
-      await expect(page.getByTestId('run-monitoring-sweep')).not.toBeVisible()
-    })
-  },
-)
+  await test.step('a role outside the Compliance Officer scope is guard-redirected away', async () => {
+    await gotoAs(page, loginAs, 'Contract Manager', '/ui/non-compliance')
+    await expect(page).not.toHaveURL(/\/ui\/non-compliance/)
+    await expect(page.getByTestId('run-monitoring-sweep')).not.toBeVisible()
+  })
+})
 
 test.describe('non-compliance incident report submission', () => {
   let fixture: DraftContractFixture
@@ -122,51 +122,51 @@ test.describe('non-compliance incident report submission', () => {
     fixture = await buildDraftContractFixture(browser)
   })
 
-  test(
-    '@REQ-non-compliance-investigation-ui-AC4 @DCS-IR-PACM-04 @UC-08-02 compliance officer submits an incident report and sees a success confirmation',
-    async ({ page, loginAs }) => {
-      await gotoAs(page, loginAs, 'Compliance Officer', '/ui/non-compliance')
+  test('@REQ-non-compliance-investigation-ui-AC4 @DCS-IR-PACM-04 @UC-08-02 compliance officer submits an incident report and sees a success confirmation', async ({
+    page,
+    loginAs,
+  }) => {
+    await gotoAs(page, loginAs, 'Compliance Officer', '/ui/non-compliance')
 
-      await page.getByTestId('incident-contract-did').fill(fixture.contractDid)
-      await page.getByTestId('incident-risk-type').fill('MISSING_APPROVAL')
-      await page.getByTestId('incident-detail').fill('Non-compliance investigation UI e2e finding.')
+    await page.getByTestId('incident-contract-did').fill(fixture.contractDid)
+    await page.getByTestId('incident-risk-type').fill('MISSING_APPROVAL')
+    await page.getByTestId('incident-detail').fill('Non-compliance investigation UI e2e finding.')
 
-      const submitted = page.waitForResponse(
-        (r) => r.url().includes('/pac/report') && r.request().method() === 'POST' && r.ok(),
-      )
-      await page.getByTestId('incident-submit').click()
-      await submitted
+    const submitted = page.waitForResponse(
+      (r) => r.url().includes('/pac/report') && r.request().method() === 'POST' && r.ok(),
+    )
+    await page.getByTestId('incident-submit').click()
+    await submitted
 
-      await expect(page.getByTestId('incident-success')).toBeVisible()
-    },
-  )
+    await expect(page.getByTestId('incident-success')).toBeVisible()
+  })
 
-  test(
-    '@REQ-non-compliance-investigation-ui-AC5 @DCS-IR-PACM-04 the submitted report links the finding typed to a contract DID',
-    async ({ page, loginAs }) => {
-      await gotoAs(page, loginAs, 'Compliance Officer', '/ui/non-compliance')
+  test('@REQ-non-compliance-investigation-ui-AC5 @DCS-IR-PACM-04 the submitted report links the finding typed to a contract DID', async ({
+    page,
+    loginAs,
+  }) => {
+    await gotoAs(page, loginAs, 'Compliance Officer', '/ui/non-compliance')
 
-      await page.getByTestId('incident-contract-did').fill(fixture.contractDid)
-      await page.getByTestId('incident-risk-type').fill('MISSING_APPROVAL')
-      await page.getByTestId('incident-detail').fill('Non-compliance investigation UI e2e typed-link finding.')
+    await page.getByTestId('incident-contract-did').fill(fixture.contractDid)
+    await page.getByTestId('incident-risk-type').fill('MISSING_APPROVAL')
+    await page.getByTestId('incident-detail').fill('Non-compliance investigation UI e2e typed-link finding.')
 
-      const submitted = page.waitForResponse(
-        (r) => r.url().includes('/pac/report') && r.request().method() === 'POST' && r.ok(),
-      )
-      await page.getByTestId('incident-submit').click()
-      const resp = await submitted
+    const submitted = page.waitForResponse(
+      (r) => r.url().includes('/pac/report') && r.request().method() === 'POST' && r.ok(),
+    )
+    await page.getByTestId('incident-submit').click()
+    const resp = await submitted
 
-      // Contract with the implementer's Goa payload (DCS-IR-PACM-04): the
-      // report body must carry the typed contract_did/findings link the
-      // backend behave scenario (features/08_audit_compliance/
-      // process_audit_and_compliance.feature) asserts gets persisted.
-      const payload = resp.request().postDataJSON() as {
-        contract_did?: string
-        findings?: Array<{ risk_type?: string; detail?: string }>
-      }
-      expect(payload.contract_did).toBe(fixture.contractDid)
-      expect(payload.findings?.length).toBeGreaterThan(0)
-      expect(payload.findings?.[0]?.risk_type).toBe('MISSING_APPROVAL')
-    },
-  )
+    // Contract with the implementer's Goa payload (DCS-IR-PACM-04): the
+    // report body must carry the typed contract_did/findings link the
+    // backend behave scenario (features/08_audit_compliance/
+    // process_audit_and_compliance.feature) asserts gets persisted.
+    const payload = resp.request().postDataJSON() as {
+      contract_did?: string
+      findings?: Array<{ risk_type?: string; detail?: string }>
+    }
+    expect(payload.contract_did).toBe(fixture.contractDid)
+    expect(payload.findings?.length).toBeGreaterThan(0)
+    expect(payload.findings?.[0]?.risk_type).toBe('MISSING_APPROVAL')
+  })
 })

@@ -317,7 +317,9 @@ const exportBundle = async () => {
         <!-- Both exports need the loaded contract's DID; until it arrives the
              handlers can only return silently, so the click looks like it did
              nothing. Disable them while the contract is still loading. -->
-        <button class="btn btn-outline md:w-32" :disabled="exporting || !contract" @click="exportPDF">Export PDF</button>
+        <button class="btn btn-outline md:w-32" :disabled="exporting || !contract" @click="exportPDF">
+          Export PDF
+        </button>
         <button class="btn btn-outline md:w-36" :disabled="exporting || !contract" @click="exportBundle">
           Export bundle
         </button>

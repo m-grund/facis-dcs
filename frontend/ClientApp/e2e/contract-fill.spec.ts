@@ -28,10 +28,7 @@ test.beforeAll(async ({ browser }) => {
   fixture = await buildDraftContractFixture(browser)
 })
 
-test('filling a placeholder writes the value inline on the placeholder of an odrl:Offer', async ({
-  page,
-  loginAs,
-}) => {
+test('filling a placeholder writes the value inline on the placeholder of an odrl:Offer', async ({ page, loginAs }) => {
   await loginAs('Contract Creator')
   await page.goto(`/ui/contracts/edit/${fixture.contractDid}`)
 

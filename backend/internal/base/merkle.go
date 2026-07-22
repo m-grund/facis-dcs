@@ -103,7 +103,7 @@ func VerifyMerkleInclusion(leafHash string, proof []string, index, leafCount int
 	}
 	consumed := 0
 	for size := leafCount; size > 1; size = (size + 1) / 2 {
-		if !(index == size-1 && size%2 == 1) {
+		if index != size-1 || size%2 == 0 {
 			if consumed >= len(proof) {
 				return false
 			}

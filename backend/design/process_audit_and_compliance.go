@@ -74,10 +74,10 @@ var PACMonitorResponse = Type("PACMonitorResponse", func() {
 	Required("checked_at", "risks")
 })
 
-
-// The publishable head of an audit-trail checkpoint (ADR-16): hashes, counts
-// and a trusted timestamp only — nothing derived from the entries it commits
-// to, so it is safe to hand to an external notary such as an ORCE flow.
+// PACCheckpointHead is the publishable head of an audit-trail checkpoint
+// (ADR-16): hashes, counts and a trusted timestamp only — nothing derived from
+// the entries it commits to, so it is safe to hand to an external notary such
+// as an ORCE flow.
 var PACCheckpointHead = Type("PACCheckpointHead", func() {
 	Description("Publishable head of an audit-trail Merkle checkpoint")
 
@@ -92,7 +92,8 @@ var PACCheckpointHead = Type("PACCheckpointHead", func() {
 	Required("seq", "root", "leaf_count", "created_at")
 })
 
-// Evidence that one audit entry is committed to by a timestamped root.
+// PACCheckpointProof is evidence that one audit entry is committed to by a
+// timestamped root.
 var PACCheckpointProof = Type("PACCheckpointProof", func() {
 	Description("Merkle inclusion proof tying one audit entry to a checkpoint")
 

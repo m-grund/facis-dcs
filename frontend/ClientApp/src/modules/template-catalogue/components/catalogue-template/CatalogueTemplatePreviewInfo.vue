@@ -16,11 +16,7 @@ const { layout, blocks, semanticConditions } = storeToRefs(useDcsDraftStore())
         style="aspect-ratio: 210 / 297"
       >
         <div class="h-full w-full overflow-auto px-10 py-8">
-          <TemplatePreview
-            :layout="layout"
-            :blocks="blocks"
-            :semantic-conditions="semanticConditions"
-          />
+          <TemplatePreview :layout="layout" :blocks="blocks" :semantic-conditions="semanticConditions" />
         </div>
       </div>
     </div>

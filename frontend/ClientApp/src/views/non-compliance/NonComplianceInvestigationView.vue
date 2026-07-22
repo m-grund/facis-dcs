@@ -88,7 +88,7 @@ const submitIncidentReport = async () => {
       </div>
 
       <p v-if="checkedAt" class="mb-3 text-sm opacity-70">Last checked: {{ checkedAt }}</p>
-      <div v-if="sweepError" class="alert mb-3 rounded-box alert-error">{{ sweepError }}</div>
+      <div v-if="sweepError" class="mb-3 alert rounded-box alert-error">{{ sweepError }}</div>
 
       <div v-if="filteredRisks.length === 0" data-testid="monitor-empty-state" class="alert rounded-box alert-info">
         No compliance risks were found for the current filter.
@@ -104,7 +104,11 @@ const submitIncidentReport = async () => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="risk in filteredRisks" :key="`${risk.did}-${risk.risk_type}-${risk.detected_at}`" data-testid="monitor-risk-row">
+          <tr
+            v-for="risk in filteredRisks"
+            :key="`${risk.did}-${risk.risk_type}-${risk.detected_at}`"
+            data-testid="monitor-risk-row"
+          >
             <td data-testid="monitor-risk-did">{{ risk.did }}</td>
             <td data-testid="monitor-risk-type">{{ risk.risk_type }}</td>
             <td data-testid="monitor-risk-detail">{{ risk.detail }}</td>
@@ -160,8 +164,8 @@ const submitIncidentReport = async () => {
         </div>
       </form>
 
-      <div v-if="incidentError" class="alert mt-3 rounded-box alert-error">{{ incidentError }}</div>
-      <div v-if="incidentSuccess" data-testid="incident-success" class="alert mt-3 rounded-box alert-success">
+      <div v-if="incidentError" class="mt-3 alert rounded-box alert-error">{{ incidentError }}</div>
+      <div v-if="incidentSuccess" data-testid="incident-success" class="mt-3 alert rounded-box alert-success">
         Incident report submitted successfully.
       </div>
     </div>

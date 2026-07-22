@@ -125,13 +125,13 @@ func (e ComplianceRiskEvent) GetDID() string {
 // anchoring so a PROCESS_AUDIT_AND_COMPLIANCE-scope audit read can prove the
 // finding was recorded, not merely accepted.
 type IncidentReportEvent struct {
-	DID         string             `json:"did"`
-	RiskType    string             `json:"risk_type"`
-	Detail      string             `json:"detail"`
-	ReportedBy  string             `json:"reported_by"`
-	OccurredAt  time.Time          `json:"occurred_at"`
-	HolderDID   string             `json:"holder_did"`
-	UserRoles   userrole.UserRoles `json:"user_roles"`
+	DID        string             `json:"did"`
+	RiskType   string             `json:"risk_type"`
+	Detail     string             `json:"detail"`
+	ReportedBy string             `json:"reported_by"`
+	OccurredAt time.Time          `json:"occurred_at"`
+	HolderDID  string             `json:"holder_did"`
+	UserRoles  userrole.UserRoles `json:"user_roles"`
 }
 
 // EventType implements the Event interface.

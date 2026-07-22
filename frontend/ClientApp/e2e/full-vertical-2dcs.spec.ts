@@ -231,10 +231,9 @@ test('full two-instance negotiation vertical (A <-> B)', async ({ page, context,
     await a.page.getByLabel('Scope').selectOption('contracts')
     await a.page.getByLabel('DID (optional)').fill(contractDid)
     await a.page.getByLabel('Audit justification').fill('Two-instance vertical E2E audit')
-    const audited = a.page.waitForResponse(
-      (r) => r.url().includes('/pac/audit') && r.request().method() === 'POST',
-      { timeout: 90_000 },
-    )
+    const audited = a.page.waitForResponse((r) => r.url().includes('/pac/audit') && r.request().method() === 'POST', {
+      timeout: 90_000,
+    })
     await a.page.getByRole('button', { name: 'Execute Audit' }).click()
     const auditResp = await audited
     if (auditResp.ok()) {

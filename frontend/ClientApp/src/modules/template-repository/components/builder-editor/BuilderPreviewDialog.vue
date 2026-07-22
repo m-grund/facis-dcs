@@ -44,11 +44,7 @@ function close() {
               style="aspect-ratio: 210 / 297"
             >
               <div :class="previewContainerClasses">
-                <TemplatePreview
-                  :layout="layout"
-                  :blocks="blocks"
-                  :semantic-conditions="semanticConditions"
-                />
+                <TemplatePreview :layout="layout" :blocks="blocks" :semantic-conditions="semanticConditions" />
               </div>
             </div>
           </div>
