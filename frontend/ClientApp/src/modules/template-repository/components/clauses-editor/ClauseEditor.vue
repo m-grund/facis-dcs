@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed, ref, useId } from 'vue'
 import ClauseTextEditor from '@template-repository/components/clauses-editor/ClauseTextEditor.vue'
 import OdrlRuleBuilder from '@template-repository/components/clauses-editor/OdrlRuleBuilder.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
@@ -7,8 +9,6 @@ import {
   ONTOLOGY_ASSETS,
   ONTOLOGY_DOMAIN_FIELDS,
 } from '@template-repository/utils/ontology-domain-fields'
-import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
 import type { DcsContentSegment, OdrlRule } from '@/models/dcs-jsonld'
 import type { DomainFieldDefinition, SemanticCondition } from '@template-repository/models/contract-template'
 
@@ -41,6 +41,10 @@ const clauseFields = ref<ClauseField[]>([])
 const clauseAssets = ref<ClauseAsset[]>([])
 const rule = ref<OdrlRule | null>(null)
 const objectToAdd = ref('')
+
+const titleId = useId()
+const contentId = useId()
+const objectToAddId = useId()
 
 const uuid = () => `urn:uuid:${crypto.randomUUID()}`
 const localName = (iri: string) => iri.replace(/^.*[:#/]/, '')
@@ -144,12 +148,19 @@ function save() {
 
 <template>
   <div class="space-y-3" data-testid="split-clause-editor">
-    <input v-model="title" type="text" placeholder="Clause title" class="input-bordered input input-sm w-full" />
+    <label :for="titleId" class="sr-only">Clause title</label>
+    <input
+      :id="titleId"
+      v-model="title"
+      type="text"
+      placeholder="Clause title"
+      class="input-bordered input input-sm w-full"
+    />
 
     <div class="space-y-2 rounded bg-base-200/50 p-2">
       <div class="flex flex-wrap items-center gap-2">
-        <span class="text-xs text-base-content/60">Objects (Semantic Hub):</span>
-        <select v-model="objectToAdd" class="select-bordered select select-xs" @change="addObject">
+        <label :for="objectToAddId" class="text-xs text-base-content/60">Objects (Semantic Hub):</label>
+        <select :id="objectToAddId" v-model="objectToAdd" class="select-bordered select select-xs" @change="addObject">
           <option value="">+ add object…</option>
           <optgroup v-for="group in objectGroups" :key="group.name" :label="group.name">
             <option v-for="o in group.entries" :key="o.value" :value="o.value">{{ o.label }}</option>
@@ -174,8 +185,9 @@ function save() {
 
     <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
       <div class="rounded border border-base-300 p-3">
-        <h5 class="mb-2 text-xs font-semibold text-base-content/70">Human prose</h5>
+        <h5 :id="contentId" class="mb-2 text-xs font-semibold text-base-content/70">Human prose</h5>
         <ClauseTextEditor
+          :text-id="contentId"
           :model-value="content"
           :semantic-conditions="proseConditions"
           @update:model-value="content = $event"

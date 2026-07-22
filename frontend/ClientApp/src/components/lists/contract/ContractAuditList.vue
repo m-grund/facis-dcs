@@ -16,7 +16,7 @@ const eventType = useContractEventType()
     <li v-for="audit in audits" :key="audit.id" class="list-row grid-cols-1">
       <div class="flex justify-between">
         <div>{{ new Date(audit.event_data.occurred_at).toLocaleString() }}</div>
-        <div class="badge badge-outline badge-sm badge-secondary">
+        <div class="badge badge-soft badge-sm badge-secondary">
           {{ contractAuditEventDisplayText(audit.event_type, audit.event_data) }}
         </div>
         <div class="text-xs">{{ toProperCase(audit.component) }}</div>
@@ -32,11 +32,11 @@ const eventType = useContractEventType()
           <div>Submitted by: {{ audit.event_data.submitted_by }}</div>
           <div>
             Transition:
-            <span class="relative -top-0.5 badge badge-outline badge-xs badge-secondary">
+            <span class="relative -top-0.5 badge badge-soft badge-xs badge-secondary">
               {{ toProperCase(audit.event_data.previous_state) }}
             </span>
             →
-            <span class="relative -top-0.5 badge badge-outline badge-xs badge-secondary">
+            <span class="relative -top-0.5 badge badge-soft badge-xs badge-secondary">
               {{ toProperCase(audit.event_data.new_state) }}
             </span>
           </div>

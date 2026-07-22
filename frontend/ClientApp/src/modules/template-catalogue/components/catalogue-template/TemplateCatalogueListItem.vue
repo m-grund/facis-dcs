@@ -2,7 +2,7 @@
 import { ROUTES } from '@/router/router'
 import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { toProperCase } from '@/utils/string'
-import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
+import type { TemplateResourcesItem } from '@template-catalogue/models/template-resource'
 
 defineProps<{
   template: TemplateResourcesItem

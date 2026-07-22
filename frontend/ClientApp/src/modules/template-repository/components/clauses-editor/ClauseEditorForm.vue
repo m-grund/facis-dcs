@@ -1,13 +1,13 @@
 <script setup lang="ts">
+import { computed, ref, useId, watch } from 'vue'
 import RequiredIndicator from '@core/components/RequiredIndicator.vue'
 import ClauseTextEditor from '@template-repository/components/clauses-editor/ClauseTextEditor.vue'
 import {
   conditionIdsInContent,
   usedPlaceholderKeysInContent,
 } from '@template-repository/composables/useClauseTextChips'
-import { computed, ref, watch } from 'vue'
 import type { DcsContentSegment } from '@/models/dcs-jsonld'
-import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
 
 const props = defineProps<{
   mode: 'create' | 'edit'
@@ -25,6 +25,9 @@ const emit = defineEmits<{
 
 const localTitle = ref(props.initialTitle)
 const localContent = ref<DcsContentSegment[]>(props.initialContent ?? [])
+
+const localTitleId = useId()
+const localContentId = useId()
 
 const heading = computed(() => {
   if (props.mode === 'edit') return 'Edit clause'
@@ -74,18 +77,26 @@ function handleSubmit() {
   </h3>
   <div class="space-y-4">
     <div>
-      <label class="label-text mb-1 block text-xs text-base-content/60">
+      <label :for="localTitleId" class="label-text mb-1 block text-xs text-base-content/70">
         Clause title
         <RequiredIndicator />
       </label>
-      <input v-model="localTitle" type="text" class="input-bordered input input-sm w-full" placeholder="" required />
+      <input
+        :id="localTitleId"
+        v-model="localTitle"
+        type="text"
+        class="input-bordered input input-sm w-full"
+        placeholder=""
+        required
+      />
     </div>
     <div>
-      <label class="label-text mb-1 block text-xs text-base-content/60">
+      <span :id="localContentId" class="label-text mb-1 block text-xs text-base-content/70">
         Clause text
         <RequiredIndicator />
-      </label>
+      </span>
       <ClauseTextEditor
+        :text-id="localContentId"
         :model-value="localContent"
         :semantic-conditions="semanticConditions"
         @update:model-value="localContent = $event"

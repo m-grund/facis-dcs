@@ -47,7 +47,7 @@ export interface DcsPlaceholder {
   'dcs:value'?: string | number | boolean
   /** Value constraint (options/pattern/min/max) carried inline so the slot is
    *  self-contained — render picks a select/text input without ontology lookup. */
-  'dcs:valueConstraint'?: import('@/modules/template-repository/models/contract-template').SemanticValueConstraint
+  'dcs:valueConstraint'?: import('@template-repository/models/contract-template').SemanticValueConstraint
 }
 
 /** A clause references a placeholder by @id — a bare {"@id"} node in content. */

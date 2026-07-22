@@ -71,23 +71,25 @@ watch(
 </script>
 
 <template>
-  <h2
-    class="mb-4 border-b border-base-content/10 bg-base-100 p-4 text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight"
-  >
-    {{ $route.meta.name }}
-  </h2>
+  <div class="flex h-full min-h-0 flex-col">
+    <h2
+      class="mb-4 shrink-0 border-b border-base-content/10 bg-base-100 p-4 text-2xl/7 font-bold sm:truncate sm:text-3xl sm:tracking-tight"
+    >
+      {{ route.meta.name }}
+    </h2>
 
-  <div v-if="loading" class="pl-4">Loading Tasks...</div>
-  <div v-else-if="error" class="pl-4">{{ error }}</div>
-  <template v-else>
-    <template v-if="$route.name === ROUTES.TASKS.REVIEWS">
-      <ReviewTaskList :tasks="reviewTasks" />
-    </template>
-    <template v-else-if="$route.name === ROUTES.TASKS.APPROVALS">
-      <ApprovalTaskList :tasks="approvalTasks" />
-    </template>
-    <template v-else-if="$route.name === ROUTES.TASKS.NEGOTIATIONS">
-      <NegotiationTaskList :tasks="negotiationTasks" />
-    </template>
-  </template>
+    <div v-if="loading" class="pl-4" role="status" aria-live="polite">Loading tasks...</div>
+    <div v-else-if="error" class="pl-4" role="status" aria-live="assertive">{{ error }}</div>
+    <div v-else class="min-h-0 flex-1 overflow-hidden">
+      <template v-if="route.name === ROUTES.TASKS.REVIEWS">
+        <ReviewTaskList :tasks="reviewTasks" />
+      </template>
+      <template v-else-if="route.name === ROUTES.TASKS.APPROVALS">
+        <ApprovalTaskList :tasks="approvalTasks" />
+      </template>
+      <template v-else-if="route.name === ROUTES.TASKS.NEGOTIATIONS">
+        <NegotiationTaskList :tasks="negotiationTasks" />
+      </template>
+    </div>
+  </div>
 </template>

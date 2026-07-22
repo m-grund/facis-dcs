@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
 import EditorBlocks from '@template-repository/components/builder-editor/EditorBlocks.vue'
 import EmptyBlockCreator from '@template-repository/components/builder-editor/EmptyBlockCreator.vue'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
-import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
 
 const { layout } = storeToRefs(useDcsDraftStore())
 

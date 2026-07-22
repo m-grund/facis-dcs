@@ -1,7 +1,7 @@
 import type { ContractTemplateResponsible } from '@/models/contract-template-responsible'
 import type { DcsBlock, DcsLayoutNode, DcsPlaceholder, OdrlRule } from '@/models/dcs-jsonld'
-import type { MetaData, TemplateTypeValue } from '@/modules/template-repository/models/contract-template'
 import type { ContractTemplateState } from '@/types/contract-template-state'
+import type { MetaData, TemplateTypeValue } from '@template-repository/models/contract-template'
 
 export const TEMPLATE_DATA_VERSIONS = [1] as const
 export type TemplateDataVersion = (typeof TEMPLATE_DATA_VERSIONS)[number]

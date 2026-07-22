@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import AddBlockModal from '@template-repository/components/builder-editor/AddBlockModal.vue'
 import BuilderPreviewDialog from '@template-repository/components/builder-editor/BuilderPreviewDialog.vue'
 import BuilderEditor from '@template-repository/components/BuilderEditor.vue'
@@ -9,9 +12,6 @@ import MetaDataEditor from '@template-repository/components/MetaDataEditor.vue'
 import { useTemplatePermissions } from '@template-repository/composables/useTemplatePermissions'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore.ts'
-import { storeToRefs } from 'pinia'
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
 import AuditView from './AuditView.vue'
 
 withDefaults(
@@ -39,7 +39,7 @@ const { isManager } = useTemplatePermissions()
 <template>
   <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
     <div class="mx-auto max-w-5xl px-6 pt-3">
-      <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">
+      <p class="mb-2 text-xs font-black tracking-widest text-base-content/70 uppercase">
         {{ title }}
       </p>
       <div role="tablist" class="tabs-border tabs tabs-lg">
@@ -47,7 +47,7 @@ const { isManager } = useTemplatePermissions()
           v-for="(tab, _index) in tabs"
           :key="tab.id"
           role="tab"
-          class="tab"
+          class="tab text-base-content/70"
           :class="{ 'tab-active text-primary': activeTab === tab.id }"
           @click="templateEditorUiStore.setActiveTab(tab.id)"
         >

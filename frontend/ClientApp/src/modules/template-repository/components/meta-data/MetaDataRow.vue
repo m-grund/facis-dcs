@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -25,6 +25,9 @@ const isNew = computed(() => props.isNew === true)
 const isEditing = ref(isNew.value)
 const localName = ref<string>(props.initialName ?? '')
 const localValue = ref<string>(props.initialValue ?? '')
+
+const localNameId = useId()
+const localValueId = useId()
 
 watch(
   () => [props.initialName, props.initialValue],
@@ -95,7 +98,9 @@ function onRowClick() {
     <!-- Name -->
     <td class="align-top">
       <div v-if="isEditing" class="flex flex-col gap-1">
+        <label :for="localNameId" class="sr-only">Name</label>
         <input
+          :id="localNameId"
           v-model="localName"
           type="text"
           class="input-bordered input input-xs w-full"
@@ -110,7 +115,9 @@ function onRowClick() {
     <!-- Value -->
     <td class="align-top">
       <div v-if="isEditing">
+        <label :for="localValueId" class="sr-only">Value</label>
         <input
+          :id="localValueId"
           v-model="localValue"
           type="text"
           class="input-bordered input input-xs w-full"

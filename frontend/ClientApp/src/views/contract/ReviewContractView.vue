@@ -2,29 +2,29 @@
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, onUnmounted, type Ref, ref, useTemplateRef, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import WorkflowStageBanner from '@core/components/WorkflowStageBanner.vue'
+import { contractStory, toBannerActions } from '@core/workflow-story'
+import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
+import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
+import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
+import AuditView from '@contract-workflow-engine/components/AuditView.vue'
+import ContractDetailsEditor from '@contract-workflow-engine/components/ContractDetailsEditor.vue'
+import { useContractDataPreprocess } from '@contract-workflow-engine/composables/useContractDataPreprocess'
+import { useContractPermissions } from '@contract-workflow-engine/composables/useContractPermissions'
+import { useSemanticValueVerification } from '@contract-workflow-engine/composables/useSemanticValueVerification'
+import { useContractContentValuesStore } from '@contract-workflow-engine/store/contractContentValuesStore'
+import { useContractEditorUiStore } from '@contract-workflow-engine/store/contractEditorUiStore'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import ContractManagerActions from '@/components/contract/ContractManagerActions.vue'
 import { useDocumentExport } from '@/composables/useDocumentExport'
-import WorkflowStageBanner from '@/core/components/WorkflowStageBanner.vue'
-import { contractStory, toBannerActions } from '@/core/workflow-story'
-import AuditView from '@/modules/contract-workflow-engine/components/AuditView.vue'
-import ContractDetailsEditor from '@/modules/contract-workflow-engine/components/ContractDetailsEditor.vue'
-import { useContractDataPreprocess } from '@/modules/contract-workflow-engine/composables/useContractDataPreprocess'
-import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
-import { useSemanticValueVerification } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
-import { useContractContentValuesStore } from '@/modules/contract-workflow-engine/store/contractContentValuesStore'
-import { useContractEditorUiStore } from '@/modules/contract-workflow-engine/store/contractEditorUiStore'
-import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
-import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
 import { ContractState } from '@/types/contract-state'
 import type { Contract } from '@/models/contract/contract'
-import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type { UserRole } from '@/types/user-role'
+import type { SemanticConditionValueSetter } from '@contract-workflow-engine/models/contract-content-values-store'
 
 const route = useRoute()
 const navStore = useNavStore()
@@ -221,13 +221,13 @@ const exportPDF = async () => {
         <!-- Tabs -->
         <div class="sticky top-0 z-10 shrink-0 border-b border-base-300 bg-base-100">
           <div class="mx-auto max-w-4xl px-6 pt-3">
-            <p class="mb-2 text-xs font-black tracking-widest text-base-content/40 uppercase">Review Contract</p>
+            <p class="mb-2 text-xs font-black tracking-widest text-base-content/70 uppercase">Review Contract</p>
             <div role="tablist" class="tabs-border tabs tabs-lg">
               <a
                 v-for="tab in tabs"
                 :key="tab.id"
                 role="tab"
-                class="tab"
+                class="tab text-base-content/70"
                 :class="{ 'tab-active text-primary': activeTab === tab.id }"
                 @click="contractEditorUiStore.setActiveTab(tab.id)"
               >

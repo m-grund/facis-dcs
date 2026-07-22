@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import IconEdit from '@core/components/icons/IconEdit.vue'
+import IconRemove from '@core/components/icons/IconRemove.vue'
 import ClauseEditorForm from '@template-repository/components/clauses-editor/ClauseEditorForm.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import {
@@ -6,11 +9,8 @@ import {
   parseSegmentsFromContent,
   type Segment,
 } from '@template-repository/composables/useClauseTextChips'
-import { computed } from 'vue'
-import IconEdit from '@/core/components/icons/IconEdit.vue'
-import IconRemove from '@/core/components/icons/IconRemove.vue'
 import type { DcsClause, DcsContentSegment } from '@/models/dcs-jsonld'
-import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
+import type { SemanticCondition } from '@template-repository/models/contract-template'
 
 const props = withDefaults(
   defineProps<{

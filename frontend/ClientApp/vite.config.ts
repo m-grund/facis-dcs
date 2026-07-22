@@ -55,9 +55,12 @@ export default defineConfig(({ mode, command }) => {
     envPrefix: 'DCS_',
     resolve: {
       alias: {
-        '@': fileURLToPath(new URL('./src/', import.meta.url)),
-        '@core': fileURLToPath(new URL('./src/core/', import.meta.url)),
         '@template-repository': fileURLToPath(new URL('./src/modules/template-repository/', import.meta.url)),
+        '@contract-workflow-engine': fileURLToPath(new URL('./src/modules/contract-workflow-engine/', import.meta.url)),
+        '@template-catalogue': fileURLToPath(new URL('./src/modules/template-catalogue/', import.meta.url)),
+        '@semantic-hub': fileURLToPath(new URL('./src/modules/semantic-hub/', import.meta.url)),
+        '@core': fileURLToPath(new URL('./src/core/', import.meta.url)),
+        '@': fileURLToPath(new URL('./src/', import.meta.url)),
       },
     },
     server: {

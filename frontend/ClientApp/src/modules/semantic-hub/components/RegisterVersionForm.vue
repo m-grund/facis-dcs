@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, useId } from 'vue'
 import { registerSchema } from '@/services/semantic-hub-service'
 
 /**
@@ -22,6 +22,8 @@ const content = ref('')
 const activate = ref(true)
 const submitting = ref(false)
 const error = ref<string | null>(null)
+
+const contentId = useId()
 
 async function onFileSelected(event: Event) {
   const input = event.target as HTMLInputElement
@@ -56,7 +58,7 @@ async function submit() {
 <template>
   <form class="space-y-3" @submit.prevent="submit">
     <div class="form-control">
-      <label class="label py-1">
+      <label :for="contentId" class="label py-1 text-base-content/70">
         <span class="label-text text-xs">New version content ({{ mediaType }})</span>
         <label class="label-text-alt link cursor-pointer text-xs">
           Upload file
@@ -64,6 +66,7 @@ async function submit() {
         </label>
       </label>
       <textarea
+        :id="contentId"
         v-model="content"
         class="textarea-bordered textarea h-48 w-full resize-y font-mono text-xs"
         placeholder="Paste the new version's raw content, or upload a file"
@@ -71,7 +74,7 @@ async function submit() {
       />
     </div>
     <div class="flex items-center justify-between gap-3">
-      <label class="label cursor-pointer gap-2 py-0">
+      <label class="label cursor-pointer gap-2 py-0 text-base-content/70">
         <input v-model="activate" type="checkbox" class="checkbox checkbox-sm" />
         <span class="label-text text-xs">Activate immediately</span>
       </label>

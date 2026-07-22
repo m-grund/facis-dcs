@@ -2,7 +2,7 @@
 import ListSearch from '@/components/lists/ListSearch.vue'
 import { templateCatalogueIntegrationService } from '@/services/template-catalogue-integration-service'
 import type { TemplateCatalogueRetrieveResponse } from '@/models/responses/template-catalogue-integration-response'
-import type { TemplateResourcesItem } from '@/modules/template-catalogue/models/template-resource'
+import type { TemplateResourcesItem } from '@template-catalogue/models/template-resource'
 
 defineProps<{
   templates: TemplateResourcesItem[]

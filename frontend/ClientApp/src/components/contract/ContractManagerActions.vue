@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, normalizeClass, ref, useAttrs, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
+import { useContractPermissions } from '@contract-workflow-engine/composables/useContractPermissions'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
-import { useContractPermissions } from '@/modules/contract-workflow-engine/composables/useContractPermissions'
 import { ROUTES } from '@/router/router'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { ContractState } from '@/types/contract-state'
