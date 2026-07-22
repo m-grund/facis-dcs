@@ -385,6 +385,95 @@ export async function buildApprovedContract(page: Page, loginAs: LoginAs): Promi
 }
 
 /**
+ * Builds a fresh contract and drives it only as far as REVIEWED (forwarded
+ * to the Contract Approver) — deliberately NOT approved, so it is left with
+ * exactly one OPEN approval task. This is the precondition the continuous-
+ * monitoring sweep's MISSING_APPROVAL risk detects (see
+ * backend/internal/processauditandcompliance/query/querymonitor.go:
+ * RiskTypeMissingApproval flags any Submitted/Reviewed contract carrying an
+ * OPEN approval task). Kept separate from buildApprovedContract (rather than
+ * refactored out of it) so that function's existing, already-relied-upon
+ * behaviour is untouched. Returns the contract's DID.
+ */
+export async function buildContractPendingApproval(page: Page, loginAs: LoginAs): Promise<string> {
+  const unique = Date.now()
+  const componentName = `NCI Component ${unique}`
+  const contractTemplateName = `NCI Contract ${unique}`
+
+  const componentDid = await test.step('create component template with a semantic clause', () =>
+    authorPaymentComponent(page, loginAs, componentName, true))
+  await submitReviewApproveTemplate(page, loginAs, componentDid, componentName)
+
+  const contractTemplateDid = await test.step('create contract template from approved component', () =>
+    authorContractTemplateFrom(page, loginAs, contractTemplateName, componentName))
+  await submitReviewApproveTemplate(page, loginAs, contractTemplateDid, contractTemplateName)
+  await test.step('register approved contract template', () =>
+    registerContractTemplate(page, loginAs, contractTemplateDid, contractTemplateName))
+
+  const contractDid = await test.step('create contract from registered template', () =>
+    deriveLocalContract(page, loginAs, contractTemplateName))
+
+  await test.step('fill the required Payment Amount and submit into negotiation', async () => {
+    await gotoAs(page, loginAs, 'Contract Creator', `/ui/contracts/edit/${contractDid}`)
+    await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeVisible()
+    await page
+      .getByRole('tab', { name: /content/i })
+      .or(page.getByText('Contract Content', { exact: true }))
+      .first()
+      .click()
+    const amount = page
+      .getByRole('spinbutton', { name: /amount/i })
+      .or(page.getByRole('textbox', { name: /amount/i }))
+      .first()
+    await expect(amount).toBeVisible({ timeout: 15_000 })
+    await amount.fill('250')
+    await amount.blur()
+    const submit = page.getByRole('button', { name: 'Submit', exact: true })
+    await expect(submit).toBeEnabled({ timeout: 15_000 })
+    const submitted = page.waitForResponse(
+      (r) => r.url().includes('/contract/submit') && r.request().method() === 'POST',
+    )
+    await submit.click()
+    const resp = await submitted
+    expect(resp.ok(), `contract submit ${resp.status()}: ${await resp.text()}`).toBeTruthy()
+  })
+
+  await test.step('accept negotiation', async () => {
+    await gotoAs(page, loginAs, 'Contract Creator', `/ui/contracts/negotiate/${contractDid}`)
+    const showBtn = page.getByRole('button', { name: 'Show' }).first()
+    if (await showBtn.isVisible().catch(() => false)) {
+      await showBtn.click()
+      const responded = page.waitForResponse(
+        (r) => r.url().includes('/contract/respond') && r.request().method() === 'POST' && r.ok(),
+      )
+      await page.getByRole('button', { name: 'Accept', exact: true }).click()
+      await confirmModal(page, 'Confirm')
+      await responded
+      await gotoAs(page, loginAs, 'Contract Creator', `/ui/contracts/negotiate/${contractDid}`)
+    }
+    const submit = page.getByRole('button', { name: 'Submit', exact: true })
+    await expect(submit).toBeEnabled({ timeout: 30_000 })
+    const accepted = page.waitForResponse(
+      (r) => r.url().includes('/contract/submit') && r.request().method() === 'POST' && r.ok(),
+    )
+    await submit.click()
+    await accepted
+  })
+
+  await test.step('review contract, leaving one OPEN approval task', async () => {
+    await gotoAs(page, loginAs, 'Contract Reviewer', `/ui/contracts/review/${contractDid}`)
+    const forwarded = page.waitForResponse(
+      (r) => r.url().includes('/contract/submit') && r.request().method() === 'POST' && r.ok(),
+    )
+    await page.getByRole('button', { name: 'Approve', exact: true }).click()
+    await confirmModal(page, 'Submit')
+    await forwarded
+  })
+
+  return contractDid
+}
+
+/**
  * Signs an APPROVED contract through the Secure Contract Viewer, as a real
  * signer would (ADR-12): open the contract from the signing list, verify it,
  * run the wallet PID ceremony, download the to-be-signed PDF, sign it

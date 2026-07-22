@@ -535,7 +535,45 @@ func (s *processAuditAndCompliancesrvc) Monitor(ctx context.Context, p *processa
 
 func (s *processAuditAndCompliancesrvc) IncidentReport(ctx context.Context, p *processauditandcompliance.IncidentReportPayload) (res any, err error) {
 	log.Printf(ctx, "processAuditAndCompliance.incident_report")
-	return
+
+	if p == nil || len(p.Findings) == 0 {
+		return map[string]any{"status": "accepted"}, nil
+	}
+
+	did := ""
+	if p.ContractDid != nil {
+		did = strings.TrimSpace(*p.ContractDid)
+	}
+	if did == "" && p.TemplateDid != nil {
+		did = strings.TrimSpace(*p.TemplateDid)
+	}
+	if did == "" {
+		return nil, processauditandcompliance.MakeBadRequest(fmt.Errorf("incident report findings must be linked to a contract_did or template_did"))
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	findings := make([]qry2.IncidentFinding, 0, len(p.Findings))
+	for _, finding := range p.Findings {
+		if finding == nil {
+			continue
+		}
+		findings = append(findings, qry2.IncidentFinding{RiskType: finding.RiskType, Detail: finding.Detail})
+	}
+
+	handler := qry2.IncidentReporter{DB: s.DB}
+	if err := handler.Handle(ctx, qry2.IncidentReportQry{
+		DID:        did,
+		Findings:   findings,
+		ReportedBy: middleware.GetParticipantID(ctx),
+		HolderDID:  middleware.GetHolderDID(ctx),
+		UserRoles:  middleware.GetUserRoles(ctx),
+	}); err != nil {
+		return nil, processauditandcompliance.MakeInternalError(err)
+	}
+
+	return map[string]any{"status": "recorded", "did": did, "findings": len(findings)}, nil
 }
 
 // CheckpointHead serves the newest audit-trail checkpoint head. Everything in

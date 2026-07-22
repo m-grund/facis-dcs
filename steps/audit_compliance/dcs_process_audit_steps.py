@@ -58,6 +58,30 @@ def step_when_compliance_officer_submits_incident(context):
     context.requests_response = post_json(context, pac_report_url(context), {}, headers=headers)
 
 
+@when(
+    'the Compliance Officer submits a non-compliance incident report linking contract '
+    '"{name}" with risk type "{risk_type}" and detail "{detail}"'
+)
+def step_when_compliance_officer_submits_incident_for_contract(context, name, risk_type, detail):
+    """POST /pac/report with a typed, contract-linked finding (DCS-IR-PACM-04,
+    non-compliance-investigation-ui AC5). The Goa design for incident_report
+    currently only declares a Token payload attribute — contract_did/
+    template_did/findings do not exist there yet, so today these extra JSON
+    fields are silently dropped by the generated decoder and nothing is
+    persisted (the handler is a no-op, see
+    backend/internal/service/process_audit_and_compliance.go IncidentReport).
+    This is the contract the implementer builds against: typed fields
+    contract_did (or template_did) plus a findings list of {risk_type, detail}.
+    """
+    did, _ = ContractService._contract_data(context, name)
+    headers = AuthService.get_headers_for_roles(["Compliance Officer"])
+    payload = {
+        "contract_did": did,
+        "findings": [{"risk_type": risk_type, "detail": detail}],
+    }
+    context.requests_response = post_json(context, pac_report_url(context), payload, headers=headers)
+
+
 @given('contract "{name}" still has an open required approval task')
 def step_given_open_approval_task(context, name):
     """Asserts the precondition the monitor sweep is supposed to flag: the
@@ -131,6 +155,51 @@ def step_then_flagged_risk_audited(context, name):
     raise AssertionError(
         f"Expected a PAC_COMPLIANCE_RISK audit event for contract '{name}' (did={did}) "
         f"in the PROCESS_AUDIT_AND_COMPLIANCE trail, got entries: {found}"
+    )
+
+
+@then('the incident report is recorded as a PAC audit event for contract "{name}" with risk type "{risk_type}"')
+def step_then_incident_report_recorded(context, name, risk_type):
+    """Asserts the typed link the incident report submitted (contract_did +
+    findings[].risk_type) was actually accepted and persisted — not just
+    acknowledged with a 200 no-op. Expected event_type contract for the
+    implementer: PAC_INCIDENT_REPORT, anchored per-contract (component
+    PROCESS_AUDIT_AND_COMPLIANCE, GetDID() == the linked contract_did) —
+    mirrors the existing PAC_COMPLIANCE_RISK anchoring pattern
+    (querymonitor.go) so a PAC-scope audit read can prove the finding was
+    recorded, not just accepted.
+    """
+    import time  # noqa: PLC0415
+
+    assert context.requests_response.status_code == 200, (
+        f"Expected 200 from /pac/report, got {context.requests_response.status_code}: "
+        f"{context.requests_response.text}"
+    )
+    did, _ = ContractService._contract_data(context, name)
+    headers = AuthService.get_headers_for_roles(["Auditor"])
+    found = []
+    deadline = time.monotonic() + 90
+    while time.monotonic() < deadline:
+        resp = post_json(
+            context,
+            pac_audit_url(context),
+            {"scope": "PROCESS_AUDIT_AND_COMPLIANCE", "justification": "BDD incident-report audit re-trigger"},
+            headers=headers,
+        )
+        assert resp.status_code == 200, f"PAC-scope audit failed: {resp.status_code} {resp.text}"
+        body = resp.json()
+        found = [
+            (entry.get("event_type"), entry.get("did"), (entry.get("event_data") or {}).get("risk_type"))
+            for scope_result in body
+            for entry in (scope_result.get("audit_trail") or [])
+            if isinstance(entry, dict)
+        ]
+        if ("PAC_INCIDENT_REPORT", did, risk_type) in found:
+            return
+        time.sleep(2)
+    raise AssertionError(
+        f"Expected a PAC_INCIDENT_REPORT audit event for contract '{name}' (did={did}) with "
+        f"risk_type '{risk_type}' in the PROCESS_AUDIT_AND_COMPLIANCE trail, got entries: {found}"
     )
 
 

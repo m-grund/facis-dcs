@@ -56,6 +56,15 @@ var PACComplianceRisk = Type("PACComplianceRisk", func() {
 	Required("did", "risk_type", "detail", "detected_at")
 })
 
+var PACIncidentFinding = Type("PACIncidentFinding", func() {
+	Description("A single non-compliance finding submitted as part of an incident report (DCS-IR-PACM-04)")
+
+	Attribute("risk_type", String, "Machine-readable risk class (e.g. MISSING_APPROVAL)")
+	Attribute("detail", String, "Human-readable description of the finding")
+
+	Required("risk_type", "detail")
+})
+
 var PACMonitorResponse = Type("PACMonitorResponse", func() {
 	Description("Continuous-monitoring snapshot of policy adherence (DCS-IR-PACM-03)")
 
@@ -189,10 +198,19 @@ var _ = Service("ProcessAuditAndCompliance", func() {
 		})
 		Payload(func() {
 			Token("token", String, "JWT token")
+			Attribute("contract_did", String, "Contract DID the findings are linked to")
+			Attribute("template_did", String, "Template DID the findings are linked to")
+			Attribute("findings", ArrayOf(PACIncidentFinding), "Non-compliance findings raised by this report")
 		})
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
 		HTTP(func() {
 			POST("/pac/report")
 			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
 		})
 		Result(Any)
 	})
