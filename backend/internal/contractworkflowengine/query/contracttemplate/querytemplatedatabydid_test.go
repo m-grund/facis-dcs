@@ -30,11 +30,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 					"@type": "dcs:Clause",
 					"dcs:content": map[string]any{"@list": []any{
 						"Availability ",
-						map[string]any{
-							"@type":       "dcs:Placeholder",
-							"dcs:token":   "{{cond-1.percent}}",
-							"dcs:bindsTo": map[string]any{"@id": "did:web:facis.example:template:1#field-cond-1-percent"},
-						},
+						map[string]any{"@id": "did:web:facis.example:template:1#field-cond-1-percent"},
 					}},
 				},
 			}},
@@ -48,20 +44,12 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 		},
 		"dcs:contractData": []any{
 			map[string]any{
-				"@id":               "did:web:facis.example:template:1#requirement-cond-1",
-				"@type":             "dcs:DataRequirement",
-				"dcs:conditionId":   "cond-1",
-				"dcs:name":          "Availability",
-				"dcs:schemaVersion": "v1",
-				"dcs:fields": []any{
-					map[string]any{
-						"@id":               "did:web:facis.example:template:1#field-cond-1-percent",
-						"@type":             "dcs:RequirementField",
-						"dcs:parameterName": "percent",
-						"dcs:domainField":   map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-service-sla-availability"},
-						"dcs:required":      true,
-					},
-				},
+				"@id":          "did:web:facis.example:template:1#field-cond-1-percent",
+				"@type":        "dcs:Placeholder",
+				"dcs:label":    "Availability",
+				"dcs:datatype": "xsd:decimal",
+				"dcs:shape":    map[string]any{"@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-service-sla-availability"},
+				"dcs:required": true,
 			},
 		},
 		"dcs:policies": map[string]any{
@@ -124,7 +112,7 @@ func TestConvertTemplateDataToContractDataKeepsCanonicalContent(t *testing.T) {
 	require.Equal(
 		t,
 		"did:web:facis.example:contract:1#field-cond-1-percent",
-		placeholder["dcs:bindsTo"].(map[string]any)["@id"],
+		placeholder["@id"],
 	)
 	policySet := data["dcs:policies"].(map[string]any)
 	policy := policySet["odrl:obligation"].([]any)[0].(map[string]any)

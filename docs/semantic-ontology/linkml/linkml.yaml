@@ -59,45 +59,6 @@ classes:
       - signatoryName
       - title
 
-  DataRequirement:
-    class_uri: dcs:DataRequirement
-    slot_usage:
-      conditionId:
-        required: true
-      fields:
-        required: true
-    slots:
-      - conditionId
-      - fields
-      - name
-      - schemaVersion
-
-  RequirementField:
-    class_uri: dcs:RequirementField
-    close_mappings:
-      - schema:PropertyValue
-    slot_usage:
-      parameterName:
-        required: true
-    slots:
-      - domainField
-      - parameterName
-      - required
-
-  SemanticConditionValue:
-    class_uri: dcs:SemanticConditionValue
-    description: >-
-      A value submitted for a requirement field during the contract
-      workflow; dcs:forField binds it to the field an ODRL constraint
-      references as its left operand.
-    slot_usage:
-      forField:
-        required: true
-    slots:
-      - forField
-      - parameterValue
-      - blockId
-
   DocumentStructure:
     class_uri: dcs:DocumentStructure
     slots:
@@ -127,8 +88,10 @@ classes:
   Placeholder:
     class_uri: dcs:Placeholder
     slots:
-      - bindsTo
-      - token
+      - label
+      - datatype
+      - shape
+      - required
 
   TemplateMetadata:
     class_uri: dcs:TemplateMetadata
@@ -186,7 +149,7 @@ slots:
 
   contractData:
     slot_uri: dcs:contractData
-    range: DataRequirement
+    range: Placeholder
     multivalued: true
 
   documentStructure:
@@ -214,17 +177,6 @@ slots:
     range: string
     description: Machine-readable identifier for the signatory role; used as the AcroForm /T field name.
 
-  conditionId:
-    slot_uri: dcs:conditionId
-    range: string
-
-  fields:
-    slot_uri: dcs:fields
-    range: RequirementField
-    multivalued: true
-    close_mappings:
-      - schema:property
-
   name:
     slot_uri: dcs:name
     range: string
@@ -248,36 +200,10 @@ slots:
       - range: Section
       - range: TextBlock
 
-  domainField:
-    slot_uri: dcs:domainField
-    range: uriorcurie
-    close_mappings:
-      - schema:propertyID
-
-  parameterName:
-    slot_uri: dcs:parameterName
-    range: string
-
-  forField:
-    slot_uri: dcs:forField
-    range: RequirementField
-    description: The requirement field a submitted value is for.
-
-  parameterValue:
-    slot_uri: dcs:parameterValue
-    range: string
-    description: The submitted value.
-
   blockId:
     slot_uri: dcs:blockId
     range: string
     description: The document block the value was captured in.
-
-  semanticConditionValues:
-    slot_uri: dcs:semanticConditionValues
-    range: SemanticConditionValue
-    multivalued: true
-    description: The values submitted for the document's requirement fields.
 
   required:
     slot_uri: dcs:required
@@ -301,9 +227,22 @@ slots:
     close_mappings:
       - schema:text
 
-  token:
-    slot_uri: dcs:token
+  label:
+    slot_uri: dcs:label
     range: string
+    description: The human-readable label for the placeholder field.
+    close_mappings:
+      - schema:name
+
+  datatype:
+    slot_uri: dcs:datatype
+    range: string
+    description: The literal datatype of the placeholder value, e.g. "xsd:decimal"; carried inline from the shape's sh:datatype.
+
+  shape:
+    slot_uri: dcs:shape
+    range: uriorcurie
+    description: The SHACL shape this placeholder's value is typed by.
 
   templateType:
     slot_uri: dcs:templateType
@@ -365,7 +304,7 @@ slots:
     slot_uri: dcs:layout
     range: LayoutNode
     multivalued: true
-    list_elements_ordered: false
+    list_elements_ordered: true
 
   children:
     slot_uri: dcs:children
@@ -390,10 +329,6 @@ slots:
     any_of:
       - range: string
       - range: Placeholder
-
-  bindsTo:
-    slot_uri: dcs:bindsTo
-    range: RequirementField
 
   wasDerivedFrom:
     abstract: true

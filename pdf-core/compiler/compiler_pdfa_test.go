@@ -14,7 +14,7 @@ import (
 func minimalDoc() documentModel {
 	return documentModel{
 		Title:         "pdfa-compliance-test",
-		CanonicalJSON: []byte(`{}`),
+		EmbeddedPayload: []byte(`{}`),
 		PayloadHash:   strings.Repeat("0", 64),
 		FileID:        strings.Repeat("0", 64),
 		NamespaceMap:  map[string]string{},
@@ -155,7 +155,7 @@ func TestGlossaryURIArrowIsASCII(t *testing.T) {
 			TermURI:    "http://www.w3.org/ns/prov#Entity",
 		}},
 		NamespaceMap:  map[string]string{"prov": "http://www.w3.org/ns/prov#"},
-		CanonicalJSON: []byte(`{}`),
+		EmbeddedPayload: []byte(`{}`),
 		PayloadHash:   strings.Repeat("0", 64),
 		FileID:        strings.Repeat("0", 64),
 	}

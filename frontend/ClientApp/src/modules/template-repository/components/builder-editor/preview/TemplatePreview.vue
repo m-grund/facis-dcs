@@ -1,27 +1,14 @@
 <script setup lang="ts">
-import { isDcsMergedApprovedTemplate } from '@template-repository/store/dcsDraftStore'
-import {
-  getBlocksFromTemplateData,
-  getLayoutFromTemplateData,
-  getSemanticConditionsFromTemplateData,
-} from '@template-repository/store/dcsDraftStore'
-import {
-  getOwnerBlockIdFromMergedBlockId,
-  isMergedBlockId,
-  isSameTemplateDataRef,
-} from '@template-repository/utils/template-data-ref'
 import { computed } from 'vue'
 import ConditionalWrapper from '@/core/components/ConditionalWrapper.vue'
 import PreviewClauseBlock from './PreviewClauseBlock.vue'
 import PreviewSectionBlock from './PreviewSectionBlock.vue'
 import PreviewTextBlock from './PreviewTextBlock.vue'
 import type { SemanticConditionValue } from '@/models/contract-data'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { DcsBlock, DcsContentSegment, DcsLayoutNode } from '@/models/dcs-jsonld'
 import type { VerificationResult } from '@/modules/contract-workflow-engine/composables/useSemanticValueVerification'
 import type { SemanticConditionValueSetter } from '@/modules/contract-workflow-engine/models/contract-content-values-store'
 import type { SemanticCondition } from '@template-repository/models/contract-template'
-import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 const props = withDefaults(
   defineProps<{
@@ -30,9 +17,8 @@ const props = withDefaults(
     /** Section nesting level for headings (1 = top-level) */
     sectionLevel?: number
     layout: DcsLayoutNode[]
-    blocks: (DcsBlock | MergedApprovedTemplateBlock)[]
+    blocks: DcsBlock[]
     semanticConditions: SemanticCondition[]
-    subTemplateSnapshots?: SubTemplateSnapshot[]
     semanticConditionValues?: SemanticConditionValue[]
     verificationResult?: VerificationResult | null
     setSemanticConditionValue?: SemanticConditionValueSetter
@@ -47,7 +33,7 @@ const rootChildren = computed(() => {
   return root ? root['dcs:children']['@list'].map((r) => r['@id']) : []
 })
 
-const block = computed<DcsBlock | MergedApprovedTemplateBlock | undefined>(() => {
+const block = computed<DcsBlock | undefined>(() => {
   if (!props.blockId) return undefined
   return props.blocks.find((b) => b['@id'] === props.blockId)
 })
@@ -81,56 +67,9 @@ const clauseContent = computed((): DcsContentSegment[] => {
   return content['@list']
 })
 
-const clauseSemanticConditions = computed(() => {
-  if (!isMergedBlockId(props.blockId ?? '')) return props.semanticConditions
-  return subTemplateSemanticConditions.value
-})
-
-const subTemplate = computed((): SubTemplateSnapshot | undefined => {
-  const b = block.value
-  if (!b) return
-  if (!props.subTemplateSnapshots?.length) return undefined
-  if (isDcsMergedApprovedTemplate(b)) {
-    return props.subTemplateSnapshots.find((snapshot) =>
-      isSameTemplateDataRef(
-        { templateId: snapshot.did, version: snapshot.version, document_number: snapshot.document_number },
-        { templateId: b['dcs:templateDid'], version: b['dcs:version'], document_number: b['dcs:documentNumber'] },
-      ),
-    )
-  }
-  if (isMergedBlockId(b['@id'])) {
-    const mergedOwnerBlockId = getOwnerBlockIdFromMergedBlockId(b['@id'])
-    const mergedBlock = mergedOwnerBlockId ? props.blocks.find((c) => c['@id'] === mergedOwnerBlockId) : undefined
-    if (mergedBlock && isDcsMergedApprovedTemplate(mergedBlock)) {
-      return props.subTemplateSnapshots.find((snapshot) =>
-        isSameTemplateDataRef(
-          { templateId: snapshot.did, version: snapshot.version, document_number: snapshot.document_number },
-          {
-            templateId: mergedBlock['dcs:templateDid'],
-            version: mergedBlock['dcs:version'],
-            document_number: mergedBlock['dcs:documentNumber'],
-          },
-        ),
-      )
-    }
-  }
-  if (b['@type'] !== 'dcs:ApprovedTemplate') return undefined
-  return props.subTemplateSnapshots.find((snapshot) =>
-    isSameTemplateDataRef(
-      { templateId: snapshot.did, version: snapshot.version, document_number: snapshot.document_number },
-      { templateId: b['dcs:templateDid'], version: b['dcs:version'], document_number: b['dcs:documentNumber'] },
-    ),
-  )
-})
-
-const subTemplateBlocks = computed(() => getBlocksFromTemplateData(subTemplate.value?.template_data))
-const subTemplateLayout = computed(() => getLayoutFromTemplateData(subTemplate.value?.template_data))
-const subTemplateSemanticConditions = computed(() =>
-  getSemanticConditionsFromTemplateData(subTemplate.value?.template_data),
-)
-const hasApprovedTemplateChildren = computed(
-  () => block.value?.['@type'] === 'dcs:ApprovedTemplate' && childrenIds.value.length > 0,
-)
+// Under ADR-15 every placeholder is a self-contained top-level node wired by
+// @id, so a clause always resolves against the top-level conditions.
+const clauseSemanticConditions = computed(() => props.semanticConditions)
 </script>
 
 <template>
@@ -143,7 +82,6 @@ const hasApprovedTemplateChildren = computed(
         :layout="layout"
         :blocks="blocks"
         :semantic-conditions="semanticConditions"
-        :sub-template-snapshots="subTemplateSnapshots"
         :semantic-condition-values="semanticConditionValues"
         :verification-result="verificationResult"
         :set-semantic-condition-value="setSemanticConditionValue"
@@ -167,7 +105,6 @@ const hasApprovedTemplateChildren = computed(
             :layout="layout"
             :blocks="blocks"
             :semantic-conditions="semanticConditions"
-            :sub-template-snapshots="subTemplateSnapshots"
             :semantic-condition-values="semanticConditionValues"
             :verification-result="verificationResult"
             :set-semantic-condition-value="setSemanticConditionValue"
@@ -187,52 +124,5 @@ const hasApprovedTemplateChildren = computed(
       :verification-result="verificationResult"
       :set-semantic-condition-value="setSemanticConditionValue"
     />
-    <!-- Approved template block -->
-    <ConditionalWrapper
-      v-else-if="block && block['@type'] === 'dcs:ApprovedTemplate'"
-      :enabled="hasApprovedTemplateChildren"
-    >
-      <TemplatePreview
-        v-if="subTemplate?.template_data"
-        :layout="subTemplateLayout"
-        :blocks="subTemplateBlocks"
-        :semantic-conditions="subTemplateSemanticConditions"
-        :sub-template-snapshots="subTemplateSnapshots"
-        :sub-block-id="block['@id']"
-        :section-level="sectionLevel"
-        :semantic-condition-values="semanticConditionValues"
-        :verification-result="verificationResult"
-        :set-semantic-condition-value="setSemanticConditionValue"
-      />
-      <template v-for="childId in childrenIds" :key="childId">
-        <TemplatePreview
-          :block-id="childId"
-          :section-level="sectionLevel + 1"
-          :layout="layout"
-          :blocks="blocks"
-          :semantic-conditions="semanticConditions"
-          :sub-template-snapshots="subTemplateSnapshots"
-          :semantic-condition-values="semanticConditionValues"
-          :verification-result="verificationResult"
-          :set-semantic-condition-value="setSemanticConditionValue"
-        />
-      </template>
-    </ConditionalWrapper>
-    <!-- Merged approved template block (preprocessed contract view) — content already merged into main layout/blocks -->
-    <template v-else-if="block && isDcsMergedApprovedTemplate(block)">
-      <template v-for="childId in childrenIds" :key="childId">
-        <TemplatePreview
-          :block-id="childId"
-          :section-level="sectionLevel"
-          :layout="layout"
-          :blocks="blocks"
-          :semantic-conditions="semanticConditions"
-          :sub-template-snapshots="subTemplateSnapshots"
-          :semantic-condition-values="semanticConditionValues"
-          :verification-result="verificationResult"
-          :set-semantic-condition-value="setSemanticConditionValue"
-        />
-      </template>
-    </template>
   </template>
 </template>

@@ -40,6 +40,7 @@ func newServer() http.Handler {
 	mux.HandleFunc("GET /version", svc.version)
 	mux.HandleFunc("POST /render", svc.render)
 	mux.HandleFunc("POST /verify", svc.verify)
+	mux.HandleFunc("POST /verify/content", svc.verifyContent)
 	mux.HandleFunc("POST /render/amendment", svc.renderAmendment)
 	mux.HandleFunc("POST /c2pa/embed", svc.embedC2PASignatures)
 	mux.HandleFunc("POST /evidence/embed", svc.embedEvidence)

@@ -230,20 +230,21 @@ func TestAuditContractContentEvaluatesProfileStatements(t *testing.T) {
 	require.Contains(t, policyFindingRuleIDs(findings), "company-party-role-vocabulary")
 }
 
-func TestEvaluateKPIViolationBindsMetricByParameterName(t *testing.T) {
+func TestEvaluateKPIViolationBindsMetricByNodeIRI(t *testing.T) {
 	contract := canonicalAuditContract()
+	countryFieldID := "urn:uuid:field-company-country"
 
-	violated, err := EvaluateKPIViolation(context.Background(), contract, "country", "USA")
+	violated, err := EvaluateKPIViolation(context.Background(), contract, countryFieldID, "USA")
 	require.NoError(t, err)
 	require.True(t, violated, "USA is outside the isAnyOf set the country field's Duty declares")
 
-	violated, err = EvaluateKPIViolation(context.Background(), contract, "country", "DEU")
+	violated, err = EvaluateKPIViolation(context.Background(), contract, countryFieldID, "DEU")
 	require.NoError(t, err)
 	require.False(t, violated)
 
-	violated, err = EvaluateKPIViolation(context.Background(), contract, "unbound-metric", "1")
+	violated, err = EvaluateKPIViolation(context.Background(), contract, "urn:uuid:unbound-node", "1")
 	require.NoError(t, err)
-	require.False(t, violated, "a metric no RequirementField declares binds to nothing")
+	require.False(t, violated, "a metric that is not a contract-data node @id binds to nothing")
 }
 
 func TestODRLRulesRequireProseBacking(t *testing.T) {

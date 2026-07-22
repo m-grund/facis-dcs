@@ -16,6 +16,9 @@ func VerifyCredential(token string, disclosures []string, cfg TrustConfig) (jwt.
 	}
 
 	parsed, err := jwt.NewParser(
+		// A credential with no exp never expires. Requiring the claim is what
+		// keeps a presentation bounded in time, so an issuer that omits it is a
+		// bug at the issuer, not a rule to relax here.
 		jwt.WithExpirationRequired(),
 		jwt.WithIssuedAt(),
 		jwt.WithValidMethods([]string{"ES256"}),
@@ -68,6 +71,9 @@ func VerifyCredentialForPID(token string, disclosures []string, cfg TrustConfig)
 	}
 
 	parsed, err := jwt.NewParser(
+		// A credential with no exp never expires. Requiring the claim is what
+		// keeps a presentation bounded in time, so an issuer that omits it is a
+		// bug at the issuer, not a rule to relax here.
 		jwt.WithExpirationRequired(),
 		jwt.WithIssuedAt(),
 		jwt.WithValidMethods([]string{"ES256"}),

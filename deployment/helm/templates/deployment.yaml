@@ -79,11 +79,17 @@ spec:
           env:
             - name: DCS_SYSTEM_TOKEN
               value: {{ .Values.systemToken | default "dcs-dev-system-token" | quote }}
-            {{- if .Values.dss }}{{- if .Values.dss.enabled }}
+            {{- if .Values.dss }}{{- if or .Values.dss.enabled .Values.dss.url }}
             # EU DSS for signature VALIDATION (DCS-FR-SM-18) and the
             # wallet-driven /signature/submit acceptance path (ADR-12). The DCS
             # validates a signature the SIGNATORY produced with their wallet/QTSP
             # or a desktop PAdES signer; it holds no contract-signing key.
+            #
+            # dss.url points at the DSS to VALIDATE against; dss.enabled deploys
+            # one. They are independent: an instance may validate against an
+            # existing DSS (its own deployment, or a shared one) without running
+            # a second copy. Without a DSS_URL the instance has no validator and
+            # refuses every externally-produced signature.
             - name: DSS_URL
               value: {{ .Values.dss.url | default (printf "http://%s-dss:8080" .Release.Name) | quote }}
             {{- end }}{{- end }}
@@ -103,6 +109,14 @@ spec:
               value: {{ index $hydraClient.post_logout_redirect_uris 0 | quote }}
             - name: HYDRA_ADMIN_URL
               value: {{ include "digital-contracting-service.hydraAdminURL" . | quote }}
+            {{- end }}
+            {{- if .Values.systemClients }}
+            # SRS §2.4 Table 5 System Users: machine callers that authenticate
+            # with the OAuth2 client credentials grant. Their roles are fixed
+            # here, not carried in the token — a client-credentials token has no
+            # OID4VP ceremony behind it and therefore no verifiable role claims.
+            - name: DCS_SYSTEM_CLIENTS
+              value: {{ .Values.systemClients | toJson | quote }}
             {{- end }}
             {{- if include "digital-contracting-service.fcKeycloakRealmURL" . }}
             - name: FC_KEYCLOAK_REALM_URL
@@ -348,6 +362,11 @@ spec:
         - name: identity
           secret:
             secretName: {{ include "digital-contracting-service.identitySecretName" . | quote }}
+            # Published by the hsm-provision post-install hook AFTER the pod is
+            # scheduled. optional lets the pod schedule (the wait-for-hsm-token
+            # initContainer already gates the app until provisioning completes);
+            # required would FailedMount → BackOff before init even runs.
+            optional: true
       {{- end }}
       {{- if .Values.signing.tsaTrustCertSecret }}
         - name: tsa-trust

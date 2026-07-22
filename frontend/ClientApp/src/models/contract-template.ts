@@ -23,12 +23,3 @@ export interface ContractTemplate {
 export type PartialContractTemplate = ContractTemplate
 
 export type ContractTemplateData = DcsTemplateData
-
-export interface SubTemplateSnapshot {
-  did: string
-  document_number?: string
-  version: number
-  name?: string
-  description?: string
-  template_data?: DcsTemplateData
-}

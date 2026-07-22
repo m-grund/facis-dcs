@@ -1,9 +1,11 @@
 Feature: dcs:Placeholder rendering in human-readable PDF
 
-  A dcs:Placeholder in a clause content list must be rendered as five underscores
-  in the compiled PDF so that signatories can see where a fill-in value belongs.
+  A clause references a top-level dcs:Placeholder by a bare {"@id"} node (ADR-15).
+  The DCS copies the placeholder's dcs:label and, once filled, its dcs:value onto
+  that in-content reference. The compiler renders the filled value, or five
+  underscores where a value has not yet been supplied — never the raw @id.
 
-  Scenario: Placeholder in clause content renders as five underscores
+  Scenario: An unfilled placeholder reference renders as five underscores
     Given the compiler service is running
     And a semantic payload:
       """
@@ -22,18 +24,11 @@ Feature: dcs:Placeholder rendering in human-readable PDF
         },
         "contractData": [
           {
-            "@id": "urn:doc:placeholder-test#req-party",
-            "@type": "DataRequirement",
-            "conditionId": "party",
-            "name": "Party Details",
-            "fields": [
-              {
-                "@id": "urn:doc:placeholder-test#field-party-name",
-                "@type": "RequirementField",
-                "parameterName": "party.name",
-                "required": true
-              }
-            ]
+            "@id": "urn:doc:placeholder-test#field-party-name",
+            "@type": "Placeholder",
+            "label": "Party Name",
+            "datatype": "xsd:string",
+            "required": true
           }
         ],
         "documentStructure": {
@@ -62,8 +57,8 @@ Feature: dcs:Placeholder rendering in human-readable PDF
               "content": [
                 "This agreement is entered into by ",
                 {
-                  "@type": "dcs:Placeholder",
-                  "dcs:bindsTo": {"@id": "urn:doc:placeholder-test#field-party-name"}
+                  "@id": "urn:doc:placeholder-test#field-party-name",
+                  "label": "Party Name"
                 },
                 "."
               ]
@@ -77,3 +72,73 @@ Feature: dcs:Placeholder rendering in human-readable PDF
     And the PDF contains these markers:
       | marker  |
       | _____   |
+
+  Scenario: A filled placeholder reference renders its value, not its @id
+    Given the compiler service is running
+    And a semantic payload:
+      """
+      {
+        "@context": {
+          "@vocab": "https://w3id.org/facis/dcs/ontology/v1#",
+          "dcs": "https://w3id.org/facis/dcs/ontology/v1#",
+          "xsd": "http://www.w3.org/2001/XMLSchema#"
+        },
+        "@id": "urn:doc:placeholder-filled",
+        "@type": "ContractTemplate",
+        "documentTitle": "Filled Placeholder Test",
+        "metadata": {
+          "@type": "TemplateMetadata",
+          "title": "Filled Placeholder Test"
+        },
+        "contractData": [
+          {
+            "@id": "urn:doc:placeholder-filled#field-amount",
+            "@type": "Placeholder",
+            "label": "Payment Amount",
+            "datatype": "xsd:decimal",
+            "required": true,
+            "value": 15000
+          }
+        ],
+        "documentStructure": {
+          "@type": "DocumentStructure",
+          "layout": [
+            {
+              "@type": "LayoutNode",
+              "isRoot": true,
+              "children": ["urn:doc:placeholder-filled#s1"]
+            },
+            {
+              "@type": "LayoutNode",
+              "@id": "urn:doc:placeholder-filled#s1",
+              "children": ["urn:doc:placeholder-filled#c1"]
+            }
+          ],
+          "blocks": [
+            {
+              "@type": "Section",
+              "@id": "urn:doc:placeholder-filled#s1",
+              "title": "1. Payment"
+            },
+            {
+              "@type": "Clause",
+              "@id": "urn:doc:placeholder-filled#c1",
+              "content": [
+                "The amount payable is ",
+                {
+                  "@id": "urn:doc:placeholder-filled#field-amount",
+                  "label": "Payment Amount",
+                  "value": 15000
+                },
+                " EUR."
+              ]
+            }
+          ]
+        }
+      }
+      """
+    When I compile the payload through /download
+    Then the response status is 200
+    And the PDF contains these markers:
+      | marker |
+      | 15000  |

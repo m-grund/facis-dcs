@@ -93,7 +93,15 @@ var Transitions = map[ContractState]map[Event][]ContractState{
 		// command/submit.go's Offered branch). Without this edge the
 		// DRAFT -> OFFERED -> NEGOTIATION -> SUBMITTED -> ... sequence is
 		// unreachable once a contract has been offered.
-		EventSubmit:    {Negotiation},
+		EventSubmit: {Negotiation},
+		// Offered -> Negotiation via EventNegotiate: the COUNTERPARTY (Responder)
+		// opens the negotiation by proposing a redline on its received offer (SRS §4
+		// Contract Negotiation & Review — the Responder may accept, negotiate, or
+		// refuse; DCS-IR-CWE-03 exchange responses/redlines; DCS-FR-CWE-18). Its
+		// authority comes from being the designated counterparty, not from local
+		// negotiator RBAC (see command/negotiate.go's inbound branch) — the
+		// Creator-only EventSubmit is not the counterparty's path.
+		EventNegotiate: {Negotiation},
 		EventWithdraw:  {Withdrawn},
 		EventTerminate: {Terminated},
 	},

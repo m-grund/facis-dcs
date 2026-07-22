@@ -3,7 +3,7 @@ import TemplatePreview from '@template-repository/components/builder-editor/prev
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { storeToRefs } from 'pinia'
 
-const { layout, blocks, semanticConditions, subTemplateSnapshots } = storeToRefs(useDcsDraftStore())
+const { layout, blocks, semanticConditions } = storeToRefs(useDcsDraftStore())
 </script>
 
 <template>
@@ -20,7 +20,6 @@ const { layout, blocks, semanticConditions, subTemplateSnapshots } = storeToRefs
             :layout="layout"
             :blocks="blocks"
             :semantic-conditions="semanticConditions"
-            :sub-template-snapshots="subTemplateSnapshots"
           />
         </div>
       </div>

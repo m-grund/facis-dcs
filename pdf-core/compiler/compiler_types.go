@@ -59,8 +59,13 @@ type documentModel struct {
 	SignatureFields []sigFieldDef
 	Glossary        []glossaryTerm
 	NamespaceMap    map[string]string // Maps prefixes (e.g., "odrl") to URIs
-	CanonicalJSON   []byte
+	// EmbeddedPayload is the JSON-LD attachment carried into the PDF VERBATIM —
+	// the exact bytes submitted, byte-preserved. pdf-core does not re-canonicalize
+	// or otherwise transform it; it is opaque payload the renderer never reads
+	// (the visible render comes from documentStructure, parsed separately).
+	EmbeddedPayload []byte
 	PayloadHash     string
+	PayloadCID      string // CIDv1(raw,sha256) of EmbeddedPayload — the rendered backlink
 	FileID          string
 	ContractID      string    // @id from the JSON-LD root node
 	CompiledAt      time.Time // timestamp embedded in the dcs.lifecycle assertion

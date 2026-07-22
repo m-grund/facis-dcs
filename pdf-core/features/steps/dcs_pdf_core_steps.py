@@ -944,19 +944,22 @@ def step_amended_prefix(context):
 
 @then("the amended PDF embeds the new JSON-LD payload")
 def step_amended_embeds_new_payload(context):
+    # pdf-core carries the JSON-LD attachment VERBATIM: the embedded stream is the
+    # exact payload submitted to /update, byte-preserved, NOT re-canonicalized.
+    # pdf-core's determinism guarantee is over the visible render (documentStructure
+    # → page content), which is asserted separately; the attachment is opaque and
+    # carried through unchanged.
     extracted = _extract_embedded_stream_by_filespec_name(context.amended_pdf, "contract.jsonld")
+    submitted = context.amended_payload_text
+    if isinstance(extracted, bytes):
+        extracted = extracted.decode("utf-8")
+    if isinstance(submitted, bytes):
+        submitted = submitted.decode("utf-8")
 
-    # /update embeds the canonicalized payload form. Validate against the same
-    # canonical form produced by /download for this amended payload.
-    _request(context, "POST", "/render", context.amended_payload_text, "application/ld+json")
-    assert context.last_response["status"] == 200, context.last_response
-    expected_pdf = context.last_response["body"]
-    expected = _extract_embedded_stream_by_filespec_name(expected_pdf, "contract.jsonld")
-
-    assert extracted.strip() == expected.strip(), (
-        f"embedded JSON-LD does not match canonical amended payload\n"
+    assert extracted.strip() == submitted.strip(), (
+        f"embedded JSON-LD is not the verbatim submitted payload\n"
         f"got:  {extracted[:200]}\n"
-        f"want: {expected[:200]}"
+        f"want: {submitted[:200]}"
     )
 
 

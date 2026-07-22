@@ -1,5 +1,5 @@
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
-import type { DcsContentSegment, DcsPlaceholder } from '@/models/dcs-jsonld'
+import type { DcsContentSegment, DcsPlaceholderRef } from '@/models/dcs-jsonld'
 import type { SemanticCondition } from '@/modules/template-repository/models/contract-template'
 import type { ClausePlaceholderHighlight } from '@template-repository/models/template-editor-ui-store'
 import type { Ref } from 'vue'
@@ -162,7 +162,7 @@ function resolveFieldId(
 
 /**
  * Converts JSON-LD DcsContentSegment[] into UI Segment[].
- * Resolves DcsPlaceholder.dcs:bindsTo['@id'] (fieldId) via semanticConditions.
+ * Resolves each content placeholder reference (its @id) via semanticConditions.
  */
 export function parseSegmentsFromContent(content: DcsContentSegment[], conditions: SemanticCondition[]): Segment[] {
   const segments: Segment[] = []
@@ -175,16 +175,15 @@ export function parseSegmentsFromContent(content: DcsContentSegment[], condition
         if (i < parts.length - 1) segments.push({ type: 'newline' })
       }
     } else {
-      const fieldId = seg['dcs:bindsTo']['@id']
+      // A content segment is a bare {"@id"} reference to a top-level placeholder;
+      // its label/type resolve from that node (via conditions), never from the IRI.
+      const fieldId = seg['@id']
       const resolved = resolveFieldId(fieldId, conditions)
-      const label = seg['dcs:label']?.trim()
       segments.push({
         type: 'placeholder',
         conditionId: resolved?.conditionId ?? '',
         parameterName: resolved?.parameterName ?? '',
-        // The placeholder carries its own human label; prose shows that, never
-        // the machine binding's IRI.
-        displayText: label ? label : (resolved?.displayText ?? humanizeIri(fieldId)),
+        displayText: resolved?.displayText ?? humanizeIri(fieldId),
       })
     }
   }
@@ -201,7 +200,7 @@ export function contentToString(content: DcsContentSegment[], conditions: Semant
     if (typeof seg === 'string') {
       result += seg
     } else {
-      const fieldId = seg['dcs:bindsTo']['@id']
+      const fieldId = seg['@id']
       const resolved = resolveFieldId(fieldId, conditions)
       if (resolved) {
         result += `{{${resolved.conditionId}.${resolved.parameterName}}}`
@@ -237,11 +236,9 @@ export function stringToContent(text: string, conditions: SemanticCondition[]): 
     const key = m[1] ?? ''
     const resolved = paramByKey.get(key)
     if (resolved) {
-      const placeholder: DcsPlaceholder = {
-        '@type': 'dcs:Placeholder',
-        'dcs:bindsTo': { '@id': resolved.fieldId },
-        'dcs:label': resolved.label ? resolved.label : humanizeIri(resolved.fieldId),
-      }
+      // The clause references the placeholder by @id; the node itself (label,
+      // datatype, value) lives in the top-level dcs:contractData registry.
+      const placeholder: DcsPlaceholderRef = { '@id': resolved.fieldId }
       content.push(placeholder)
     } else {
       content.push(m[0])
@@ -253,13 +250,13 @@ export function stringToContent(text: string, conditions: SemanticCondition[]): 
 }
 
 /**
- * Returns the set of conditionIds referenced in a DcsContentSegment[] via dcs:bindsTo fieldIds.
+ * Returns the set of conditionIds referenced in a DcsContentSegment[] via placeholder @ids.
  */
 export function conditionIdsInContent(content: DcsContentSegment[], conditions: SemanticCondition[]): Set<string> {
   const set = new Set<string>()
   for (const seg of content) {
     if (typeof seg === 'string') continue
-    const fieldId = seg['dcs:bindsTo']['@id']
+    const fieldId = seg['@id']
     for (const cond of conditions) {
       if (cond.parameters.some((p) => p.fieldId === fieldId)) {
         set.add(cond.conditionId)
@@ -281,7 +278,7 @@ export function usedPlaceholderKeysInContent(
   const set = new Set<string>()
   for (const seg of content) {
     if (typeof seg === 'string') continue
-    const fieldId = seg['dcs:bindsTo']['@id']
+    const fieldId = seg['@id']
     for (const cond of conditions) {
       const param = cond.parameters.find((p) => p.fieldId === fieldId)
       if (param) {

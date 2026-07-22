@@ -1,31 +1,14 @@
 /**
- * Assignee IDs are raw participant identifiers (e.g. a did:web peer DID for
- * cross-instance federation, or a local user/org identifier) recorded as-is
- * on the contract's `responsible` reviewers/approvers/negotiators lists.
- * There is no JWT-`sub` binding/validation here or on the backend — any
- * syntactically accepted identifier can be assigned, including a raw peer
- * DID that never authenticates via this instance's own JWTs (see the
- * two-instance peer-trust pack, features/17_peer_trust).
+ * The counterparty is the other DCS this contract is offered to and negotiated
+ * with — a `did:web` peer (ADR-13). It is recorded as-is on the contract; there
+ * is no JWT-`sub` binding/validation here or on the backend, so any
+ * syntactically accepted `did:web` can be assigned (see the two-instance
+ * peer-trust pack, features/17_peer_trust). Reviewer/approver/negotiator roles
+ * are LOCAL RBAC roles held by this instance's own users, not part of contract
+ * creation — each DCS runs its own workflow.
  */
 
 export interface ParticipantSelection {
-  reviewers: string[]
-  approvers: string[]
-  negotiators: string[]
-}
-
-/** True if DID already exists in the same role list. */
-export function isDuplicateInList(did: string, list: string[]): boolean {
-  const normalized = did.trim()
-  return list.some((entry) => entry === normalized)
-}
-
-/** Trim list entries, merge a pending draft if non-empty, drop blanks. */
-export function mergeDraftIntoList(list: string[], draft: string): string[] {
-  const result = list.map((entry) => entry.trim()).filter(Boolean)
-  const pending = draft.trim()
-  if (pending && !isDuplicateInList(pending, result)) {
-    result.push(pending)
-  }
-  return result
+  /** Counterparty `did:web`, or empty for a purely local contract. */
+  counterparty: string
 }

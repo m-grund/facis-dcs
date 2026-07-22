@@ -1,45 +1,57 @@
-import { expect, seededFixtures, test } from './dcs-test'
+import { expect, test } from './dcs-test'
+import { buildDraftContractFixture, type DraftContractFixture } from './lifecycle-helpers'
 
 /**
  * The workspace dashboards render their backing APIs' data for the roles the
  * SRS assigns them (DCS-FR-TR-28 template overview, DCS-FR-CWE-24 contract
  * overview, DCS-FR-SM-22 signer dashboard, DCS-FR-CSA-21/-24 archive/audit
  * views) — the UI half of requirements whose API half the BDD suite covers.
+ *
+ * The template/contract lists and the human-readable render are asserted
+ * against a fixture authored by clicking a registered contract template and a
+ * DRAFT contract into existence through the real UI.
  */
 
-test('template dashboard lists registered templates', async ({ page, loginAs }) => {
-  await loginAs('Template Creator')
-  await page.goto('/ui/templates')
+test.describe('dashboards backed by an authored fixture', () => {
+  let fixture: DraftContractFixture
 
-  await expect(page.getByText('BDD Contract Source Template').first()).toBeVisible()
-})
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(600_000)
+    fixture = await buildDraftContractFixture(browser)
+  })
 
-test('contract dashboard lists contracts with their lifecycle state', async ({ page, loginAs }) => {
-  await loginAs('Contract Manager')
-  await page.goto('/ui/contracts')
+  test('template dashboard lists registered templates', async ({ page, loginAs }) => {
+    await loginAs('Template Creator')
+    await page.goto('/ui/templates')
 
-  // The seeded contract inherits its template's name at creation; the state
-  // chip is asserted among VISIBLE matches (a bare .first() can land on
-  // hidden filter options).
-  await expect(page.getByText('BDD Contract Source Template').first()).toBeVisible()
-  await expect(page.getByText('DRAFT', { exact: true }).locator('visible=true').first()).toBeVisible()
-})
+    await expect(page.getByText(fixture.contractTemplateName).first()).toBeVisible()
+  })
 
-test('contract view renders the human-readable document', async ({ page, loginAs }) => {
-  const { contractDid } = seededFixtures()
-  await loginAs('Contract Manager')
-  await page.goto(`/ui/contracts/view/${contractDid}`)
+  test('contract dashboard lists contracts with their lifecycle state', async ({ page, loginAs }) => {
+    await loginAs('Contract Manager')
+    await page.goto('/ui/contracts')
 
-  // The human-readable rendering lives under the Contract Content tab.
-  await page
-    .getByRole('tab', { name: /content/i })
-    .or(page.getByText('Contract Content', { exact: true }))
-    .first()
-    .click()
-  // The seeded ODRL fixture document's clause text, rendered from the
-  // machine-readable JSON-LD — the human-readable representation the SRS
-  // demands alongside it.
-  await expect(page.getByText('Provider coverage:').first()).toBeVisible()
+    // The derived contract inherits its template's name at creation; the state
+    // chip is asserted among VISIBLE matches (a bare .first() can land on
+    // hidden filter options).
+    await expect(page.getByText(fixture.contractTemplateName).first()).toBeVisible()
+    await expect(page.getByText('DRAFT', { exact: true }).locator('visible=true').first()).toBeVisible()
+  })
+
+  test('contract view renders the human-readable document', async ({ page, loginAs }) => {
+    await loginAs('Contract Manager')
+    await page.goto(`/ui/contracts/view/${fixture.contractDid}`)
+
+    // The human-readable rendering lives under the Contract Content tab.
+    await page
+      .getByRole('tab', { name: /content/i })
+      .or(page.getByText('Contract Content', { exact: true }))
+      .first()
+      .click()
+    // The authored clause's prose, rendered from the machine-readable JSON-LD —
+    // the human-readable representation the SRS demands alongside it.
+    await expect(page.getByText(fixture.clauseProse).first()).toBeVisible()
+  })
 })
 
 test('signing list renders for the signer role', async ({ page, loginAs }) => {

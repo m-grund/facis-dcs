@@ -124,7 +124,7 @@ Feature: Contract deployment, execution evidence, and KPIs
     And an authorized user deploys contract "KPI Violation Contract" to the configured contract target
     And get http 200:Success code
     And the contract target acknowledges the deployment of contract "KPI Violation Contract"
-    When the target reports a KPI value "coverage" = "80" for contract "KPI Violation Contract"
+    When the target reports a KPI value for the ODRL-bound field of contract "KPI Violation Contract" = "80"
     Then get http 200:Success code
-    And the contract detail for "KPI Violation Contract" shows a KPI violation flag for "coverage"
-    And the semantic KPI observations for "KPI Violation Contract" record a violated "coverage" observation
+    And the contract detail for "KPI Violation Contract" shows a KPI violation flag for its ODRL-bound field
+    And the semantic KPI observations for "KPI Violation Contract" record a violated observation for its ODRL-bound field

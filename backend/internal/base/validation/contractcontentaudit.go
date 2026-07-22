@@ -572,9 +572,9 @@ func externalODRLPolicies(raw []any) []map[string]any {
 }
 
 type odrlFieldInfo struct {
-	parameterName string
-	value         any
-	hasValue      bool
+	label    string
+	value    any
+	hasValue bool
 }
 
 func contractFinding(ruleID, title, severity, message, path, ontologyTerm string) PolicyFinding {
@@ -621,8 +621,8 @@ func normalizeObject(raw any) (map[string]any, error) {
 }
 
 // contractValue resolves a validation-profile rule target (a document
-// property path like "contract.jurisdiction", or a declared
-// dcs:parameterName) to the document's runtime value.
+// property path like "contract.jurisdiction", or a placeholder dcs:label) to
+// the document's runtime value.
 func contractValue(contract map[string]any, target string) (any, bool) {
 	if value, ok := contractSHACLAliasValue(contract, target); ok {
 		return compactJSONLDValue(value), true
@@ -661,21 +661,18 @@ func firstExistingValue(contract map[string]any, keys ...string) (any, bool) {
 	return nil, false
 }
 
-// contractDataFieldValue pairs a declared requirement field with the value
-// it carries inline (dcs:parameterValue) and the requirement that declares
-// it; the field @id is the IRI an ODRL constraint's odrl:leftOperand
-// references.
+// contractDataFieldValue pairs a declared placeholder with the value it
+// carries inline (dcs:value); the placeholder @id is the IRI an ODRL
+// constraint's odrl:leftOperand references, and dcs:label is its human name.
 type contractDataFieldValue struct {
-	requirement   map[string]any
-	conditionID   string
-	parameterName string
-	value         any
-	hasValue      bool
+	label    string
+	value    any
+	hasValue bool
 }
 
-// contractDataFieldValues walks the document's declared requirements in
-// document order (including composed sub-templates'), yielding each field
-// once with the value it carries inline.
+// contractDataFieldValues walks the document's declared placeholders in
+// document order (including composed sub-templates'), yielding each once with
+// the value it carries inline.
 func contractDataFieldValues(contract map[string]any) []contractDataFieldValue {
 	out := []contractDataFieldValue{}
 	seen := map[string]bool{}
@@ -683,40 +680,24 @@ func contractDataFieldValues(contract map[string]any) []contractDataFieldValue {
 	walk = func(current any) {
 		switch value := current.(type) {
 		case map[string]any:
-			if rawRequirements, ok := topLevelValue(documentData(value), "contractData").([]any); ok {
-				for _, rawRequirement := range rawRequirements {
-					requirement, ok := rawRequirement.(map[string]any)
+			if rawPlaceholders, ok := topLevelValue(documentData(value), "contractData").([]any); ok {
+				for _, rawPlaceholder := range rawPlaceholders {
+					placeholder, ok := rawPlaceholder.(map[string]any)
 					if !ok {
 						continue
 					}
-					conditionID, _ := requirement["dcs:conditionId"].(string)
-					if conditionID == "" {
-						conditionID, _ = requirement["conditionId"].(string)
-					}
-					rawFields, ok := asArray(firstOf(requirement, "dcs:fields", "fields"))
-					if !ok {
+					fieldID, _ := placeholder["@id"].(string)
+					if fieldID == "" || seen[fieldID] {
 						continue
 					}
-					for _, rawField := range rawFields {
-						field, ok := rawField.(map[string]any)
-						if !ok {
-							continue
-						}
-						fieldID, _ := field["@id"].(string)
-						if fieldID == "" || seen[fieldID] {
-							continue
-						}
-						seen[fieldID] = true
-						fieldValue, hasValue := inlineFieldValue(field)
-						parameterName, _ := firstOf(field, "dcs:parameterName", "parameterName").(string)
-						out = append(out, contractDataFieldValue{
-							requirement:   requirement,
-							conditionID:   conditionID,
-							parameterName: parameterName,
-							value:         fieldValue,
-							hasValue:      hasValue,
-						})
-					}
+					seen[fieldID] = true
+					fieldValue, hasValue := inlineFieldValue(placeholder)
+					label, _ := firstOf(placeholder, "dcs:label", "label").(string)
+					out = append(out, contractDataFieldValue{
+						label:    label,
+						value:    fieldValue,
+						hasValue: hasValue,
+					})
 				}
 			}
 			for _, nested := range value {
@@ -732,10 +713,10 @@ func contractDataFieldValues(contract map[string]any) []contractDataFieldValue {
 	return out
 }
 
-// inlineFieldValue reads the value a requirement field carries inline
-// (dcs:parameterValue), treating an empty value as absent.
+// inlineFieldValue reads the value a placeholder carries inline (dcs:value),
+// treating an empty value as absent.
 func inlineFieldValue(field map[string]any) (any, bool) {
-	for _, key := range []string{"dcs:parameterValue", "parameterValue"} {
+	for _, key := range []string{"dcs:value", "value"} {
 		value, ok := field[key]
 		if !ok {
 			continue
@@ -751,7 +732,7 @@ func inlineFieldValue(field map[string]any) (any, bool) {
 func semanticConditionValuesByParameterName(contract map[string]any, parameterName string) (any, bool) {
 	matches := []any{}
 	for _, field := range contractDataFieldValues(contract) {
-		if field.parameterName != parameterName || !field.hasValue {
+		if !strings.EqualFold(field.label, parameterName) || !field.hasValue {
 			continue
 		}
 		matches = append(matches, field.value)
@@ -765,46 +746,12 @@ func semanticConditionValuesByParameterName(contract map[string]any, parameterNa
 	return matches, true
 }
 
-func companyPartiesFromSemanticValues(contract map[string]any) ([]any, bool) {
-	partiesByCondition := map[string]map[string]any{}
-	order := []string{}
-	for _, field := range contractDataFieldValues(contract) {
-		if !field.hasValue || !strings.HasPrefix(field.parameterName, "company.") {
-			continue
-		}
-		if !isCompanyPartyRequirement(field.requirement) && field.parameterName != "company.role" {
-			continue
-		}
-		party := partiesByCondition[field.conditionID]
-		if party == nil {
-			party = map[string]any{
-				"@type": "dcs:CompanyParty",
-			}
-			if role := companyPartyRole(field.requirement); role != "" {
-				party["role"] = role
-			}
-			partiesByCondition[field.conditionID] = party
-			order = append(order, field.conditionID)
-		}
-		parameterValue := compactJSONLDValue(field.value)
-		switch field.parameterName {
-		case "company.legalName":
-			party["legalName"] = parameterValue
-			party["dcs:legalName"] = parameterValue
-		case "company.role":
-			if text, ok := parameterValue.(string); ok {
-				party["role"] = compactEntityRole(text)
-			}
-		}
-	}
-	if len(order) == 0 {
-		return nil, false
-	}
-	parties := make([]any, 0, len(order))
-	for _, conditionID := range order {
-		parties = append(parties, partiesByCondition[conditionID])
-	}
-	return parties, true
+// companyPartiesFromSemanticValues no longer derives parties from filled
+// placeholders: the flat, self-contained placeholder registry carries no
+// entity grouping, and a contract's parties are materialized from its ODRL
+// rules (materializeRuleParties) and stored in dcs:parties.
+func companyPartiesFromSemanticValues(_ map[string]any) ([]any, bool) {
+	return nil, false
 }
 
 func firstOf(node map[string]any, keys ...string) any {
@@ -814,22 +761,6 @@ func firstOf(node map[string]any, keys ...string) any {
 		}
 	}
 	return nil
-}
-
-func isCompanyPartyRequirement(requirement map[string]any) bool {
-	entityType, _ := requirement["dcs:entityType"].(string)
-	if entityType == "" {
-		entityType, _ = requirement["entityType"].(string)
-	}
-	return compactTerm(entityType) == "CompanyParty"
-}
-
-func companyPartyRole(requirement map[string]any) string {
-	role, _ := requirement["dcs:entityRole"].(string)
-	if role == "" {
-		role, _ = requirement["entityRole"].(string)
-	}
-	return compactEntityRole(role)
 }
 
 func contractString(contract map[string]any, target string) (string, bool) {

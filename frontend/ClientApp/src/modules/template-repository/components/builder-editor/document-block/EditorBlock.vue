@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import TemplatePreview from '@template-repository/components/builder-editor/preview/TemplatePreview.vue'
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
@@ -9,15 +8,9 @@ import {
   type Segment,
 } from '@template-repository/composables/useClauseTextChips'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
-import {
-  getBlocksFromTemplateData,
-  getLayoutFromTemplateData,
-  getSemanticConditionsFromTemplateData,
-} from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import type { SubTemplateSnapshot } from '@/models/contract-template'
 import type { EnrichedBlockItem } from '@template-repository/models/enriched-block-item'
 
 const props = defineProps<{
@@ -40,7 +33,7 @@ const emit = defineEmits<{
 const uiStore = useTemplateEditorUiStore()
 const draftStore = useDcsDraftStore()
 const { selectedBlockId } = storeToRefs(uiStore)
-const { semanticConditions, subTemplateSnapshots } = storeToRefs(draftStore)
+const { semanticConditions } = storeToRefs(draftStore)
 const { isSwapPreviewTarget } = useBlockMovementPreview()
 
 const block = computed(() => props.item.block)
@@ -72,29 +65,6 @@ const toolbarVisibilityClass = computed(() => {
   if (isSelected.value) return 'opacity-100'
   return 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
 })
-
-const approvedTemplateBlock = computed(() =>
-  block.value?.['@type'] === 'dcs:ApprovedTemplate' ? block.value : undefined,
-)
-
-const approvedTemplate = computed<SubTemplateSnapshot | undefined>(() => {
-  const b = approvedTemplateBlock.value
-  if (!b) return undefined
-  return subTemplateSnapshots.value.find((t) => t.did === b['dcs:templateDid'])
-})
-
-const approvedTemplateName = computed(() => approvedTemplate.value?.name ?? '')
-const approvedTemplateDescription = computed(() => approvedTemplate.value?.description ?? '')
-const approvedTemplateBlocks = computed(() => getBlocksFromTemplateData(approvedTemplate.value?.template_data))
-const approvedTemplateLayout = computed(() => getLayoutFromTemplateData(approvedTemplate.value?.template_data))
-const approvedTemplateSemanticConditions = computed(() =>
-  getSemanticConditionsFromTemplateData(approvedTemplate.value?.template_data),
-)
-const isApprovedPreviewOpen = ref(false)
-
-function toggleApprovedPreview() {
-  isApprovedPreviewOpen.value = !isApprovedPreviewOpen.value
-}
 
 const savedTitle = computed(() => {
   const b = block.value
@@ -186,48 +156,6 @@ function revertToSaved() {
         <p class="mt-1 text-xs leading-relaxed whitespace-pre-wrap text-base-content/70">
           <ClauseSegmentsPreview :segments="clauseSegments" :get-placeholder-label="getPlaceholderLabel" />
         </p>
-      </template>
-      <!-- Approved sub-template: read-only -->
-      <template v-else-if="block && block['@type'] === 'dcs:ApprovedTemplate'">
-        <label class="text-[10px] font-bold uppercase opacity-60">Sub template</label>
-        <div class="mt-1 flex items-start gap-2">
-          <!-- Collapse button -->
-          <button
-            type="button"
-            class="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-base-content/60 transition-colors hover:bg-base-200/70 hover:text-base-content"
-            @click.stop="toggleApprovedPreview"
-          >
-            <svg
-              class="h-3 w-3 transition-transform duration-200"
-              :class="isApprovedPreviewOpen ? 'rotate-180' : ''"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-base-content">{{ approvedTemplateName }}</p>
-            <p class="mt-0.5 line-clamp-2 text-xs text-base-content/70">{{ approvedTemplateDescription }}</p>
-          </div>
-        </div>
-        <!-- Preview sub-template -->
-        <div v-if="isApprovedPreviewOpen" class="mt-2 rounded-md bg-base-200/60 px-3 py-3">
-          <p class="mb-1.5 text-xs font-medium text-base-content/70">Preview template</p>
-          <div class="max-h-64 overflow-auto rounded-md border border-base-300 bg-base-100 px-3 py-2">
-            <TemplatePreview
-              v-if="approvedTemplate?.template_data"
-              :layout="approvedTemplateLayout"
-              :blocks="approvedTemplateBlocks"
-              :semantic-conditions="approvedTemplateSemanticConditions"
-              :sub-template-snapshots="subTemplateSnapshots"
-            />
-            <p v-else class="text-xs text-base-content/60 italic">No template data available.</p>
-          </div>
-        </div>
       </template>
     </div>
     <div

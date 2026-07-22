@@ -6,16 +6,11 @@
     "@type": "dcs:ContractTemplate",
     "dcs:contractData": [
         {
-            "@id": "did:web:localhost:template:test-required-not-boolean#req-1",
-            "@type": "dcs:DataRequirement",
-            "dcs:fields": [
-                {
-                    "@id": "did:web:localhost:template:test-required-not-boolean#field-1",
-                    "@type": "dcs:RequirementField",
-                    "dcs:parameterName": "some.field",
-                    "dcs:required": "yes"
-                }
-            ]
+            "@id": "did:web:localhost:template:test-required-not-boolean#field-1",
+            "@type": "dcs:Placeholder",
+            "dcs:label": "Some Field",
+            "dcs:datatype": "xsd:string",
+            "dcs:required": "yes"
         }
     ]
 }

@@ -1,4 +1,5 @@
-import { expect, seededFixtures, test } from './dcs-test'
+import { expect, test } from './dcs-test'
+import { buildDraftContractFixture, type DraftContractFixture } from './lifecycle-helpers'
 
 /**
  * The storytelling layer: the frontpage narrates the product's stages per
@@ -22,11 +23,19 @@ test('frontpage shows the semantic hub stage to the template manager', async ({ 
   await expect(page.getByRole('heading', { name: 'Semantic Hub' })).toBeVisible()
 })
 
-test('contract edit view narrates the draft stage of the lifecycle', async ({ page, loginAs }) => {
-  const { contractDid } = seededFixtures()
-  await loginAs('Contract Creator')
-  await page.goto(`/ui/contracts/edit/${contractDid}`)
+test.describe('lifecycle narration on an authored draft', () => {
+  let fixture: DraftContractFixture
 
-  await expect(page.getByText('This contract is a draft')).toBeVisible()
-  await expect(page.getByText('then submit for review')).toBeVisible()
+  test.beforeAll(async ({ browser }) => {
+    test.setTimeout(600_000)
+    fixture = await buildDraftContractFixture(browser)
+  })
+
+  test('contract edit view narrates the draft stage of the lifecycle', async ({ page, loginAs }) => {
+    await loginAs('Contract Creator')
+    await page.goto(`/ui/contracts/edit/${fixture.contractDid}`)
+
+    await expect(page.getByText('This contract is a draft')).toBeVisible()
+    await expect(page.getByText('then submit for review')).toBeVisible()
+  })
 })

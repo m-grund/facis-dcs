@@ -78,6 +78,11 @@ type Subscriber struct {
 	TRepo      tpldb.ContractTemplateRepo
 	PDFCore    *pdfcore.Client
 	IssuerDID  string
+	// LocalPeer is this instance's own did:web. A contract whose Origin is not
+	// this DID was received from a peer (ADR-13); its stored PDF carries the
+	// counterparty's C2PA chain, so a content change must amend that base rather
+	// than fresh-render (which would strip the counterparty's provenance).
+	LocalPeer string
 	// VCIssuer issues and signs a W3C VC for each lifecycle event (DCS-OR-C2PA-004/005).
 	VCIssuer provenance.VCIssuer
 }
@@ -185,11 +190,18 @@ func (s *Subscriber) appendC2PA(ctx context.Context, cweEvt minimalCWEEvent) err
 		return nil // already up to date — idempotent re-delivery
 	}
 
-	// A pure state transition appends to the existing PDF to preserve the C2PA
-	// chain; the genesis render or a content change (a DRAFT edit) starts from a
-	// freshly rendered PDF that reflects the current content.
+	// The signature fields are seeded at genesis (create.go), so the initial
+	// render already carries the full signable AcroForm structure and no later
+	// render needs to introduce fields. Every regeneration therefore AMENDS the
+	// stored PDF (pdfCore.Update chains the prior manifest as an ingredient) —
+	// whether the change is a state transition, a local content edit, or a
+	// peer-received counter-offer — so the C2PA provenance chain and any embedded
+	// signatures always carry through and grow instead of resetting (ADR-13). The
+	// inbound peer PDF is the authoritative base: it holds provenance and
+	// credentials this instance cannot reproduce. A fresh render happens only at
+	// genesis, when there is no stored PDF yet.
 	var basePDF []byte
-	if pdfState.IPFSCID != "" && !contentChanged {
+	if pdfState.IPFSCID != "" {
 		ipfsResult, err := s.IPFSClient.FetchFile(pdfState.IPFSCID)
 		if err != nil || len(ipfsResult.Data) == 0 {
 			return fmt.Errorf("fetch PDF from IPFS %s for contract %s: %w", pdfState.IPFSCID, cweEvt.DID, err)

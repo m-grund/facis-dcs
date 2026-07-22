@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	dcstodcs2 "digital-contracting-service/internal/dcstodcs"
 	dcstodcsdb "digital-contracting-service/internal/dcstodcs/db"
@@ -230,10 +231,15 @@ func main() {
 		log.Fatalf(ctx, err, "Could not build OID4VP request signer")
 	}
 	authCfg.RequestSigner = requestSigner
+	systemClients, err := loadSystemClients()
+	if err != nil {
+		log.Fatalf(ctx, err, "Invalid system client configuration")
+	}
 	hydraJWTValidator, err := middleware.NewHydraJWTValidator(ctx, middleware.HydraJWTConfig{
 		PublicIssuerURL:   authCfg.Hydra.PublicIssuerURL(),
 		InternalIssuerURL: authCfg.Hydra.InternalIssuerURL(),
 		ClientID:          authCfg.Hydra.ClientID(),
+		SystemClients:     systemClients,
 	})
 	if err != nil {
 		log.Fatalf(ctx, err, "Failed to initialize Hydra JWT validator")
@@ -304,7 +310,7 @@ func main() {
 		ARepo:        &aRepo,
 		TSAClient:    tsaClient,
 	}
-	err = outboxProcessor.Start(ctx, did)
+	err = outboxProcessor.Start(ctx)
 	if err != nil {
 		log.Fatalf(ctx, err, "failed to start outbox processor")
 	}
@@ -440,7 +446,9 @@ func main() {
 	if statusListServiceURL == "" {
 		log.Fatalf(ctx, nil, "STATUSLIST_SERVICE_URL is required (DCS-OR-C2PA-005)")
 	}
-	if err := probeHTTPAny(statusListServiceURL+"/health", statusListServiceURL+"/v1/metrics/health"); err != nil {
+	if err := probeHTTPUntilReady(3*time.Minute, func() error {
+		return probeHTTPAny(statusListServiceURL+"/health", statusListServiceURL+"/v1/metrics/health")
+	}); err != nil {
 		log.Fatalf(ctx, err, "status list service not reachable at %s", statusListServiceURL)
 	}
 	statusListTenantID := os.Getenv("STATUSLIST_TENANT_ID") // defaults to "default" when empty
@@ -451,7 +459,9 @@ func main() {
 	if pdfCoreURL == "" {
 		log.Fatalf(ctx, nil, "PDF_CORE_URL is required")
 	}
-	if err := probeHTTP(pdfCoreURL + "/version"); err != nil {
+	if err := probeHTTPUntilReady(3*time.Minute, func() error {
+		return probeHTTP(pdfCoreURL + "/version")
+	}); err != nil {
 		log.Fatalf(ctx, err, "pdf-core not reachable at %s", pdfCoreURL)
 	}
 	pdfCoreClient := pdfcore.New(pdfCoreURL, func(sigStructure []byte) ([]byte, error) {
@@ -526,6 +536,7 @@ func main() {
 		TRepo:      &ctRepo,
 		PDFCore:    pdfCoreClient,
 		IssuerDID:  issuerDID,
+		LocalPeer:  did,
 		VCIssuer:   provenance.NewLocalVCIssuer(vcSigner, issuerDID, statusListPublisher),
 	}
 	go func() {

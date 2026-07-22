@@ -1,5 +1,4 @@
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -19,18 +18,6 @@ export type DcsRole =
   | 'Auditor'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-
-export interface SeededFixtures {
-  templateDid: string
-  contractDid: string
-  contractName: string
-  /** Draft contract derived from a registered template carrying a hub typed clause (dcs:PaymentClause). */
-  typedContractDid: string
-}
-
-export function seededFixtures(): SeededFixtures {
-  return JSON.parse(readFileSync(path.join(here, '.auth', 'fixtures.json'), 'utf-8'))
-}
 
 interface RoleSession {
   token: string

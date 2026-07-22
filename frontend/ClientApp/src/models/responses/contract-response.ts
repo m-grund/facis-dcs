@@ -65,6 +65,10 @@ export interface ContractDeployResponse {
   payload: unknown
 }
 
+export interface ContractOfferResponse {
+  did: string
+}
+
 export interface ContractReviewResponse {
   did: string
 }
@@ -118,7 +122,6 @@ export interface ContractAuditResponseItem {
   did?: string
   created_at: string
   res_log_pred_cid?: string
-  global_log_pred_cid?: string
 }
 
 export type ContractAuditResponse = ContractAuditResponseItem[]

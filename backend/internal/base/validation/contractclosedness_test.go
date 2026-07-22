@@ -11,22 +11,18 @@ import (
 // field is filled only when value != "".
 func contractWithBoundary(value string) map[string]any {
 	field := map[string]any{
-		"@id":               "urn:dcs:field:region",
-		"@type":             "dcs:RequirementField",
-		"dcs:parameterName": "region",
-		"dcs:required":      true,
+		"@id":          "urn:dcs:field:region",
+		"@type":        "dcs:Placeholder",
+		"dcs:label":    "region",
+		"dcs:datatype": "xsd:string",
+		"dcs:required": true,
 	}
 	if value != "" {
-		field["dcs:parameterValue"] = value
+		field["dcs:value"] = value
 	}
 	return map[string]any{
-		"@type": "dcs:Contract",
-		"dcs:contractData": []any{
-			map[string]any{
-				"@id": "urn:dcs:req:1", "@type": "dcs:DataRequirement", "dcs:conditionId": "c1",
-				"dcs:fields": []any{field},
-			},
-		},
+		"@type":            "dcs:Contract",
+		"dcs:contractData": []any{field},
 		"dcs:policies": map[string]any{
 			"@type": "odrl:Agreement",
 			"odrl:permission": []any{
@@ -65,13 +61,8 @@ func TestValidateContractClosedFlagsUnfilledRequiredField(t *testing.T) {
 		"@type": "dcs:Contract",
 		"dcs:contractData": []any{
 			map[string]any{
-				"@id": "urn:dcs:req:1", "@type": "dcs:DataRequirement", "dcs:conditionId": "c1",
-				"dcs:fields": []any{
-					map[string]any{
-						"@id": "urn:dcs:field:amount", "@type": "dcs:RequirementField",
-						"dcs:parameterName": "amount", "dcs:required": true,
-					},
-				},
+				"@id": "urn:dcs:field:amount", "@type": "dcs:Placeholder",
+				"dcs:label": "amount", "dcs:datatype": "xsd:decimal", "dcs:required": true,
 			},
 		},
 		"dcs:policies": map[string]any{
@@ -99,7 +90,6 @@ func TestValidateContractClosedFlagsUnfilledRequiredField(t *testing.T) {
 
 func TestValidateContractClosedFlagsUnfilledProsePlaceholder(t *testing.T) {
 	doc := contractWithBoundary("DE") // boundary filled, but a prose placeholder is not
-	doc["dcs:contractData"].([]any)[0].(map[string]any)["dcs:fields"].([]any)[0].(map[string]any)["@id"] = "urn:dcs:field:region"
 	doc["dcs:documentStructure"] = map[string]any{
 		"@type": "dcs:DocumentStructure",
 		"dcs:blocks": map[string]any{"@list": []any{
@@ -107,7 +97,7 @@ func TestValidateContractClosedFlagsUnfilledProsePlaceholder(t *testing.T) {
 				"@id": "urn:dcs:block:1", "@type": "dcs:Clause",
 				"dcs:content": map[string]any{"@list": []any{
 					"The party in ",
-					map[string]any{"@type": "dcs:Placeholder", "dcs:bindsTo": map[string]any{"@id": "urn:dcs:field:unfilled"}},
+					map[string]any{"@id": "urn:dcs:field:unfilled"},
 				}},
 			},
 		}},

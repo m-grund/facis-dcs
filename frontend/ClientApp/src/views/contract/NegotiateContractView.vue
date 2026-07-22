@@ -21,13 +21,11 @@ import {
   fromDocumentSemanticValues,
 } from '@/modules/contract-workflow-engine/utils/semantic-condition-values'
 import TemplatePreview from '@/modules/template-repository/components/builder-editor/preview/TemplatePreview.vue'
-import {
-  buildContractDocument,
-  getSemanticConditionsFromTemplateData,
-} from '@/modules/template-repository/store/dcsDraftStore'
+import { buildContractDocument } from '@/modules/template-repository/store/dcsDraftStore'
 import { useDcsDraftStore } from '@/modules/template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@/modules/template-repository/store/templateEditorUiStore'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
+import { getLocalDIDFile } from '@/services/did-service'
 import { useAuthStore } from '@/stores/auth-store'
 import { useErrorStore } from '@/stores/error-store'
 import { useNavStore } from '@/stores/nav-store'
@@ -76,15 +74,8 @@ const tabs = computed(() => contractEditorUiStore.availableTabs(contract.value?.
 const story = computed(() => contractStory(contract.value?.state))
 
 const verificationResult = computed(() => {
-  const subTemplateSemanticConditions = dcsDraftStore.subTemplateSnapshots.map((subTemplate) => ({
-    templateId: subTemplate.did,
-    version: subTemplate.version,
-    document_number: subTemplate.document_number,
-    semanticConditions: getSemanticConditionsFromTemplateData(subTemplate.template_data),
-  }))
   return verifySemanticValue(
     dcsDraftStore.semanticConditions,
-    subTemplateSemanticConditions,
     contractContentValuesStore.semanticConditionValues,
     dcsDraftStore.blocks,
   )
@@ -140,7 +131,6 @@ function buildCurrentContractData(): ContractData | undefined {
     layout: dcsDraftStore.layout,
     contractData: dcsDraftStore.contractData,
     policies: dcsDraftStore.policies,
-    subTemplateSnapshots: dcsDraftStore.subTemplateSnapshots,
     semanticConditionValues: contractContentValuesStore.semanticConditionValues,
     derivedFromTemplate: contract.value.contract_data?.derivedFromTemplate,
     parentContractDid: contract.value.contract_data?.['dcs:parentContract']?.['@id'],
@@ -170,16 +160,11 @@ watch(
 )
 
 watch(
-  () => [dcsDraftStore.blocks, dcsDraftStore.semanticConditions, dcsDraftStore.subTemplateSnapshots],
+  () => [dcsDraftStore.blocks, dcsDraftStore.semanticConditions],
   () => {
     const invalidValues = contractContentValuesStore.semanticConditionValues.filter(
       (conditionValue) =>
-        !hasConditionParameterForValue(
-          conditionValue,
-          dcsDraftStore.blocks,
-          dcsDraftStore.semanticConditions,
-          dcsDraftStore.subTemplateSnapshots,
-        ),
+        !hasConditionParameterForValue(conditionValue, dcsDraftStore.blocks, dcsDraftStore.semanticConditions),
     )
     contractContentValuesStore.removeSemanticConditionValues(invalidValues)
   },
@@ -246,15 +231,55 @@ const submitContract = async () => {
   }
 }
 
+// Only THIS party's undecided decisions may block Submit. A negotiation
+// replicates to both instances carrying a decision row per negotiator, but each
+// instance resolves its own row in its own database — the counterparty's
+// acceptance never lands here. Counting every row therefore deadlocked the
+// federated round: the peer's pending decision disabled our Submit forever, and
+// responding to it matched no row (the respond updates WHERE negotiator = us).
+// Identifies which negotiation decisions are OURS: decisions are keyed by the
+// party's DCS instance did:web, not by the logged-in user's issuer (that is the
+// signatory's organization and never matches a party).
+const localInstanceDid = ref('')
+
+// A change request we authored ourselves is excluded: FR-CWE-07 refuses an
+// accept by its own author, so it would disable Submit with a decision this
+// user can never resolve. The backend submit gate skips the same rows.
 const hasOpenDecisions = computed(
   () =>
-    contract.value?.negotiations?.some((negotiation) =>
-      negotiation.negotiation_decisions.some((decision) => !decision.decision),
+    contract.value?.negotiations?.some(
+      (negotiation) =>
+        negotiation.created_by !== issuer.value &&
+        negotiation.negotiation_decisions.some(
+          (decision) => !decision.decision && decision.negotiator === localInstanceDid.value,
+        ),
     ) ?? false,
 )
 
-onMounted(() => {
+// TEMP-INSTRUMENT: log what disables the Submit button on the negotiate view.
+watch(
+  () => ({
+    state: contract.value?.state,
+    isCreator: isCreator.value,
+    isReviewer: isReviewer.value,
+    hasChangeRequest: hasChangeRequest.value,
+    changedName: changedName.value,
+    changedDescription: changedDescription.value,
+    changedContractData: changedContractData.value,
+    hasOpenDecisions: hasOpenDecisions.value,
+    compareChangesData: !!compareChangesData.value,
+    contractVersion: contract.value?.contract_version,
+    store: contractContentValuesStore.semanticConditionValues,
+    snapshot: contractSemanticConditionValueSnapshot.value,
+  }),
+  (s) => console.log('[SUBMIT-GATE]', JSON.stringify(s)),
+  { immediate: true, deep: true },
+)
+
+onMounted(async () => {
   templateEditorUiStore.reset({ workflow: 'contract' })
+  // Our own party identity, used to tell our pending decisions from the peer's.
+  localInstanceDid.value = (await getLocalDIDFile().catch(() => ({ id: '' }))).id
 })
 
 onUnmounted(() => {
@@ -282,7 +307,6 @@ function applyContractDataToDraft(contractData?: unknown) {
       layout: cd.layout,
       contractData: cd.contractData,
       policies: cd.policies,
-      subTemplateSnapshots: cd.subTemplateSnapshots,
     })
     contractContentValuesStore.reset({ semanticConditionValues: cd.semanticConditionValues ?? [] })
   } else {
@@ -394,9 +418,15 @@ const currentContractData = computed<ContractData | undefined>(() => {
 })
 
 const hasActiveNegotiations = computed(() => {
+  // A negotiation needs surfacing while it still carries an undecided decision
+  // (that decision blocks Submit) OR it targets the current version. Keying on
+  // the version alone hid the list once a counter's immediate redline bumped the
+  // contract version, deadlocking the round: Submit disabled, no list to resolve.
   return (
     contract.value?.negotiations?.some(
-      (negotiation) => negotiation.contract_version === contract.value?.contract_version,
+      (negotiation) =>
+        negotiation.contract_version === contract.value?.contract_version ||
+        negotiation.negotiation_decisions.some((decision) => !decision.decision),
     ) ?? false
   )
 })
@@ -465,7 +495,6 @@ const exportPDF = async () => {
                         :semantic-conditions="dcsDraftStore.semanticConditions"
                         :semantic-condition-values="contractContentValuesStore.semanticConditionValues"
                         :verification-result="verificationResult"
-                        :sub-template-snapshots="dcsDraftStore.subTemplateSnapshots"
                         :set-semantic-condition-value="setSemanticConditionValue"
                       />
                     </div>
@@ -507,9 +536,13 @@ const exportPDF = async () => {
     <div class="sticky bottom-0 shrink-0 border-t border-base-300 bg-base-100">
       <div class="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-3 md:flex-row">
         <button class="btn btn-outline md:w-32" @click="$router.back()">Back</button>
-        <button class="btn btn-outline md:w-32" :disabled="exporting" @click="exportPDF">Export PDF</button>
+        <!-- Needs the loaded contract's DID; until it arrives exportPDF can only
+             return silently, so the click looks like it did nothing. -->
+        <button class="btn btn-outline md:w-32" :disabled="exporting || !contract" @click="exportPDF">
+          Export PDF
+        </button>
         <button
-          v-if="contract?.state === ContractState.negotiation"
+          v-if="contract?.state === ContractState.negotiation || contract?.state === ContractState.offered"
           class="btn flex-1 btn-primary"
           :disabled="isSubmitting || !hasChangeRequest || !!compareChangesData"
           @click="negotiateContractChange"

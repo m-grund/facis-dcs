@@ -90,7 +90,15 @@ def main() -> None:
         headers={WEBHOOK_SECRET_HEADER: os.getenv("BDD_EUDIPLO_WEBHOOK_SECRET", "bdd-eudiplo-webhook-secret")},
         timeout=60,
     )
-    response.raise_for_status()
+    if not response.ok:
+        # Surface WHAT the ceremony refused (e.g. which PoA organization was
+        # presented versus the party the ceremony is bound to); raise_for_status
+        # alone reports only the code, which says nothing about the mismatch.
+        raise SystemExit(
+            f"webhook {response.status_code} for ceremony {ceremony_id} at {base_url}\n"
+            f"  presented poa_organization={poa_organization!r}\n"
+            f"  response: {response.text[:600]}"
+        )
     print(response.status_code, response.text[:500])
 
 

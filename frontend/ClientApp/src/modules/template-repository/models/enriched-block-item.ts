@@ -1,5 +1,4 @@
 import type { DcsBlock } from '@/models/dcs-jsonld'
-import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcsDraftStore'
 
 /**
  * One block row in the editor list:
@@ -8,7 +7,7 @@ import type { MergedApprovedTemplateBlock } from '@template-repository/store/dcs
 export interface EnrichedBlockItem {
   /** Full JSON-LD @id IRI. */
   blockId: string
-  block?: DcsBlock | MergedApprovedTemplateBlock
+  block?: DcsBlock
   siblingIndex: number
   siblingCount: number
   /** Full JSON-LD @id IRI. */
@@ -22,9 +21,4 @@ export interface EnrichedBlockItem {
   outdentInsertIndex: number
   indentParentBlockId: string
   indentInsertIndex: number
-  /**
-   * Some approved blocks are merged into the main document for editing
-   * without conflicting with the original approved template.
-   */
-  mergedApprovedBlock?: MergedApprovedTemplateBlock
 }

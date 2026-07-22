@@ -2,7 +2,9 @@ package command
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,9 +13,10 @@ import (
 	"time"
 
 	"digital-contracting-service/internal/base/datatype"
-	"digital-contracting-service/internal/base/jsonld"
+	"digital-contracting-service/internal/base/ipfs"
 	"digital-contracting-service/internal/contractworkflowengine/datatype/contractstate"
 	"digital-contracting-service/internal/contractworkflowengine/db"
+	"digital-contracting-service/internal/pdfgeneration/provenance"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -31,17 +34,22 @@ type PeerPdfReceiveCmd struct {
 	LocalPeer string
 	// Payload is the JSON-LD contract document pdf-core extracted from the PDF.
 	Payload []byte
+	// Pdf is the EXACT contract PDF the peer shipped. It is carried over as this
+	// instance's copy (not regenerated), so the counterparty's C2PA provenance
+	// chain embedded in it is preserved (ADR-13).
+	Pdf []byte
 }
 
 // PeerPdfReceiver upserts a peer-shipped contract into this instance's own
 // store and opens its own local workflow tasks (ADR-13): each DCS runs its own
 // RBAC; nothing crosses the boundary.
 type PeerPdfReceiver struct {
-	DB     *sqlx.DB
-	CRepo  db.ContractRepo
-	RTRepo db.ReviewTaskRepo
-	ATRepo db.ApprovalTaskRepo
-	NTRepo db.NegotiationTaskRepo
+	DB         *sqlx.DB
+	CRepo      db.ContractRepo
+	RTRepo     db.ReviewTaskRepo
+	ATRepo     db.ApprovalTaskRepo
+	NTRepo     db.NegotiationTaskRepo
+	IPFSClient *ipfs.APIClient
 }
 
 // Handle upserts the local copy from the shipped contract's JSON-LD. A first
@@ -64,14 +72,11 @@ func (h *PeerPdfReceiver) Handle(ctx context.Context, cmd PeerPdfReceiveCmd) err
 		return fmt.Errorf("could not read local contract copy: %w", err)
 	}
 
-	// pdf-core embeds the canonical, IRI-expanded JSON-LD; re-compact it to the
-	// FACIS context so this copy matches the originator's compact form (ADR-13).
-	compacted, err := jsonld.CompactToFacis(cmd.Payload)
-	if err != nil {
-		return fmt.Errorf("could not re-compact shipped contract JSON-LD: %w", err)
-	}
-	payload := datatype.JSON(compacted)
-	templateIRI, templateVersion, name := parseShippedContractMeta(compacted)
+	// pdf-core carries the contract JSON-LD VERBATIM (ADR-13): the shipped payload
+	// is already this instance's native DCS form — the exact bytes the originator
+	// embedded — so it is used as-is, with no dialect round-trip.
+	payload := datatype.JSON(cmd.Payload)
+	templateIRI, templateVersion, name := parseShippedContractMeta(cmd.Payload)
 	now := time.Now().UTC()
 
 	data := db.Contract{
@@ -94,36 +99,76 @@ func (h *PeerPdfReceiver) Handle(ctx context.Context, cmd PeerPdfReceiveCmd) err
 		if err := h.CRepo.RemoteUpdate(ctx, tx, data); err != nil {
 			return fmt.Errorf("could not update local contract copy: %w", err)
 		}
-		return tx.Commit()
+	} else {
+		// A first receipt is an inbound offer: this instance's intrinsic state
+		// starts at OFFERED (an offer on our table, awaiting our own review),
+		// which its local review/approval tasks then advance. The peer-facing
+		// extrinsic lifecycle (offered → accepted → executed) is inferred from
+		// this plus the shipped PDF.
+		data.State = contractstate.Offered.String()
+
+		// The two parties are objective on both copies: the origin (the peer that
+		// created and offered the contract) and this instance. This instance's own
+		// users hold the local RBAC roles.
+		resp := db.Responsible{
+			Creator:      cmd.Counterparty,
+			Counterparty: cmd.LocalPeer,
+			Reviewers:    []string{cmd.LocalPeer},
+			Approvers:    []string{cmd.LocalPeer},
+			Negotiators:  []string{cmd.LocalPeer},
+		}
+		data.Origin = cmd.Counterparty
+		data.CreatedBy = cmd.Counterparty
+		data.CreatedAt = now
+		data.ContractVersion = 1
+		data.Responsible = &resp
+		if err := h.CRepo.RemoteCreate(ctx, tx, data); err != nil {
+			return fmt.Errorf("could not create local contract copy: %w", err)
+		}
+		if err := createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd.ContractIRI, cmd.LocalPeer, resp); err != nil {
+			return err
+		}
 	}
 
-	// A first receipt is an inbound offer: this instance's intrinsic state starts
-	// at OFFERED (an offer on our table, awaiting our own review), which its local
-	// review/approval tasks then advance. The peer-facing extrinsic lifecycle
-	// (offered → accepted → executed) is inferred from this plus the shipped PDF.
-	data.State = contractstate.Offered.String()
+	// Carry over the EXACT PDF the peer shipped as this instance's copy: the
+	// peer's PDF is the authoritative artifact and embeds its own C2PA provenance
+	// chain, so regenerating it here would strip the counterparty's C2PA. The
+	// service verified the human-readable render matches the embedded JSON-LD
+	// before this; this instance's own later changes append to this base (so the
+	// C2PA chain grows rather than resetting).
+	if len(cmd.Pdf) > 0 {
+		stored, err := h.IPFSClient.CreateFile(ctx, cmd.Pdf)
+		if err != nil {
+			return fmt.Errorf("could not store carried-over peer PDF in IPFS: %w", err)
+		}
+		c2paState, err := provenance.MapCWEStateToC2PA(data.State)
+		if err != nil {
+			return fmt.Errorf("could not map contract state to C2PA lifecycle: %w", err)
+		}
+		// Hash the contract_data AS PERSISTED, not the shipped bytes: Postgres
+		// normalizes JSONB on write, and the PDF export readiness gate (and the
+		// local regenerator) recompute this hash from the stored contract_data.
+		// Hashing the shipped bytes leaves the two permanently unequal, so export
+		// would wait forever for a regeneration that never runs for a received
+		// contract — the carried-over PDF must be servable straight away.
+		persisted, err := h.CRepo.ReadDataByDID(ctx, tx, cmd.ContractIRI)
+		if err != nil {
+			return fmt.Errorf("could not re-read persisted contract data for %s: %w", cmd.ContractIRI, err)
+		}
+		var persistedData []byte
+		if persisted.ContractData != nil {
+			persistedData = []byte(*persisted.ContractData)
+		}
+		payloadSum := sha256.Sum256(persistedData)
+		if err := h.CRepo.UpdatePDFState(ctx, tx, cmd.ContractIRI, db.ContractPDFState{
+			IPFSCID:     stored.Identifier.Value,
+			C2PAState:   c2paState,
+			PayloadHash: hex.EncodeToString(payloadSum[:]),
+		}); err != nil {
+			return fmt.Errorf("could not record carried-over PDF state: %w", err)
+		}
+	}
 
-	// The two parties are objective on both copies: the origin (the peer that
-	// created and offered the contract) and this instance. This instance's own
-	// users hold the local RBAC roles.
-	resp := db.Responsible{
-		Creator:      cmd.Counterparty,
-		Counterparty: cmd.LocalPeer,
-		Reviewers:    []string{cmd.LocalPeer},
-		Approvers:    []string{cmd.LocalPeer},
-		Negotiators:  []string{cmd.LocalPeer},
-	}
-	data.Origin = cmd.Counterparty
-	data.CreatedBy = cmd.Counterparty
-	data.CreatedAt = now
-	data.ContractVersion = 1
-	data.Responsible = &resp
-	if err := h.CRepo.RemoteCreate(ctx, tx, data); err != nil {
-		return fmt.Errorf("could not create local contract copy: %w", err)
-	}
-	if err := createTasks(ctx, tx, h.RTRepo, h.ATRepo, h.NTRepo, cmd.ContractIRI, cmd.LocalPeer, resp); err != nil {
-		return err
-	}
 	return tx.Commit()
 }
 

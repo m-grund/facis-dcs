@@ -8,49 +8,45 @@
     "@type": "dcs:ContractTemplate",
     "dcs:contractData": [
         {
-            "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#requirement-951a2f96-53e8-47ed-b686-5a6e84e82779",
-            "@type": "dcs:DataRequirement",
-            "dcs:conditionId": "951a2f96-53e8-47ed-b686-5a6e84e82779",
-            "dcs:fields": [
-                {
-                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.amount",
-                    "@type": "dcs:RequirementField",
-                    "dcs:domainField": {
-                        "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-payment-amount"
-                    },
-                    "dcs:parameterName": "contract.payment.amount",
-                    "dcs:required": true
-                },
-                {
-                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.currency",
-                    "@type": "dcs:RequirementField",
-                    "dcs:domainField": {
-                        "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-payment-currency"
-                    },
-                    "dcs:parameterName": "contract.payment.currency",
-                    "dcs:required": true
-                },
-                {
-                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.dueDate",
-                    "@type": "dcs:RequirementField",
-                    "dcs:domainField": {
-                        "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-payment-dueDate"
-                    },
-                    "dcs:parameterName": "contract.payment.dueDate",
-                    "dcs:required": true
-                },
-                {
-                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.dueDays",
-                    "@type": "dcs:RequirementField",
-                    "dcs:domainField": {
-                        "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-payment-dueDays"
-                    },
-                    "dcs:parameterName": "contract.payment.dueDays",
-                    "dcs:required": true
-                }
-            ],
-            "dcs:name": "Payment Term",
-            "dcs:schemaVersion": "v1"
+            "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-contract.payment.amount",
+            "@type": "dcs:Placeholder",
+            "dcs:label": "Payment Amount",
+            "dcs:datatype": "xsd:decimal",
+            "dcs:shape": {
+                "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-payment-amount"
+            },
+            "dcs:required": true,
+            "dcs:value": 12
+        },
+        {
+            "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-contract.payment.currency",
+            "@type": "dcs:Placeholder",
+            "dcs:label": "Payment Currency",
+            "dcs:datatype": "xsd:string",
+            "dcs:shape": {
+                "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-payment-currency"
+            },
+            "dcs:required": true
+        },
+        {
+            "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-contract.payment.dueDate",
+            "@type": "dcs:Placeholder",
+            "dcs:label": "Payment Due Date",
+            "dcs:datatype": "xsd:date",
+            "dcs:shape": {
+                "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-payment-dueDate"
+            },
+            "dcs:required": true
+        },
+        {
+            "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-contract.payment.dueDays",
+            "@type": "dcs:Placeholder",
+            "dcs:label": "Payment Due Days",
+            "dcs:datatype": "xsd:integer",
+            "dcs:shape": {
+                "@id": "https://w3id.org/facis/dcs/taxonomy/v1#field-contract-payment-dueDays"
+            },
+            "dcs:required": true
         }
     ],
     "dcs:documentStructure": {
@@ -65,31 +61,19 @@
                         "@list": [
                             "Payment Amount: ",
                             {
-                                "@type": "dcs:Placeholder",
-                                "dcs:bindsTo": {
-                                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.amount"
-                                }
+                                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-contract.payment.amount"
                             },
                             "\nPayment Currency: ",
                             {
-                                "@type": "dcs:Placeholder",
-                                "dcs:bindsTo": {
-                                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.currency"
-                                }
+                                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-contract.payment.currency"
                             },
                             "\nPayment Due Date: ",
                             {
-                                "@type": "dcs:Placeholder",
-                                "dcs:bindsTo": {
-                                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.dueDate"
-                                }
+                                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-contract.payment.dueDate"
                             },
                             "\nPayment Due Days: ",
                             {
-                                "@type": "dcs:Placeholder",
-                                "dcs:bindsTo": {
-                                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.dueDays"
-                                }
+                                "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-contract.payment.dueDays"
                             }
                         ]
                     },
@@ -136,12 +120,12 @@
     },
     "dcs:policies": [
         {
-            "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#policy-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.amount-0",
+            "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#policy-contract.payment.amount-0",
             "@type": "odrl:Duty",
             "odrl:constraint": {
                 "@type": "odrl:Constraint",
                 "odrl:leftOperand": {
-                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-951a2f96-53e8-47ed-b686-5a6e84e82779-contract.payment.amount"
+                    "@id": "did:web:localhost:template:493959cb-6d4b-4f49-a848-eb6ebb6de2a3#field-contract.payment.amount"
                 },
                 "odrl:operator": {
                     "@id": "odrl:eq"

@@ -10,6 +10,7 @@ import {
   type SignatureViewResult,
 } from '@/services/signature-management-service'
 import { useAuthStore } from '@/stores/auth-store'
+import { downloadBlob } from '@/utils/download-blob'
 
 // The Signature Compliance Viewer (DCS-FR-SM-05/-07/-08, DCS-FR-SM-18/-21/-26):
 // a tabbed dashboard over the signed contracts an Auditor / Compliance Officer /
@@ -223,12 +224,7 @@ function reportFilename(ext: string): string {
 
 function exportJson() {
   const blob = new Blob([JSON.stringify(buildReport(), null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = reportFilename('json')
-  anchor.click()
-  URL.revokeObjectURL(url)
+  downloadBlob(blob, reportFilename('json'))
 }
 
 function escapeHtml(value: string | number | boolean | null | undefined): string {

@@ -217,6 +217,77 @@ func TestCreateFileWithPreEncodedStringDoesNotRoundTrip(t *testing.T) {
 	}
 }
 
+// TestCreateFile_CopyToMFSIsIdempotentWhenEntryExists reproduces the shared-IPFS
+// federation collision: instance A already copied a PDF's CID into MFS, then
+// instance B ships the identical bytes and stores them. The store is
+// content-addressed, so B computes the same CID and its files/cp onto the
+// existing /<cid> path fails ("already has entry by that name"). CreateFile must
+// treat that as success — the byte-identical entry already satisfies the
+// postcondition — rather than surfacing an error that would roll back B's
+// contract receive.
+func TestCreateFile_CopyToMFSIsIdempotentWhenEntryExists(t *testing.T) {
+	const cid = "shared-cid"
+	var statCalled bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/ipfs/create":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"identifier":{"Format":"CID","Value":%q},"data":null}`, cid)
+		case "/api/v0/files/cp":
+			// The peer already copied this CID: Kubo rejects the duplicate path.
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprint(w, `{"Message":"cp: cannot put node in path /`+cid+`: directory already has entry by that name","Code":0,"Type":"error"}`)
+		case "/api/v0/files/stat":
+			statCalled = true
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"Hash":%q,"Type":"file"}`, cid)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, server.URL)
+	result, err := client.CreateFile(context.Background(), []byte("%PDF-1.7\npeer shipped bytes"))
+	if err != nil {
+		t.Fatalf("CreateFile must tolerate an already-present shared-MFS CID, got error: %v", err)
+	}
+	if result.Identifier.Value != cid {
+		t.Fatalf("expected CID %q, got %q", cid, result.Identifier.Value)
+	}
+	if !statCalled {
+		t.Fatal("expected files/stat to confirm the existing entry resolves to the same CID")
+	}
+}
+
+// TestCreateFile_CopyToMFSFailsWhenEntryDiffers ensures the idempotency shortcut
+// does not mask a genuine files/cp failure: if the MFS path does not resolve to
+// the expected CID, CreateFile still returns an error.
+func TestCreateFile_CopyToMFSFailsWhenEntryDiffers(t *testing.T) {
+	const cid = "wanted-cid"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/ipfs/create":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"identifier":{"Format":"CID","Value":%q},"data":null}`, cid)
+		case "/api/v0/files/cp":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprint(w, `{"Message":"cp: some other failure"}`)
+		case "/api/v0/files/stat":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprint(w, `{"Hash":"a-different-cid","Type":"file"}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, server.URL)
+	if _, err := client.CreateFile(context.Background(), []byte("payload")); err == nil {
+		t.Fatal("expected CreateFile to surface a files/cp failure when MFS does not hold the expected CID")
+	}
+}
+
 func TestFetchFileTenantAPI_RetriesUntilResolvable(t *testing.T) {
 	payload := []byte("%PDF-1.7\nresolvable after propagation")
 	var calls int

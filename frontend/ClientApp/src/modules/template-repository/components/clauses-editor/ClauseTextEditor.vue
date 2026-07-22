@@ -13,7 +13,6 @@ import {
   type PlaceholderDropdownMode,
   usePlaceholderDropdownPosition,
 } from '@template-repository/composables/usePlaceholderDropdownPosition'
-import { getBlocksFromTemplateData } from '@template-repository/store/dcsDraftStore'
 import { useDcsDraftStore } from '@template-repository/store/dcsDraftStore'
 import { useTemplateEditorUiStore } from '@template-repository/store/templateEditorUiStore'
 import { semanticParameterLabel } from '@template-repository/utils/semantic-parameter-label'
@@ -37,7 +36,7 @@ const emit = defineEmits<{
 const uiStore = useTemplateEditorUiStore()
 const draftStore = useDcsDraftStore()
 const { clausePlaceholderHighlight } = storeToRefs(uiStore)
-const { blocks, subTemplateSnapshots } = storeToRefs(draftStore)
+const { blocks } = storeToRefs(draftStore)
 
 const editorRef = ref<HTMLDivElement | null>(null)
 let valueFromEditor = false
@@ -80,10 +79,7 @@ const unusedConditions = computed(() =>
 )
 const existingClauseConditionIds = computed(() => {
   const ids = new Set<string>()
-  const clauseBlocks = [
-    ...blocks.value,
-    ...subTemplateSnapshots.value.flatMap((subTemplate) => getBlocksFromTemplateData(subTemplate.template_data)),
-  ]
+  const clauseBlocks = blocks.value
 
   for (const block of clauseBlocks) {
     if (block['@type'] !== 'dcs:Clause') continue

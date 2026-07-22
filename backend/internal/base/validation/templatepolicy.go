@@ -188,7 +188,7 @@ func auditCanonicalDocumentStructure(policySet *templatePolicySet, rule template
 	if !ok || len(blocks) == 0 {
 		findings = append(findings, newPolicyFinding(policySet, rule, "dcs:documentStructure.dcs:blocks must contain at least one block", "dcs:documentStructure.dcs:blocks", ""))
 	}
-	layout, ok := structure["dcs:layout"].([]any)
+	layout, ok := canonicalLayout(structure)
 	if !ok || len(layout) == 0 {
 		findings = append(findings, newPolicyFinding(policySet, rule, "dcs:documentStructure.dcs:layout must contain at least one layout node", "dcs:documentStructure.dcs:layout", ""))
 	}
@@ -268,54 +268,36 @@ func auditCanonicalContractData(policySet *templatePolicySet, rule templatePolic
 }
 
 func auditContractDataIntegrity(policySet *templatePolicySet, rule templatePolicyRule, data documentData, requireAtLeastOne bool) []PolicyFinding {
-	requirements, ok := topLevelValue(data, "contractData").([]any)
-	if !ok || len(requirements) == 0 {
+	placeholders, ok := topLevelValue(data, "contractData").([]any)
+	if !ok || len(placeholders) == 0 {
 		if !requireAtLeastOne && ok {
 			return nil
 		}
-		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:contractData must contain at least one dcs:DataRequirement", "dcs:contractData", "")}
+		return []PolicyFinding{newPolicyFinding(policySet, rule, "dcs:contractData must contain at least one dcs:Placeholder", "dcs:contractData", "")}
 	}
 	findings := []PolicyFinding{}
 	fieldIDs := map[string]bool{}
-	for reqIndex, rawRequirement := range requirements {
-		requirement, ok := rawRequirement.(map[string]any)
+	for index, rawPlaceholder := range placeholders {
+		placeholder, ok := rawPlaceholder.(map[string]any)
 		if !ok {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:contractData item %d must be an object", reqIndex), "dcs:contractData", ""))
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:contractData item %d must be a placeholder object", index), "dcs:contractData", ""))
 			continue
 		}
-		conditionID, _ := requirement["dcs:conditionId"].(string)
-		if strings.TrimSpace(conditionID) == "" {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:contractData item %d requires dcs:conditionId", reqIndex), "dcs:contractData.dcs:conditionId", ""))
+		fieldID, _ := placeholder["@id"].(string)
+		if strings.TrimSpace(fieldID) == "" {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("dcs:contractData item %d requires @id", index), "dcs:contractData.@id", ""))
+		} else {
+			fieldIDs[fieldID] = true
 		}
-		fields, ok := requirement["dcs:fields"].([]any)
-		if !ok || len(fields) == 0 {
-			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("data requirement %q must contain at least one dcs:RequirementField", conditionID), "dcs:contractData.dcs:fields", ""))
-			continue
+		if strings.TrimSpace(stringMapValue(placeholder, "dcs:datatype")) == "" {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("placeholder %q requires dcs:datatype", fieldID), "dcs:contractData.dcs:datatype", ""))
 		}
-		for fieldIndex, rawField := range fields {
-			field, ok := rawField.(map[string]any)
-			if !ok {
-				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("field %d in requirement %q must be an object", fieldIndex, conditionID), "dcs:contractData.dcs:fields", ""))
-				continue
-			}
-			fieldID, _ := field["@id"].(string)
-			if strings.TrimSpace(fieldID) == "" {
-				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("field %d in requirement %q requires @id", fieldIndex, conditionID), "dcs:contractData.dcs:fields.@id", ""))
-			} else {
-				fieldIDs[fieldID] = true
-			}
-			if strings.TrimSpace(stringMapValue(field, "dcs:parameterName")) == "" {
-				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("field %q requires dcs:parameterName", fieldID), "dcs:contractData.dcs:fields.dcs:parameterName", ""))
-			}
-			domainField, ok := field["dcs:domainField"].(map[string]any)
-			domainFieldID, _ := domainField["@id"].(string)
-			if !ok || strings.TrimSpace(domainFieldID) == "" {
-				findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("field %q requires dcs:domainField @id", fieldID), "dcs:contractData.dcs:fields.dcs:domainField", ""))
-			}
+		if strings.TrimSpace(stringMapValue(placeholder, "dcs:label")) == "" {
+			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("placeholder %q requires dcs:label", fieldID), "dcs:contractData.dcs:label", ""))
 		}
 	}
 	if len(fieldIDs) == 0 {
-		findings = append(findings, newPolicyFinding(policySet, rule, "dcs:contractData must declare at least one requirement field @id", "dcs:contractData.dcs:fields", ""))
+		findings = append(findings, newPolicyFinding(policySet, rule, "dcs:contractData must declare at least one placeholder @id", "dcs:contractData.@id", ""))
 	}
 	return findings
 }
@@ -394,7 +376,7 @@ func auditDocumentStructureIntegrity(policySet *templatePolicySet, rule template
 			findings = append(findings, newPolicyFinding(policySet, rule, fmt.Sprintf("document block %q requires @type", blockID), blockID, ""))
 		}
 	}
-	layout, ok := structure["dcs:layout"].([]any)
+	layout, ok := canonicalLayout(structure)
 	if !ok {
 		if requireCompleteLayout {
 			findings = append(findings, newPolicyFinding(policySet, rule, "dcs:documentStructure.dcs:layout must contain at least one layout node", "dcs:documentStructure.dcs:layout", ""))
@@ -520,27 +502,27 @@ func auditMetadataComplete(policySet *templatePolicySet, rule templatePolicyRule
 	return findings
 }
 
-func forEachSemanticParameter(data documentData, ontology *domainOntology, visit func(conditionID string, index int, param map[string]any)) {
-	requirements, _ := topLevelValue(data, "contractData").([]any)
-	for _, rawRequirement := range requirements {
-		requirement, ok := rawRequirement.(map[string]any)
+// forEachSemanticParameter visits each top-level placeholder. A placeholder is
+// self-contained: its identity for domain-field audits is its dcs:shape @id
+// (falling back to its own @id), and it carries its value constraint inline
+// (dcs:valueConstraint).
+func forEachSemanticParameter(data documentData, _ *domainOntology, visit func(conditionID string, index int, param map[string]any)) {
+	placeholders, _ := topLevelValue(data, "contractData").([]any)
+	for index, rawPlaceholder := range placeholders {
+		placeholder, ok := rawPlaceholder.(map[string]any)
 		if !ok {
 			continue
 		}
-		conditionID, _ := requirement["dcs:conditionId"].(string)
-		fields, _ := requirement["dcs:fields"].([]any)
-		for index, rawField := range fields {
-			field, ok := rawField.(map[string]any)
-			if !ok {
-				continue
+		fieldIRI, _ := placeholder["@id"].(string)
+		if shape, ok := placeholder["dcs:shape"].(map[string]any); ok {
+			if shapeID, _ := shape["@id"].(string); shapeID != "" {
+				fieldIRI = shapeID
 			}
-			domainField, _ := field["dcs:domainField"].(map[string]any)
-			domainFieldID, _ := domainField["@id"].(string)
-			visit(conditionID, index, map[string]any{
-				"fieldIri":        domainFieldID,
-				"valueConstraint": domainFieldValueConstraint(ontology, domainFieldID),
-			})
 		}
+		visit("", index, map[string]any{
+			"fieldIri":        fieldIRI,
+			"valueConstraint": placeholder["dcs:valueConstraint"],
+		})
 	}
 }
 
@@ -552,24 +534,25 @@ func canonicalBlocks(structure map[string]any) ([]any, bool) {
 	return blocks, ok
 }
 
+func canonicalLayout(structure map[string]any) ([]any, bool) {
+	layout, ok := jsonLDList(structure["dcs:layout"])
+	if !ok {
+		layout, ok = structure["dcs:layout"].([]any)
+	}
+	return layout, ok
+}
+
 func canonicalContractDataFieldIDs(data documentData) map[string]bool {
 	fieldIDs := map[string]bool{}
-	requirements, _ := topLevelValue(data, "contractData").([]any)
-	for _, rawRequirement := range requirements {
-		requirement, ok := rawRequirement.(map[string]any)
+	placeholders, _ := topLevelValue(data, "contractData").([]any)
+	for _, rawPlaceholder := range placeholders {
+		placeholder, ok := rawPlaceholder.(map[string]any)
 		if !ok {
 			continue
 		}
-		fields, _ := requirement["dcs:fields"].([]any)
-		for _, rawField := range fields {
-			field, ok := rawField.(map[string]any)
-			if !ok {
-				continue
-			}
-			fieldID, _ := field["@id"].(string)
-			if strings.TrimSpace(fieldID) != "" {
-				fieldIDs[fieldID] = true
-			}
+		fieldID, _ := placeholder["@id"].(string)
+		if strings.TrimSpace(fieldID) != "" {
+			fieldIDs[fieldID] = true
 		}
 	}
 	return fieldIDs
@@ -582,24 +565,15 @@ func clauseHasContractDataBinding(block map[string]any, fieldIDs map[string]bool
 	}
 	for _, rawSegment := range content {
 		segment, ok := rawSegment.(map[string]any)
-		if !ok || segment["@type"] != "dcs:Placeholder" {
+		if !ok {
 			continue
 		}
-		bindsTo, _ := segment["dcs:bindsTo"].(map[string]any)
-		fieldID, _ := bindsTo["@id"].(string)
-		if fieldIDs[fieldID] {
+		fieldID, _ := segment["@id"].(string)
+		if fieldID != "" && fieldIDs[fieldID] {
 			return true
 		}
 	}
 	return false
-}
-
-func domainFieldValueConstraint(ontology *domainOntology, domainFieldID string) map[string]any {
-	field, ok := ontology.fields[domainFieldID]
-	if !ok || field.Constraint == nil {
-		return nil
-	}
-	return field.Constraint.asMap()
 }
 
 func stringMapValue(values map[string]any, key string) string {
