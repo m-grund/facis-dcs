@@ -1,4 +1,4 @@
-import type { Contract, ContractDeploymentKpi, ExpirationPolicy } from '../contract/contract'
+import type { Contract, ContractChangeRequest, ContractDeploymentKpi, ExpirationPolicy } from '../contract/contract'
 import type { ContractApprovalTask } from '../contract/contract-approval-task'
 import type { ContractEvent } from '../contract/contract-event'
 import type { ContractNegotiation } from '../contract/contract-negotiation'
@@ -96,6 +96,13 @@ export interface ContractNegotiationResponse {
 
 export interface ContractNegotiationRespondResponse {
   id: string
+}
+
+export interface ContractNegotiationDraftResponse {
+  did: string
+  /** The staged change request; absent when no draft is stored. */
+  change_request?: ContractChangeRequest
+  updated_at?: string
 }
 
 export interface ContractApproveResponse {

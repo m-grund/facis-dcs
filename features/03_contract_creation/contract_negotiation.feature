@@ -114,3 +114,34 @@ Feature: Contract Negotiation
     Then the request is denied with a "Conflict of interest - cannot approve own proposal" error
     And another authorized reviewer must approve
     And the restriction is logged
+
+  # SRS §3.1.1 Contract Negotiation UI lists "Save draft" among its controls,
+  # distinct from "Propose change": a negotiator stages modifications privately
+  # and proposes them later. A draft creates no negotiation change-request row,
+  # moves no contract state, and is consumed when its author proposes it
+  # (command/negotiate.go clears the author's draft row).
+  @DCS-IR-CWE-03 @clean_db
+  Scenario: A negotiator saves a private draft and proposes it later
+    Given I am authenticated with roles: "Contract Creator"
+    And contract "Staged Draft Contract" has reached contract state "NEGOTIATION"
+    When the negotiator saves a negotiation draft for contract "Staged Draft Contract" renaming it to "Staged Rename"
+    Then get http 200:Success code
+    And the negotiation draft for contract "Staged Draft Contract" contains the staged name "Staged Rename"
+    And the contract "Staged Draft Contract" has no recorded negotiation change requests
+    And the contract "Staged Draft Contract" is in state "NEGOTIATION"
+    When the negotiator proposes the staged draft for contract "Staged Draft Contract"
+    Then get http 200:Success code
+    And the negotiation draft for contract "Staged Draft Contract" is empty
+    And the contract "Staged Draft Contract" has a recorded negotiation change request renaming it to "Staged Rename"
+
+  @DCS-IR-CWE-03 @clean_db
+  Scenario: A negotiation draft is private to its author and can be discarded
+    Given I am authenticated with roles: "Contract Creator"
+    And contract "Private Draft Contract" has reached contract state "NEGOTIATION"
+    When the negotiator saves a negotiation draft for contract "Private Draft Contract" renaming it to "Only Mine"
+    Then get http 200:Success code
+    And the negotiation draft for contract "Private Draft Contract" is not visible to a user with roles "Contract Reviewer"
+    When the negotiator discards the negotiation draft for contract "Private Draft Contract"
+    Then get http 200:Success code
+    And the negotiation draft for contract "Private Draft Contract" is empty
+    And the contract "Private Draft Contract" has no recorded negotiation change requests

@@ -387,6 +387,37 @@ var ContractNegotiationResponse = Type("ContractNegotiationResponse", func() {
 	Required("did")
 })
 
+var ContractNegotiationDraftSaveRequest = Type("ContractNegotiationDraftSaveRequest", func() {
+	Description("Save (upsert) the caller's private negotiation draft for a contract")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("change_request", Any, "The staged change request, same shape as the negotiate payload")
+
+	Required("did", "change_request")
+})
+
+var ContractNegotiationDraftRetrieveRequest = Type("ContractNegotiationDraftRetrieveRequest", func() {
+	Description("Retrieve the caller's private negotiation draft for a contract")
+
+	Token("token", String, "JWT token")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+
+	Required("did")
+})
+
+var ContractNegotiationDraftResponse = Type("ContractNegotiationDraftResponse", func() {
+	Description("The caller's private negotiation draft; change_request is absent when no draft is stored")
+
+	Attribute("did", String, "Decentralized Identifier of the contract")
+	Attribute("change_request", Any, "The staged change request, if a draft exists")
+	Attribute("updated_at", String, "When the draft was last saved")
+
+	Required("did")
+})
+
 var ContractNegotiationRespondRequest = Type("ContractNegotiationRespondRequest", func() {
 	Description("Contract negotiation decision request")
 
@@ -790,6 +821,101 @@ var _ = Service("ContractWorkflowEngine", func() {
 
 		HTTP(func() {
 			POST("/contract/negotiate")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	// SRS §3.1.1 Contract Negotiation UI lists "Save draft" among its controls,
+	// distinct from "Propose change": a negotiator stages modifications
+	// privately and proposes them later. Drafts are party-private — stored per
+	// (contract, author), never replicated to the peer, never part of the
+	// negotiation audit trail; proposing (POST /contract/negotiate) or
+	// discarding deletes them.
+	Method("save_negotiation_draft", func() {
+		Description("save (upsert) the caller's private staged change request for a contract in negotiation; it is not visible to any other user and not transmitted to the counterparty until proposed.")
+		Meta("dcs:requirements", "DCS-IR-CWE-03")
+		Meta("dcs:cwe:components", "Contract Versioning")
+		Meta("dcs:ui", "Contract Negotiation")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Manager")
+		})
+
+		Payload(ContractNegotiationDraftSaveRequest)
+		Result(ContractNegotiationDraftResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			PUT("/contract/negotiation_draft")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("retrieve_negotiation_draft", func() {
+		Description("retrieve the caller's private staged change request for a contract; change_request is absent when no draft is stored.")
+		Meta("dcs:requirements", "DCS-IR-CWE-03")
+		Meta("dcs:cwe:components", "Contract Versioning")
+		Meta("dcs:ui", "Contract Negotiation")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Manager")
+		})
+
+		Payload(ContractNegotiationDraftRetrieveRequest)
+		Result(ContractNegotiationDraftResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			GET("/contract/negotiation_draft/{did}")
+			Param("did")
+			Response(StatusOK)
+			Response("bad_request", StatusBadRequest)
+			Response("internal_error", StatusInternalServerError)
+		})
+	})
+
+	Method("delete_negotiation_draft", func() {
+		Description("discard the caller's private staged change request for a contract.")
+		Meta("dcs:requirements", "DCS-IR-CWE-03")
+		Meta("dcs:cwe:components", "Contract Versioning")
+		Meta("dcs:ui", "Contract Negotiation")
+
+		Security(JWTAuth, func() {
+			Scope("Contract Creator")
+			Scope("Sys. Contract Creator")
+			Scope("Contract Negotiator")
+			Scope("Contract Reviewer")
+			Scope("Sys. Contract Reviewer")
+			Scope("Contract Manager")
+		})
+
+		Payload(ContractNegotiationDraftRetrieveRequest)
+		Result(ContractNegotiationDraftResponse)
+
+		Error("bad_request", ErrorResult, "Bad request")
+		Error("internal_error", ErrorResult, "Internal server error")
+
+		HTTP(func() {
+			DELETE("/contract/negotiation_draft/{did}")
+			Param("did")
 			Response(StatusOK)
 			Response("bad_request", StatusBadRequest)
 			Response("internal_error", StatusInternalServerError)

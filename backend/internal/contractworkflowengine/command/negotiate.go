@@ -190,6 +190,12 @@ func (h *Negotiator) Handle(ctx context.Context, cmd NegotiationCmd) error {
 		}
 	}
 
+	// Proposing consumes the author's private staged draft (SRS §3.1.1 "Save
+	// draft" vs "Propose change"): what was staged is now on the table.
+	if err := h.NRepo.DeleteDraft(ctx, tx, cmd.DID, cmd.NegotiatedBy); err != nil {
+		return fmt.Errorf("could not clear negotiation draft: %w", err)
+	}
+
 	evt := contractevents.NegotiationEvent{
 		DID:             cmd.DID,
 		ContractVersion: processData.ContractVersion,

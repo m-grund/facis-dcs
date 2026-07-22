@@ -5,6 +5,8 @@ import type {
   ContractCreateRequest,
   ContractDeployRequest,
   ContractHistoryRetrieveRequest,
+  ContractNegotiationDraftRetrieveRequest,
+  ContractNegotiationDraftSaveRequest,
   ContractNegotiationRequest,
   ContractNegotiationRespondRequest,
   ContractOfferRequest,
@@ -25,6 +27,7 @@ import type {
   ContractCreateResponse,
   ContractDeployResponse,
   ContractHistoryResponse,
+  ContractNegotiationDraftResponse,
   ContractNegotiationRespondResponse,
   ContractNegotiationResponse,
   ContractOfferResponse,
@@ -44,6 +47,13 @@ export interface ContractWorkflowService {
   offer: (request: ContractOfferRequest) => Promise<ContractOfferResponse>
   submit: (request: ContractSubmitRequest) => Promise<ContractSubmitResponse>
   negotiate: (request: ContractNegotiationRequest) => Promise<ContractNegotiationResponse>
+  saveNegotiationDraft: (request: ContractNegotiationDraftSaveRequest) => Promise<ContractNegotiationDraftResponse>
+  retrieveNegotiationDraft: (
+    request: ContractNegotiationDraftRetrieveRequest,
+  ) => Promise<ContractNegotiationDraftResponse>
+  deleteNegotiationDraft: (
+    request: ContractNegotiationDraftRetrieveRequest,
+  ) => Promise<ContractNegotiationDraftResponse>
   respond: (request: ContractNegotiationRespondRequest) => Promise<ContractNegotiationRespondResponse>
   review: (request: ContractReviewRequest) => Promise<ContractReviewResponse>
   retrieveApprovedTemplates: () => Promise<ApprovedContractTemplateRetrieveResponse>

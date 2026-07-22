@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"maps"
 	"slices"
 	"time"
@@ -782,6 +785,92 @@ func (s *contractWorkflowEnginesrvc) Negotiate(ctx context.Context, req *contrac
 	}
 
 	return &contractworkflowengine.ContractNegotiationResponse{
+		Did: req.Did,
+	}, nil
+}
+
+func (s *contractWorkflowEnginesrvc) SaveNegotiationDraft(ctx context.Context, req *contractworkflowengine.ContractNegotiationDraftSaveRequest) (res *contractworkflowengine.ContractNegotiationDraftResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	changeRequest, err := datatype.NewJSON(req.ChangeRequest)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	handler := command.NegotiationDraftSaver{
+		DB:    s.DB,
+		CRepo: s.CRepo,
+		NRepo: s.NRepo,
+	}
+	err = handler.Handle(ctx, command.SaveNegotiationDraftCmd{
+		DID:           req.Did,
+		SavedBy:       middleware.GetParticipantID(ctx),
+		ChangeRequest: &changeRequest,
+		UserRoles:     middleware.GetUserRoles(ctx),
+	})
+	if err != nil {
+		return nil, mapContractCommandError(err)
+	}
+
+	return &contractworkflowengine.ContractNegotiationDraftResponse{
+		Did: req.Did,
+	}, nil
+}
+
+func (s *contractWorkflowEnginesrvc) RetrieveNegotiationDraft(ctx context.Context, req *contractworkflowengine.ContractNegotiationDraftRetrieveRequest) (res *contractworkflowengine.ContractNegotiationDraftResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	tx, err := s.DB.BeginTxx(ctx, nil)
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Printf("could not rollback transaction: %v", err)
+		}
+	}()
+
+	draft, err := s.NRepo.ReadDraft(ctx, tx, req.Did, middleware.GetParticipantID(ctx))
+	if err != nil {
+		return nil, contractworkflowengine.MakeInternalError(err)
+	}
+
+	res = &contractworkflowengine.ContractNegotiationDraftResponse{Did: req.Did}
+	if draft != nil && draft.ChangeRequest != nil {
+		var changeRequest any
+		if err := json.Unmarshal(*draft.ChangeRequest, &changeRequest); err != nil {
+			return nil, contractworkflowengine.MakeInternalError(err)
+		}
+		res.ChangeRequest = changeRequest
+		updatedAt := draft.UpdatedAt.Format(time.RFC3339)
+		res.UpdatedAt = &updatedAt
+	}
+	return res, nil
+}
+
+func (s *contractWorkflowEnginesrvc) DeleteNegotiationDraft(ctx context.Context, req *contractworkflowengine.ContractNegotiationDraftRetrieveRequest) (res *contractworkflowengine.ContractNegotiationDraftResponse, err error) {
+
+	ctx, cancel := context.WithTimeout(ctx, conf.TransactionTimeout())
+	defer cancel()
+
+	handler := command.NegotiationDraftDeleter{
+		DB:    s.DB,
+		NRepo: s.NRepo,
+	}
+	err = handler.Handle(ctx, command.DeleteNegotiationDraftCmd{
+		DID:       req.Did,
+		SavedBy:   middleware.GetParticipantID(ctx),
+		UserRoles: middleware.GetUserRoles(ctx),
+	})
+	if err != nil {
+		return nil, mapContractCommandError(err)
+	}
+
+	return &contractworkflowengine.ContractNegotiationDraftResponse{
 		Did: req.Did,
 	}, nil
 }
