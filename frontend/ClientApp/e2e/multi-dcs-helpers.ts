@@ -11,6 +11,7 @@ import {
   E2E_FRONTEND_B_ORIGIN,
   E2E_STATUSLIST_URL,
 } from '../playwright.config'
+import { formatNumberInput } from '../src/modules/template-repository/utils/number-format'
 import type { Browser, BrowserContext, Page } from '@playwright/test'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -759,7 +760,7 @@ export async function stagedCounterOffer(inst: Instance, contractDid: string, op
     .click()
   const restored = inst.page.getByRole('textbox', { name: 'Payment Amount' }).first()
   await expect(restored).toBeVisible({ timeout: 30_000 })
-  await expect(restored).toHaveValue(opts.value)
+  await expect(restored).toHaveValue(formatNumberInput(opts.value))
   await expect(inst.page.getByRole('button', { name: 'Discard draft', exact: true })).toBeVisible()
 
   const proposed = inst.page.waitForResponse(
