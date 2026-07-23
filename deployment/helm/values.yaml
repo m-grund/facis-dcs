@@ -149,9 +149,7 @@ messaging:
 # Service discovery overrides – all auto-wired when the sub-charts below are enabled
 serviceDiscovery:
   postgresqlHost: ""
-  keycloakHost: ""
   natsHost: ""
-  keycloakPort: ""
 
 # ---- Signing / C2PA provenance ----------------------------------------
 # DCS never holds raw private keys (DCS-IR-HI-01): every key lives in the
@@ -291,6 +289,8 @@ federatedCatalogue:
 
 fcService:
   enabled: false
+  route:
+    path: ""
 
 # PDF-Core: C2PA-aware PDF compiler and verifier (DCS-OR-C2PA-*)
 pdfCore:
