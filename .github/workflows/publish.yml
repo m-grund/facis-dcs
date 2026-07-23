@@ -26,6 +26,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
+      - name: Build chart dependencies
+        # charts/*.tgz is gitignored; the local file:// subcharts still
+        # resolve from their committed source directories, but external
+        # repo-based deps (kube-prometheus-stack, traefik) need fetching.
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add traefik https://traefik.github.io/charts
+          helm dependency build deployment/helm
       - name: Package chart
         run: helm package deployment/helm --destination /tmp/helm-package
       - name: Log in to Harbor OCI registry
