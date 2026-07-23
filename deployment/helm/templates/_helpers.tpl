@@ -83,19 +83,6 @@ Resolve PostgreSQL host (explicit override or in-chart default).
 {{- end }}
 
 {{/*
-Resolve Keycloak host (explicit override or in-chart default).
-*/}}
-{{- define "digital-contracting-service.keycloakHost" -}}
-{{- if .Values.serviceDiscovery.keycloakHost -}}
-{{- .Values.serviceDiscovery.keycloakHost -}}
-{{- else if .Values.keycloak.enabled -}}
-{{- printf "%s-keycloak" .Release.Name -}}
-{{- else -}}
-{{- "" -}}
-{{- end -}}
-{{- end }}
-
-{{/*
 Resolve NATS host (explicit override or in-chart default).
 */}}
 {{- define "digital-contracting-service.natsHost" -}}
@@ -105,19 +92,6 @@ Resolve NATS host (explicit override or in-chart default).
 {{- printf "%s-nats" .Release.Name -}}
 {{- else -}}
 {{- "" -}}
-{{- end -}}
-{{- end }}
-
-{{/*
-Resolve Keycloak port from explicit override, in-chart service, or scheme defaults.
-*/}}
-{{- define "digital-contracting-service.keycloakPort" -}}
-{{- if .Values.serviceDiscovery.keycloakPort -}}
-{{- .Values.serviceDiscovery.keycloakPort -}}
-{{- else if .Values.keycloak.enabled -}}
-{{- default 8080 .Values.keycloak.service.port -}}
-{{- else -}}
-443
 {{- end -}}
 {{- end }}
 
@@ -196,9 +170,6 @@ Keycloak realm URL for Federated Catalogue integration only.
 {{- define "digital-contracting-service.fcKeycloakRealmURL" -}}
 {{- if .Values.fcKeycloak.realmURL -}}
 {{- .Values.fcKeycloak.realmURL -}}
-{{- else if .Values.keycloak.enabled -}}
-{{- $port := .Values.keycloak.service.port | default 8080 | int -}}
-{{- printf "http://%s-keycloak:%d/realms/gaia-x" .Release.Name $port -}}
 {{- else -}}
 {{- "" -}}
 {{- end -}}
@@ -285,15 +256,6 @@ IPFS_MFS_BASE_URL: explicit value or secret ref.
 */}}
 {{- define "digital-contracting-service.ipfsMFSBaseURL" -}}
 {{- .Values.ipfs.mfsBaseURL -}}
-{{- end }}
-
-{{/*
-Normalize Keycloak route path (leading slash, no trailing slash).
-*/}}
-{{- define "digital-contracting-service.keycloakRoutePath" -}}
-{{- if .Values.keycloak.route.path -}}
-{{- printf "/%s" (trimAll "/" (.Values.keycloak.route.path | toString)) -}}
-{{- end -}}
 {{- end }}
 
 {{/*

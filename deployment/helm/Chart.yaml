@@ -10,10 +10,6 @@ dependencies:
     version: "0.1.0"
     repository: "file://charts/postgresql"
     condition: postgresql.enabled
-  - name: keycloak
-    version: "0.1.0"
-    repository: "file://charts/keycloak"
-    condition: keycloak.enabled
   - name: hydra
     version: "0.1.0"
     repository: "file://charts/hydra"

@@ -215,13 +215,6 @@ postgresql:
     password: dcs
     database: dcs
 
-keycloak:
-  enabled: false
-  service:
-    port: 8080
-  route:
-    path: ""
-
 hydra:
   enabled: false
   clients: []

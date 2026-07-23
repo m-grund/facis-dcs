@@ -52,16 +52,6 @@ spec:
                 port:
                   number: {{ $.Values.service.port | int }}
           {{- end }}
-          {{- /* Keycloak route on same host when enabled with route.path */}}
-          {{- if and $.Values.keycloak.enabled $.Values.keycloak.route.path }}
-          - path: {{ include "digital-contracting-service.keycloakRoutePath" $ }}
-            pathType: {{ default "Prefix" $.Values.ingress.pathType }}
-            backend:
-              service:
-                name: {{ $.Release.Name }}-keycloak
-                port:
-                  number: {{ $.Values.keycloak.service.port | int }}
-          {{- end }}
           {{- /* Vendored fc-service route on same host when enabled with route.path —
                lets another DCS instance's backend reach this one's FC across clusters.
                Service name/port are fc-service's own fixed defaults (kept verbatim,
