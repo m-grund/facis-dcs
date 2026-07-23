@@ -56,8 +56,8 @@ spec:
                lets another DCS instance's backend reach this one's FC across clusters.
                Service name/port are fc-service's own fixed defaults (kept verbatim,
                not release-prefixed — see Chart.yaml's fc-service dependency). */}}
-          {{- if and $.Values.fcService.enabled $.Values.fcService.route.path }}
-          - path: {{ include "digital-contracting-service.fcServiceRoutePath" $ }}
+          {{- if and $.Values.fcservice.enabled $.Values.fcservice.route.path }}
+          - path: {{ include "digital-contracting-service.fcserviceRoutePath" $ }}
             pathType: {{ default "Prefix" $.Values.ingress.pathType }}
             backend:
               service:

@@ -261,9 +261,9 @@ IPFS_MFS_BASE_URL: explicit value or secret ref.
 {{/*
 Normalize the vendored fc-service route path (leading slash, no trailing slash).
 */}}
-{{- define "digital-contracting-service.fcServiceRoutePath" -}}
-{{- if .Values.fcService.route.path -}}
-{{- printf "/%s" (trimAll "/" (.Values.fcService.route.path | toString)) -}}
+{{- define "digital-contracting-service.fcserviceRoutePath" -}}
+{{- if .Values.fcservice.route.path -}}
+{{- printf "/%s" (trimAll "/" (.Values.fcservice.route.path | toString)) -}}
 {{- end -}}
 {{- end }}
 

@@ -266,8 +266,8 @@ statuslistService:
 # XFSC Federated Catalogue. Two parts:
 #   - federatedCatalogue.*: how THIS DCS backend calls out to an FC instance
 #     (its own env vars, independent of where that instance runs — could be
-#     fcService below, or a remote instance like OSC-testbed pointing at IONOS).
-#   - fcService.*: whether/how to deploy the FC instance itself, vendored
+#     fcservice below, or a remote instance like OSC-testbed pointing at IONOS).
+#   - fcservice.*: whether/how to deploy the FC instance itself, vendored
 #     verbatim from eclipse-xfsc/federated-catalogue's published chart (see
 #     Chart.yaml). Its own self-contained stack (Postgres, Keycloak, Fuseki) —
 #     see charts/fc-service-*.tgz (fetched by `helm dependency build`) for all
@@ -287,7 +287,7 @@ federatedCatalogue:
       name: ""
       key: "FEDERATED_CATALOGUE_CLIENT_SECRET"
 
-fcService:
+fcservice:
   enabled: false
   route:
     path: ""

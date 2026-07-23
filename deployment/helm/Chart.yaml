@@ -29,8 +29,8 @@ dependencies:
   - name: fc-service
     version: "0.4.0"
     repository: "oci://node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/catalogue"
-    condition: fcService.enabled
-    alias: fcService
+    condition: fcservice.enabled
+    alias: fcservice
   - name: ipfs
     version: "0.1.0"
     repository: "file://charts/ipfs"
