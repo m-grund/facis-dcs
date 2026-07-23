@@ -12,10 +12,13 @@ const { isCreator, isManager } = useTemplatePermissions()
 
 const copyTemplate = async () => {
   if (!draftStore.did || (!isCreator && !isManager)) return
-
-  const response = await contractTemplateService.copy({ did: draftStore.did })
-  if (response.did) {
-    await router.push({ name: ROUTES.TEMPLATES.EDIT, params: { did: response.did } })
+  try {
+    const response = await contractTemplateService.copy({ did: draftStore.did })
+    if (response.did) {
+      await router.push({ name: ROUTES.TEMPLATES.EDIT, params: { did: response.did } })
+    }
+  } catch (err) {
+    console.error('Copying failed:', err)
   }
 }
 </script>

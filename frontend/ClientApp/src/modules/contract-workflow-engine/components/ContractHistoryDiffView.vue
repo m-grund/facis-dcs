@@ -187,6 +187,7 @@ watch([leftPick, rightPick], () => ensureDistinctPicks())
         <label class="form-control w-full md:flex-1">
           <span class="label-text text-xs text-base-content/70">Left</span>
           <select
+            id="diff-left-pick"
             v-model="leftPick"
             class="select-bordered select w-full select-sm"
             :disabled="loading || compareOptions.length < 2"
@@ -199,6 +200,7 @@ watch([leftPick, rightPick], () => ensureDistinctPicks())
         <label class="form-control w-full md:flex-1">
           <span class="label-text text-xs text-base-content/70">Right</span>
           <select
+            id="diff-right-pick"
             v-model="rightPick"
             class="select-bordered select w-full select-sm"
             :disabled="loading || compareOptions.length < 2"

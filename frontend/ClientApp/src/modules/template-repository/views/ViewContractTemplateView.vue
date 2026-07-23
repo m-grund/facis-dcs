@@ -111,7 +111,7 @@ const exportPDF = async () => {
 
 <template>
   <div :class="embedded ? 'flex flex-1 flex-col' : '-mx-4 -my-4 flex min-h-full flex-col md:-mx-8 md:-my-8'">
-    <TemplateEditors title="Contract">
+    <TemplateEditors title="View Template">
       <template #before-tabs>
         <WorkflowStageBanner
           v-if="!embedded && state"

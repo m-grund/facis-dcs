@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import BlockToolbar from '@template-repository/components/builder-editor/toolbar/BlockToolbar.vue'
 import ClauseSegmentsPreview from '@template-repository/components/clauses-editor/ClauseSegmentsPreview.vue'
 import { useBlockMovementPreview } from '@template-repository/composables/useBlockMovementPreview'
@@ -81,6 +81,9 @@ const savedText = computed(() => {
 const localTitle = ref('')
 const localText = ref('')
 
+const localTitleId = useId()
+const localTextId = useId()
+
 watch(
   () => [props.item.blockId, savedTitle.value, savedText.value] as const,
   ([, title, text]) => {
@@ -125,8 +128,9 @@ function revertToSaved() {
     <div class="min-w-0 flex-1 px-3 py-2">
       <!-- Section: title input -->
       <template v-if="block && block['@type'] === 'dcs:Section'">
-        <label class="text-[10px] font-bold uppercase opacity-60">Section</label>
+        <label :for="localTitleId" class="text-[10px] font-bold uppercase opacity-60">Section</label>
         <input
+          :id="localTitleId"
           v-model="localTitle"
           type="text"
           class="input input-sm mt-0.5 w-full input-ghost font-semibold"
@@ -136,8 +140,9 @@ function revertToSaved() {
       </template>
       <!-- Text: textarea -->
       <template v-else-if="block && block['@type'] === 'dcs:TextBlock'">
-        <label class="text-[10px] font-bold uppercase opacity-60">Text</label>
+        <label :for="localTextId" class="text-[10px] font-bold uppercase opacity-60">Text</label>
         <textarea
+          :id="localTextId"
           v-model="localText"
           :disabled="!uiStore.isTemplateEditable"
           class="textarea mt-0.5 min-h-10 w-full resize-y textarea-ghost text-sm textarea-sm"

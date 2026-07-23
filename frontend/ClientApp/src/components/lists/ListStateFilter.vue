@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, useTemplateRef } from 'vue'
 import {
   useApprovalTaskStateFilterStore,
   useContractStateFilterStore,
@@ -40,6 +40,7 @@ const props = defineProps<{
 }>()
 
 const filterStore = storeMap[props.storeType]() as unknown as FilterStore<FilterMap[StoreType]>
+const filterPopover = useTemplateRef('filter-popover')
 
 const showAll = ref(true)
 
@@ -74,6 +75,20 @@ const isSelected = (type: FilterMap[typeof props.storeType]) => {
 }
 
 const showInitialFocus = ref(true)
+
+const focusFirstOption = () => {
+  void nextTick(() => {
+    filterPopover.value?.querySelector<HTMLElement>('a[tabindex="0"]')?.focus()
+  })
+}
+
+const handlePopoverToggle = (event: ToggleEvent) => {
+  if (event.newState === 'closed') {
+    showInitialFocus.value = true
+  } else if (showInitialFocus.value) {
+    focusFirstOption()
+  }
+}
 </script>
 
 <template>
@@ -88,9 +103,10 @@ const showInitialFocus = ref(true)
   </button>
   <ul
     id="filter-popover"
+    ref="filter-popover"
     popover
     class="menu dropdown mt-2 rounded-box rounded-md bg-base-300 shadow-sm"
-    @toggle="(event) => (event.newState === 'closed' ? (showInitialFocus = true) : null)"
+    @toggle="handlePopoverToggle"
   >
     <li class="pointer-events-none menu-title">
       <h1 class="label text-base-content/70">{{ label }}</h1>
@@ -100,7 +116,6 @@ const showInitialFocus = ref(true)
         <li v-for="(filter, index) in shownFilters" :key="filter" class="flex justify-between transition-colors">
           <a
             tabindex="0"
-            :autofocus="index === 0"
             class="label flex-1 text-base-content/70"
             :class="{
               'mt-1 bg-primary text-primary-content': isSelected(filter),

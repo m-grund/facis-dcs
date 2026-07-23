@@ -6,7 +6,6 @@ import { TemplateType } from '@template-repository/models/contract-template'
 import ConfirmationModal from '@/components/ConfirmationModal.vue'
 import { ROUTES } from '@/router/router'
 import { contractTemplateService } from '@/services/contract-template-service'
-import { useContractTemplatesStore } from '@/stores/contract-templates-store'
 import { type ContractTemplateState, TemplateState } from '@/types/contract-template-state'
 import type { PartialContractTemplate } from '@/models/contract-template'
 
@@ -39,8 +38,6 @@ const router = useRouter()
 const { isManager } = useTemplatePermissions()
 
 const isPublishing = ref(false)
-
-const templatesStore = useContractTemplatesStore()
 
 const canArchive = computed(() => {
   const archiveStates: ContractTemplateState[] = [TemplateState.deleted, TemplateState.deprecated]
@@ -95,11 +92,16 @@ const publish = async () => {
 
 async function register() {
   try {
-    await contractTemplateService.register({ did: props.template.did })
+    if (!confirmationModal.value) return
+    const { isCanceled } = await confirmationModal.value.reveal({ message: 'Proceed with registration?' })
+    if (!isCanceled) {
+      await contractTemplateService.register({ did: props.template.did })
 
-    await templatesStore.loadTemplates()
-    await router.push({ name: ROUTES.TEMPLATES.LIST })
-  } catch {}
+      await router.push({ name: ROUTES.TEMPLATES.LIST })
+    }
+  } catch (err) {
+    console.error('Registration failed:', err)
+  }
 }
 </script>
 
@@ -109,6 +111,6 @@ async function register() {
     <span v-if="isPublishing" class="loading loading-sm loading-spinner"></span>
     Publish
   </button>
-  <button v-if="canArchive" :class="[filteredClass, 'btn-error']" @click="archive">Archive</button>
+  <button v-if="canArchive" :class="[filteredClass, 'btn-error']" class="z-1000" @click="archive">Archive</button>
   <ConfirmationModal ref="confirmation-modal" />
 </template>

@@ -58,7 +58,6 @@
     "autoprefixer": "^10.4.27",
     "daisyui": "^5.5.23",
     "eslint": "^10.4.0",
-    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-simple-import-sort": "^13.0.0",
     "eslint-plugin-vue": "~10.9.1",
     "lint-staged": "^17.0.5",

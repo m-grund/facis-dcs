@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, type Ref, ref } from 'vue'
 import { contractWorkflowService } from '@/services/contract-workflow-service'
 import { TemplateState } from '@/types/contract-template-state'
+import { compareValues } from '@/utils/comparison'
 import type { Contract } from '@/models/contract/contract'
 import type { ContractApprovalTask } from '@/models/contract/contract-approval-task'
 import type { ContractNegotiationTask } from '@/models/contract/contract-negotiation-task'
@@ -28,9 +29,9 @@ export const useContractsStore = defineStore('contracts', () => {
     ),
   )
   const approvedTemplates = computed(() =>
-    contractTemplates.value.filter(
-      (template) => template.state === TemplateState.registered || template.state === TemplateState.published,
-    ),
+    contractTemplates.value
+      .filter((template) => template.state === TemplateState.registered || template.state === TemplateState.published)
+      .sort((a, b) => compareValues(a, b, 'updated_at', 1)),
   )
 
   const findContractByDid = (did: string) => contracts.value.find((contract) => contract.did === did)

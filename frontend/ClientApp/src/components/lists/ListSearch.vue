@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T extends { did: string }">
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/vue'
-import { computed, type Ref, ref, type ShallowRef, shallowRef, useTemplateRef } from 'vue'
+import { computed, nextTick, type Ref, ref, type ShallowRef, shallowRef, useTemplateRef } from 'vue'
 
 type FilterLabelConfig<T> = Partial<Record<keyof T, string>>
 type SearchFunction<T> = (request: Record<string, unknown>) => Promise<T[]>
@@ -82,15 +82,17 @@ async function searchList(event?: Event) {
   else emit('searchResult', null)
 }
 
-const getDisplayValue = (template: T | null): string => {
+function getDisplayValue(template: T | null): string {
   return searchKey.value && template ? String(template[searchKey.value]) : ''
 }
 
-const autocompleteOptionClasses = (active: boolean, selected: boolean) => [
-  'cursor-pointer px-4 py-2',
-  active ? 'bg-secondary text-secondary-content' : 'bg-base-100',
-  selected ? 'font-bold' : '',
-]
+function autocompleteOptionClasses(active: boolean, selected: boolean) {
+  return [
+    'cursor-pointer px-4 py-2',
+    active ? 'bg-secondary text-secondary-content' : 'bg-base-100',
+    selected ? 'font-bold' : '',
+  ]
+}
 
 async function onComboboxFocus() {
   await searchRequest()
@@ -118,6 +120,20 @@ function onFilterSelect(label: FilterLabelValue) {
 }
 
 const showInitialFocus = ref(true)
+
+function focusFirstOption() {
+  void nextTick(() => {
+    filterPopover.value?.querySelector<HTMLElement>('a[tabindex="0"]')?.focus()
+  })
+}
+
+function handlePopoverToggle(event: ToggleEvent) {
+  if (event.newState === 'closed') {
+    showInitialFocus.value = true
+  } else if (showInitialFocus.value) {
+    focusFirstOption()
+  }
+}
 </script>
 
 <template>
@@ -142,7 +158,7 @@ const showInitialFocus = ref(true)
         popover
         role="listbox"
         :aria-label="'Select search filter'"
-        @toggle="(event) => (event.newState === 'closed' ? (showInitialFocus = true) : null)"
+        @toggle="handlePopoverToggle"
       >
         <li role="option" aria-selected="false" class="menu-title">
           <span class="menu-disabled pointer-events-none text-base-content/70 select-none">Select search filter</span>
@@ -151,7 +167,6 @@ const showInitialFocus = ref(true)
           <li role="option" :aria-selected="label === selectedFilter">
             <a
               tabindex="0"
-              :autofocus="index === 0"
               :class="{
                 'bg-primary text-primary-content': label === selectedFilter,
                 'menu-focus': index === 0 && showInitialFocus,
