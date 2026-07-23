@@ -11,6 +11,7 @@ import {
   E2E_FRONTEND_B_ORIGIN,
   E2E_STATUSLIST_URL,
 } from '../playwright.config'
+import { formatNumberInput } from '../src/modules/template-repository/utils/number-format'
 import type { Browser, BrowserContext, Page } from '@playwright/test'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -133,6 +134,10 @@ export async function signOnInstance(inst: Instance, contractDid: string, signat
   expect(ceremony.ceremony_id).toBeTruthy()
   expect(ceremony.wallet_uri).toBeTruthy()
 
+  const ceremonyStart = ceremonyResponse.request().postDataJSON() as { field_name?: string }
+  const signField = ceremonyStart.field_name?.trim() ?? ''
+  expect(signField, 'ceremony start must bind a signature field_name').toBeTruthy()
+
   execFileSync(python, [path.join(here, 'complete_signing_webhook.py'), ceremony.wallet_uri], {
     cwd: repoRoot,
     env: { ...process.env, STATUSLIST_SERVICE_URL: E2E_STATUSLIST_URL, BDD_DCS_BASE_URL: inst.apiBase },
@@ -160,7 +165,12 @@ export async function signOnInstance(inst: Instance, contractDid: string, signat
   const signedPath = path.join(tmpdir(), `signed-${ceremony.ceremony_id}.pdf`)
   execFileSync(python, [path.join(here, 'sign_prepared_pdf.py'), preparedPath, signedPath], {
     cwd: repoRoot,
-    env: { ...process.env, DSS_URL: E2E_DSS_URL, E2E_SIGNATORY: signatory },
+    env: {
+      ...process.env,
+      DSS_URL: E2E_DSS_URL,
+      E2E_SIGNATORY: signatory,
+      E2E_SIGN_FIELD: signField,
+    },
     stdio: 'pipe',
   })
 
@@ -750,7 +760,7 @@ export async function stagedCounterOffer(inst: Instance, contractDid: string, op
     .click()
   const restored = inst.page.getByRole('textbox', { name: 'Payment Amount' }).first()
   await expect(restored).toBeVisible({ timeout: 30_000 })
-  await expect(restored).toHaveValue(opts.value)
+  await expect(restored).toHaveValue(formatNumberInput(opts.value))
   await expect(inst.page.getByRole('button', { name: 'Discard draft', exact: true })).toBeVisible()
 
   const proposed = inst.page.waitForResponse(
