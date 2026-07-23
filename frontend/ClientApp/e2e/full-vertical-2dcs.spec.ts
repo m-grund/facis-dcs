@@ -20,6 +20,7 @@ import {
   saveArtifact,
   settleToApprovedOn,
   signOnInstance,
+  stagedCounterOffer,
   submitReviewApproveTemplateOn,
   verifyArtifact,
 } from './multi-dcs-helpers'
@@ -149,10 +150,14 @@ test('full two-instance negotiation vertical (A <-> B)', async ({ page, context,
   // adjustment ships a new PDF and the C2PA ingredient chain grows by one on BOTH
   // parties (the counterparty's provenance is chained, not reset).
   await test.step('Stage 6 [DCS-FR-CWE-18, DCS-IR-CWE-03/-04, DCS-OR-C2PA-002]: negotiation ping-pong 20000 -> 10000 -> 15000', async () => {
-    // B redlines 20000 -> 10000: the counter-offer applies the value to
-    // contract_data immediately, so the negotiated PDF re-renders with the redline
-    // and re-ships to A over the PDF exchange (the C2PA chain grows on both).
-    await counterOffer(b, contractDid, { value: '10000' })
+    // B redlines 20000 -> 10000 through the SRS §3.1.1 Save-draft leg: the
+    // redline is staged as B's party draft, survives leaving the Negotiate
+    // view, and only "Change Proposal" makes it real — the chain growth
+    // asserted below comes from the propose; the save ships nothing to A.
+    // Once proposed, the counter-offer applies the value to contract_data
+    // immediately, so the negotiated PDF re-renders with the redline and
+    // re-ships to A over the PDF exchange (the C2PA chain grows on both).
+    await stagedCounterOffer(b, contractDid, { value: '10000' })
     bChain = await assertManifestChainGrew(b, contractDid, bChain)
     aChain = await assertManifestChainGrew(a, contractDid, aChain)
     await saveArtifact(b, contractDid, '02-counter-10k-B')
