@@ -62,6 +62,19 @@ spec:
                 port:
                   number: {{ $.Values.keycloak.service.port | int }}
           {{- end }}
+          {{- /* Vendored fc-service route on same host when enabled with route.path —
+               lets another DCS instance's backend reach this one's FC across clusters.
+               Service name/port are fc-service's own fixed defaults (kept verbatim,
+               not release-prefixed — see Chart.yaml's fc-service dependency). */}}
+          {{- if and $.Values.fcService.enabled $.Values.fcService.route.path }}
+          - path: {{ include "digital-contracting-service.fcServiceRoutePath" $ }}
+            pathType: {{ default "Prefix" $.Values.ingress.pathType }}
+            backend:
+              service:
+                name: fc-service
+                port:
+                  number: 8081
+          {{- end }}
           {{- /* Hydra public OAuth2/OIDC routes — keeps Hydra off the edge; browser traffic
                proxied through this ingress. selfIssuerURL must match the ingress host. */}}
           {{- if and $.Values.hydra.enabled $.Values.hydra.route.paths }}

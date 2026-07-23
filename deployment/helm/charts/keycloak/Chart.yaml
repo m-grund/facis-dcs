@@ -1,6 +1,0 @@
-apiVersion: v2
-name: keycloak
-description: Minimal Keycloak subchart for DCS co-deployments
-type: application
-version: 0.1.0
-appVersion: "26"

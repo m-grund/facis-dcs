@@ -297,6 +297,15 @@ Normalize Keycloak route path (leading slash, no trailing slash).
 {{- end }}
 
 {{/*
+Normalize the vendored fc-service route path (leading slash, no trailing slash).
+*/}}
+{{- define "digital-contracting-service.fcServiceRoutePath" -}}
+{{- if .Values.fcService.route.path -}}
+{{- printf "/%s" (trimAll "/" (.Values.fcService.route.path | toString)) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 OID4VP trust ConfigMap name.
 */}}
 {{- define "digital-contracting-service.oid4vpTrustConfigMapName" -}}

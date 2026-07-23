@@ -1,10 +1,13 @@
-{{- if .Values.localTSA.enabled }}
+{{- if and .Values.localTSA.enabled .Values.localTSA.autoProvision }}
 # Provisions the in-cluster dev TSA signing material (RSA key + self-signed
 # cert with critical extendedKeyUsage=timeStamping) into a Secret. The ORCE
 # /tsa flow signs RFC3161 replies with it (openssl ts -reply), and any service
 # verifying those tokens (DCS backend via TSA_TRUST_CERT_FILE) mounts the same
 # Secret's cert. Idempotent: an existing secret is left untouched so tokens
 # issued earlier keep verifying across upgrades.
+# Needs RBAC self-management (Role/RoleBinding) on the deploying identity —
+# set localTSA.autoProvision: false and pre-create the Secret yourself if
+# that identity can't self-grant (see values.yaml comment).
 apiVersion: v1
 kind: ServiceAccount
 metadata:

@@ -22,10 +22,6 @@ dependencies:
     version: "0.1.0"
     repository: "file://charts/nats"
     condition: nats.enabled
-  - name: neo4j
-    version: "0.1.0"
-    repository: "file://charts/neo4j"
-    condition: neo4j.enabled
   - name: orce
     version: "0.1.0"
     repository: "file://charts/orce"
@@ -34,11 +30,11 @@ dependencies:
     version: "0.1.0"
     repository: "file://charts/dss"
     condition: dss.enabled
-  - name: federated-catalogue
-    version: "0.1.0"
-    repository: "file://charts/federated-catalogue"
-    condition: federatedCatalogue.enabled
-    alias: federatedCatalogue
+  - name: fc-service
+    version: "0.4.0"
+    repository: "oci://node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/catalogue"
+    condition: fcService.enabled
+    alias: fcService
   - name: ipfs
     version: "0.1.0"
     repository: "file://charts/ipfs"

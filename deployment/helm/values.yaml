@@ -236,9 +236,6 @@ systemClients: []
 nats:
   enabled: false
 
-neo4j:
-  enabled: false
-
 # BDD only: loopback proxy so DCS Pod fetches localhost statusListCredential via Traefik ingress.
 statusListLocalhostProxy:
   enabled: false
@@ -275,8 +272,15 @@ statuslistService:
       cpu: 300m
       memory: 512Mi
 
-# XFSC Federated Catalogue (requires neo4j, keycloak, postgresql with "fc" database)
-# See charts/federated-catalogue/values.yaml for all configurable fields.
+# XFSC Federated Catalogue. Two parts:
+#   - federatedCatalogue.*: how THIS DCS backend calls out to an FC instance
+#     (its own env vars, independent of where that instance runs — could be
+#     fcService below, or a remote instance like OSC-testbed pointing at IONOS).
+#   - fcService.*: whether/how to deploy the FC instance itself, vendored
+#     verbatim from eclipse-xfsc/federated-catalogue's published chart (see
+#     Chart.yaml). Its own self-contained stack (Postgres, Keycloak, Fuseki) —
+#     see charts/fc-service-*.tgz (fetched by `helm dependency build`) for all
+#     configurable fields, or deployment/helm/values.*.yml for our overrides.
 federatedCatalogue:
   enabled: false
   # URL the DCS backend uses to reach the Federated Catalogue API
@@ -291,13 +295,9 @@ federatedCatalogue:
     clientSecretSecretRef:
       name: ""
       key: "FEDERATED_CATALOGUE_CLIENT_SECRET"
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
+
+fcService:
+  enabled: false
 
 # PDF-Core: C2PA-aware PDF compiler and verifier (DCS-OR-C2PA-*)
 pdfCore:

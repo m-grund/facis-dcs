@@ -11,18 +11,15 @@ dependencies:
 - name: nats
   repository: file://charts/nats
   version: 0.1.0
-- name: neo4j
-  repository: file://charts/neo4j
-  version: 0.1.0
 - name: orce
   repository: file://charts/orce
   version: 0.1.0
 - name: dss
   repository: file://charts/dss
   version: 0.1.0
-- name: federated-catalogue
-  repository: file://charts/federated-catalogue
-  version: 0.1.0
+- name: fc-service
+  repository: oci://node-654e3bca7fbeeed18f81d7c7.ps-xaas.io/catalogue
+  version: 0.4.0
 - name: ipfs
   repository: file://charts/ipfs
   version: 0.1.0
@@ -38,5 +35,5 @@ dependencies:
 - name: traefik
   repository: https://traefik.github.io/charts
   version: 41.0.0
-digest: sha256:f1590ae201fcab7adf52390c94a730559bcdbe14672bf3e470918367243c2be7
-generated: "2026-07-14T17:47:10.915206287+02:00"
+digest: sha256:a643e68cc9cad69db1264a61e4405fced7851389c952bc61a00b4a9a367d5eb4
+generated: "2026-07-23T16:11:21.714448835+02:00"

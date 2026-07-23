@@ -38,6 +38,13 @@ global:
 # external TSA. Self-contained for dev/BDD/CI — no internet dependency.
 localTSA:
   enabled: true
+  # The provisioning Job needs a Role/RoleBinding to write the material
+  # Secret, which some clusters' deploying identities aren't allowed to
+  # self-grant (RBAC self-management). Set to false there and pre-create
+  # the <release>-orce-tsa-material Secret (keys tsa-cert.pem/tsa-key.pem)
+  # out of band before install — the mount (this flag's `enabled`) still
+  # applies regardless.
+  autoProvision: true
 
 resources: {}
 
