@@ -65,9 +65,9 @@ const eventType = useContractEventType()
         <div v-else-if="eventType.isApproveEvent(audit)">
           <div>Approved by: {{ audit.event_data.approved_by }}</div>
         </div>
-        <div v-else-if="eventType.isRejectEvent(audit)" class="flex justify-between">
-          <div>Rejected by: {{ audit.event_data.rejected_by }}</div>
-          <div>Reason: {{ audit.event_data.reason }}</div>
+        <div v-else-if="eventType.isRejectEvent(audit)" class="flex flex-col gap-1">
+          <div class="min-w-0 break-all">Rejected by: {{ audit.event_data.rejected_by }}</div>
+          <div class="min-w-0 break-words whitespace-pre-wrap">Reason: {{ audit.event_data.reason }}</div>
         </div>
         <div v-else-if="eventType.isTerminateEvent(audit)">
           <div>Terminated by: {{ audit.event_data.terminated_by }}</div>
@@ -83,6 +83,19 @@ const eventType = useContractEventType()
         </div>
         <div v-else-if="eventType.isIncreaseContractVersionEvent(audit)">
           <div>Submitted by: {{ audit.event_data.submitted_by }}</div>
+        </div>
+        <div v-else-if="eventType.isNegotiationChangeSupersededEvent(audit)">
+          <div>
+            Version {{ audit.event_data.merged_contract_version }} does not carry these accepted change requests:
+          </div>
+          <ul>
+            <li
+              v-for="discard in audit.event_data.superseded"
+              :key="`${discard.negotiation_id}-${discard.superseded_by}`"
+            >
+              {{ discard.negotiation_id }}: {{ discard.fields.join(', ') }} superseded by {{ discard.superseded_by }}
+            </li>
+          </ul>
         </div>
         <div v-else>{{ audit.event_data }}</div>
       </div>
